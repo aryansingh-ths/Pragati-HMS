@@ -1,0 +1,10 @@
+{
+  "ota_reference": "BKG12345",
+  "guest_name": "John Doe OTA",
+  "guest_email": "john.ota@example.com",
+  "guest_phone": "1234567890",
+  "room_type_id": "bde89b90-fbc7-4997-8e85-3d7bb7620595",
+  "check_in_date": "2026-10-01",
+  "check_out_date": "2026-10-05",
+  "total_price": 1200
+}
