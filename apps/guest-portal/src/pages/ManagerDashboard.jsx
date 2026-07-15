@@ -6,7 +6,7 @@ import {
   Sliders, Wrench, Loader2, Plus, Trash2, X, ChevronDown, ChevronUp, Edit,
   TrendingUp, AlertTriangle, Clock, BedDouble, Zap, ArrowUpRight, ArrowDownRight,
   UserCheck, UserX, ShieldAlert, Hammer, Eye, CircleDot, RefreshCw, CheckCircle,
-  LogIn, DoorOpen
+  LogIn, DoorOpen, Maximize2
 } from 'lucide-react';
 
 // =============================================
@@ -305,7 +305,8 @@ function OccupancyTrendLine({ trend = [] }) {
             />
             {p.isToday && (
               <motion.circle
-                cx={p.x} cy={p.y} r={8}
+                cx={p.x} cy={p.y}
+                initial={{ r: 8 }}
                 fill="none"
                 stroke="#f97316"
                 strokeWidth="2"
@@ -323,7 +324,7 @@ function OccupancyTrendLine({ trend = [] }) {
             )}
             <motion.circle
               cx={p.x} cy={p.y}
-              r={hoverIdx === i ? 6 : (p.isToday ? 5 : 3)}
+              initial={{ r: p.isToday ? 5 : 3 }}
               fill={p.isToday ? "#f97316" : "#ffffff"}
               stroke="#4f46e5"
               strokeWidth={hoverIdx === i ? 3 : 2}
@@ -333,7 +334,7 @@ function OccupancyTrendLine({ trend = [] }) {
             />
             {hoverIdx === i && (
               <motion.circle
-                cx={p.x} cy={p.y} r={10}
+                cx={p.x} cy={p.y}
                 fill="none"
                 stroke="#818cf8"
                 strokeWidth="1.5"
@@ -444,6 +445,7 @@ export default function ManagerDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
   const navigate = useNavigate(); 
   const [expandedQueueCol, setExpandedQueueCol] = useState(null);  // Live Operations state
+  const [expandedCard, setExpandedCard] = useState(null); // 'frontdesk' | 'housekeeping' | 'engineering' | null
   const [liveData, setLiveData] = useState(null);
   const [activityPage, setActivityPage] = useState(1);
   const activityItemsPerPage = 10;
@@ -1355,109 +1357,415 @@ export default function ManagerDashboard() {
               {/* ============================================ */}
               {/* TAB: ACTIVITY MONITOR                        */}
               {/* ============================================ */}
-              {activeTab === 'activity_monitor' && liveData && (
+           {activeTab === 'activity_monitor' && liveData && (
                 <motion.div key="activity_monitor" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
+
+                  {/* Local styles for this section only — glow rings, floating orbs, sheen sweep, glass modal */}
+                  <style>{`
+                    @keyframes amc-shimmer { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+                    @keyframes amc-float { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(12px,-10px) scale(1.06); } }
+                    @keyframes amc-float-rev { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-10px,10px) scale(1.05); } }
+                    @keyframes amc-pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(99,102,241,0.4); } 70% { box-shadow: 0 0 0 9px rgba(99,102,241,0); } 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0); } }
+                    @keyframes amc-pulse-ring-amber { 0% { box-shadow: 0 0 0 0 rgba(245,158,11,0.4); } 70% { box-shadow: 0 0 0 9px rgba(245,158,11,0); } 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0); } }
+                    @keyframes amc-pulse-ring-rose { 0% { box-shadow: 0 0 0 0 rgba(244,63,94,0.4); } 70% { box-shadow: 0 0 0 9px rgba(244,63,94,0); } 100% { box-shadow: 0 0 0 0 rgba(244,63,94,0); } }
+                    .amc-orb { position: absolute; border-radius: 9999px; filter: blur(42px); pointer-events: none; }
+                    .amc-ring-indigo { animation: amc-pulse-ring 2.4s cubic-bezier(0.4,0,0.6,1) infinite; }
+                    .amc-ring-amber { animation: amc-pulse-ring-amber 2.4s cubic-bezier(0.4,0,0.6,1) infinite; }
+                    .amc-ring-rose { animation: amc-pulse-ring-rose 2.4s cubic-bezier(0.4,0,0.6,1) infinite; }
+                    .amc-sheen { position: absolute; inset: 0; background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.55) 45%, transparent 60%); transform: translateX(-130%); transition: transform 0.85s cubic-bezier(0.22,1,0.36,1); pointer-events: none; z-index: 3; border-radius: inherit; }
+                    .group:hover .amc-sheen { transform: translateX(130%); }
+                    .amc-glass-backdrop { background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+                    .amc-glass-modal { background: rgba(255,255,255,0.98); border: 1px solid rgba(226,232,240,0.8); box-shadow: 0 30px 70px -12px rgba(56,189,248,0.28); backdrop-filter: blur(24px); }
+                    .amc-scrollbar::-webkit-scrollbar { width: 6px; }
+                    .amc-scrollbar::-webkit-scrollbar-track { background: transparent; }
+                    .amc-scrollbar::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.4); border-radius: 999px; }
+                  `}</style>
+
+                  {/*
+                    NOTE: this section now needs one small piece of local UI state to power the
+                    click-to-expand popups. Add this once, alongside your other useState calls
+                    at the top of this component (not inside this JSX block):
+
+                      const [expandedCard, setExpandedCard] = useState(null); // 'frontdesk' | 'housekeeping' | 'engineering' | null
+
+                    Nothing about liveData, its shape, or how it's fetched/computed changes below —
+                    expandedCard purely controls which popup is shown.
+                  */}
+
                   {/* Department Snapshots grid */}
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Front desk card */}
-                    <div className="bg-white rounded-[2rem] p-5 shadow-sm border border-zinc-200/60">
-                      <div className="flex items-center gap-2 mb-4 border-b border-zinc-100 pb-3">
-                        <UserCheck size={16} className="text-indigo-600" />
-                        <h3 className="text-xs font-black uppercase tracking-wider text-zinc-800">Front Desk Dispatch</h3>
+                    <motion.div
+                      layout
+                      whileHover={{ y: -5, scale: 1.01 }}
+                      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                      onClick={() => setExpandedCard('frontdesk')}
+                      className="group relative overflow-hidden bg-gradient-to-br from-indigo-50 via-white to-blue-50 rounded-[2rem] p-5 shadow-[0_18px_40px_-16px_rgba(99,102,241,0.25)] border-2 border-indigo-100/70 hover:border-indigo-300/70 cursor-pointer transition-colors"
+                    >
+                      <div className="amc-sheen" />
+                      <div className="amc-orb w-36 h-36 bg-indigo-300/25 -top-10 -right-10" style={{ animation: 'amc-float 8s ease-in-out infinite' }} />
+                      <div className="relative flex items-center gap-2 mb-4 border-b border-indigo-100 pb-3">
+                        <motion.div
+                          whileHover={{ rotate: -10, scale: 1.1 }}
+                          className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center shadow-sm amc-ring-indigo"
+                        >
+                          <UserCheck size={15} className="text-white" />
+                        </motion.div>
+                        <h3 className="text-xs font-black uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-indigo-700 to-blue-600 flex-1">Front Desk Dispatch</h3>
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Maximize2 size={11} /> Expand
+                        </span>
                       </div>
-                      <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-400 mb-2">Pending check-ins</p>
+
+                      <div className="relative flex items-center justify-between mb-2">
+                        <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Pending check-ins</p>
+                        <motion.span
+                          key={liveData.departmental.pendingCheckins.length}
+                          initial={{ scale: 1.3 }} animate={{ scale: 1 }}
+                          transition={{ type: 'spring', stiffness: 400, damping: 12 }}
+                          className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700"
+                        >
+                          {liveData.departmental.pendingCheckins.length}
+                        </motion.span>
+                      </div>
                       {liveData.departmental.pendingCheckins.length === 0 ? (
                         <p className="text-xs text-zinc-400 italic mb-4">No pending arrivals today</p>
                       ) : (
-                        <div className="space-y-2 mb-4">
+                        <div className="relative space-y-2 mb-4">
                           {liveData.departmental.pendingCheckins.slice(0, 3).map((p, i) => (
-                            <div key={i} className="flex items-center justify-between p-2 rounded-xl bg-zinc-50 border border-zinc-200/60">
+                            <motion.div
+                              key={i}
+                              initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0, transition: { delay: i * 0.05 } }}
+                              className="flex items-center justify-between p-2 rounded-xl bg-white/70 border border-indigo-100 shadow-sm"
+                            >
                               <div>
                                 <p className="text-xs font-bold text-zinc-800">{p.guest_name}</p>
                                 <p className="text-[9px] text-zinc-400">{p.room_type} · Rm {p.room_number}</p>
                               </div>
-                              <Clock size={12} className="text-zinc-400" />
-                            </div>
+                              <Clock size={12} className="text-indigo-400" />
+                            </motion.div>
                           ))}
                         </div>
                       )}
-                      
-                      <p className="text-[9px] font-bold uppercase tracking-wider text-rose-500 mb-2 flex items-center gap-1">
-                        <ShieldAlert size={11} /> Overstay Alerts
+
+                      <p className="relative text-[9px] font-bold uppercase tracking-wider text-rose-500 mb-2 flex items-center gap-1">
+                        <motion.span animate={{ scale: [1, 1.2, 1] }} transition={{ duration: 1.6, repeat: Infinity }} className="inline-flex">
+                          <ShieldAlert size={11} />
+                        </motion.span>
+                        Overstay Alerts
                       </p>
                       {liveData.departmental.overstays.length === 0 ? (
-                        <p className="text-xs text-zinc-400 italic">No overstays detected</p>
+                        <p className="relative text-xs text-zinc-400 italic">No overstays detected</p>
                       ) : (
-                        <div className="space-y-2">
-                          {liveData.departmental.overstays.map((o, i) => (
-                            <div key={i} className="flex items-center justify-between p-2 rounded-xl bg-rose-50 border border-rose-100">
+                        <div className="relative space-y-2">
+                          {liveData.departmental.overstays.slice(0, 2).map((o, i) => (
+                            <motion.div
+                              key={i}
+                              initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0, transition: { delay: i * 0.05 } }}
+                              className="flex items-center justify-between p-2 rounded-xl bg-rose-50 border border-rose-100"
+                            >
                               <div>
                                 <p className="text-xs font-bold text-rose-700">{o.guest_name}</p>
                                 <p className="text-[9px] text-rose-500">Rm {o.room_number} · Expired: {new Date(o.check_out_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
                               </div>
                               <AlertTriangle size={12} className="text-rose-500" />
-                            </div>
+                            </motion.div>
                           ))}
                         </div>
                       )}
-                    </div>
+                    </motion.div>
 
                     {/* Housekeeping card */}
-                    <div className="bg-white rounded-[2rem] p-5 shadow-sm border border-zinc-200/60">
-                      <div className="flex items-center gap-2 mb-4 border-b border-zinc-100 pb-3">
-                        <Sparkles size={16} className="text-amber-500" />
-                        <h3 className="text-xs font-black uppercase tracking-wider text-zinc-800">Housekeeping Queue</h3>
+                    <motion.div
+                      layout
+                      whileHover={{ y: -5, scale: 1.01 }}
+                      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                      onClick={() => setExpandedCard('housekeeping')}
+                      className="group relative overflow-hidden bg-gradient-to-br from-amber-50 via-white to-orange-50 rounded-[2rem] p-5 shadow-[0_18px_40px_-16px_rgba(245,158,11,0.25)] border-2 border-amber-100/70 hover:border-amber-300/70 cursor-pointer transition-colors"
+                    >
+                      <div className="amc-sheen" />
+                      <div className="amc-orb w-36 h-36 bg-amber-300/25 -bottom-10 -left-10" style={{ animation: 'amc-float-rev 9s ease-in-out infinite' }} />
+                      <div className="relative flex items-center gap-2 mb-4 border-b border-amber-100 pb-3">
+                        <motion.div
+                          whileHover={{ rotate: 10, scale: 1.1 }}
+                          className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-sm amc-ring-amber"
+                        >
+                          <Sparkles size={15} className="text-white" />
+                        </motion.div>
+                        <h3 className="text-xs font-black uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-amber-600 to-orange-600 flex-1">Housekeeping Queue</h3>
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-amber-500 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Maximize2 size={11} /> Expand
+                        </span>
                       </div>
-                      <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-400 mb-2">Priority Cleaning Rooms</p>
+
+                      <div className="relative flex items-center justify-between mb-2">
+                        <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Priority Cleaning Rooms</p>
+                        <motion.span
+                          key={liveData.departmental.dirtyRooms.length}
+                          initial={{ scale: 1.3 }} animate={{ scale: 1 }}
+                          transition={{ type: 'spring', stiffness: 400, damping: 12 }}
+                          className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700"
+                        >
+                          {liveData.departmental.dirtyRooms.length}
+                        </motion.span>
+                      </div>
                       {liveData.departmental.dirtyRooms.length === 0 ? (
-                        <div className="text-center py-8">
-                          <CheckCircle size={24} className="text-emerald-500 mx-auto mb-1.5" />
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="relative text-center py-8">
+                          <motion.div animate={{ y: [0, -5, 0] }} transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}>
+                            <CheckCircle size={24} className="text-emerald-500 mx-auto mb-1.5" />
+                          </motion.div>
                           <p className="text-xs font-bold text-zinc-800">All Clean</p>
                           <p className="text-[9px] text-zinc-400">Rooms in order</p>
-                        </div>
+                        </motion.div>
                       ) : (
-                        <div className="space-y-2">
+                        <div className="relative space-y-2">
                           {liveData.departmental.dirtyRooms.slice(0, 4).map((r, i) => (
-                            <div key={i} className="flex items-center justify-between p-2 rounded-xl bg-zinc-50 border border-zinc-200/60">
+                            <motion.div
+                              key={i}
+                              initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0, transition: { delay: i * 0.05 } }}
+                              className="flex items-center justify-between p-2 rounded-xl bg-white/70 border border-amber-100 shadow-sm"
+                            >
                               <div>
                                 <p className="text-xs font-bold text-zinc-800">Room {r.room_number}</p>
                                 <p className="text-[9px] text-zinc-400">{r.room_type}</p>
                               </div>
                               <span className="text-[9px] font-bold uppercase tracking-wider text-rose-600 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md">Dirty</span>
-                            </div>
+                            </motion.div>
                           ))}
                         </div>
                       )}
-                    </div>
+                    </motion.div>
 
                     {/* Engineering card */}
-                    <div className="bg-white rounded-[2rem] p-5 shadow-sm border border-zinc-200/60">
-                      <div className="flex items-center gap-2 mb-4 border-b border-zinc-100 pb-3">
-                        <Hammer size={16} className="text-rose-500" />
-                        <h3 className="text-xs font-black uppercase tracking-wider text-zinc-800">Active Workorders</h3>
+                    <motion.div
+                      layout
+                      whileHover={{ y: -5, scale: 1.01 }}
+                      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                      onClick={() => setExpandedCard('engineering')}
+                      className="group relative overflow-hidden bg-gradient-to-br from-rose-50 via-white to-fuchsia-50 rounded-[2rem] p-5 shadow-[0_18px_40px_-16px_rgba(244,63,94,0.25)] border-2 border-rose-100/70 hover:border-rose-300/70 cursor-pointer transition-colors"
+                    >
+                      <div className="amc-sheen" />
+                      <div className="amc-orb w-36 h-36 bg-rose-300/25 -top-10 -left-10" style={{ animation: 'amc-float 8.5s ease-in-out infinite' }} />
+                      <div className="relative flex items-center gap-2 mb-4 border-b border-rose-100 pb-3">
+                        <motion.div
+                          whileHover={{ rotate: -10, scale: 1.1 }}
+                          className="w-8 h-8 rounded-xl bg-gradient-to-br from-rose-500 to-fuchsia-500 flex items-center justify-center shadow-sm amc-ring-rose"
+                        >
+                          <Hammer size={15} className="text-white" />
+                        </motion.div>
+                        <h3 className="text-xs font-black uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-rose-600 to-fuchsia-600 flex-1">Active Workorders</h3>
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-rose-500 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Maximize2 size={11} /> Expand
+                        </span>
                       </div>
-                      <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-400 mb-2">High Priority Repairs</p>
+
+                      <div className="relative flex items-center justify-between mb-2">
+                        <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-400">High Priority Repairs</p>
+                        <motion.span
+                          key={liveData.departmental.highPriorityTickets.length}
+                          initial={{ scale: 1.3 }} animate={{ scale: 1 }}
+                          transition={{ type: 'spring', stiffness: 400, damping: 12 }}
+                          className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-700"
+                        >
+                          {liveData.departmental.highPriorityTickets.length}
+                        </motion.span>
+                      </div>
                       {liveData.departmental.highPriorityTickets.length === 0 ? (
-                        <div className="text-center py-8">
-                          <CheckCircle size={24} className="text-emerald-500 mx-auto mb-1.5" />
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="relative text-center py-8">
+                          <motion.div animate={{ y: [0, -5, 0] }} transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}>
+                            <CheckCircle size={24} className="text-emerald-500 mx-auto mb-1.5" />
+                          </motion.div>
                           <p className="text-xs font-bold text-zinc-800">All Operations Clear</p>
                           <p className="text-[9px] text-zinc-400">No breakdowns reported</p>
-                        </div>
+                        </motion.div>
                       ) : (
-                        <div className="space-y-2">
+                        <div className="relative space-y-2">
                           {liveData.departmental.highPriorityTickets.slice(0, 3).map((t, i) => (
-                            <div key={i} className="p-2 rounded-xl bg-rose-50/50 border border-rose-100">
+                            <motion.div
+                              key={i}
+                              initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0, transition: { delay: i * 0.05 } }}
+                              className="p-2 rounded-xl bg-rose-50/60 border border-rose-100"
+                            >
                               <div className="flex justify-between items-center mb-1">
                                 <p className="text-xs font-bold text-zinc-800">Room {t.room_number}</p>
                                 <span className="text-[9px] font-bold uppercase tracking-wider text-rose-600 bg-rose-100 px-1.5 py-0.5 rounded">High</span>
                               </div>
                               <p className="text-[9px] text-zinc-500 truncate">{t.issue}</p>
-                            </div>
+                            </motion.div>
                           ))}
                         </div>
                       )}
-                    </div>
+                    </motion.div>
                   </div>
+
+                  {/* ═══════════════════════════════════════════════
+                      CLICK-TO-EXPAND POPUP — full department detail
+                      ═══════════════════════════════════════════════ */}
+                  <AnimatePresence>
+                    {expandedCard && (
+                      <motion.div
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        transition={{ duration: 0.25 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center amc-glass-backdrop p-4"
+                        onClick={() => setExpandedCard(null)}
+                      >
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.92, y: 20 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.92, y: 20 }}
+                          transition={{ type: 'spring', damping: 28, stiffness: 350 }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full max-w-2xl amc-glass-modal rounded-3xl p-7 overflow-y-auto amc-scrollbar max-h-[85vh]"
+                        >
+                          {/* ── FRONT DESK POPUP ── */}
+                          {expandedCard === 'frontdesk' && (
+                            <div className="space-y-5">
+                              <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center shadow-md">
+                                    <UserCheck size={20} className="text-white" />
+                                  </div>
+                                  <div>
+                                    <h2 className="text-lg font-serif font-bold text-zinc-900">Front Desk Dispatch</h2>
+                                    <p className="text-xs text-zinc-500">Full department snapshot</p>
+                                  </div>
+                                </div>
+                                <motion.button whileHover={{ rotate: 90, scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setExpandedCard(null)} className="p-2 rounded-xl hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-colors">
+                                  <X size={20} />
+                                </motion.button>
+                              </div>
+
+                              <div>
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-500 mb-2">Pending Check-ins ({liveData.departmental.pendingCheckins.length})</p>
+                                {liveData.departmental.pendingCheckins.length === 0 ? (
+                                  <p className="text-xs text-zinc-400 italic">No pending arrivals today</p>
+                                ) : (
+                                  <div className="space-y-2">
+                                    {liveData.departmental.pendingCheckins.map((p, i) => (
+                                      <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0, transition: { delay: i * 0.03 } }} className="flex items-center justify-between p-3 rounded-xl bg-indigo-50/60 border border-indigo-100">
+                                        <div>
+                                          <p className="text-xs font-bold text-zinc-800">{p.guest_name}</p>
+                                          <p className="text-[10px] text-zinc-400">{p.room_type} · Rm {p.room_number}</p>
+                                        </div>
+                                        <Clock size={13} className="text-indigo-400" />
+                                      </motion.div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div>
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-rose-500 mb-2 flex items-center gap-1">
+                                  <ShieldAlert size={12} /> Overstay Alerts ({liveData.departmental.overstays.length})
+                                </p>
+                                {liveData.departmental.overstays.length === 0 ? (
+                                  <p className="text-xs text-zinc-400 italic">No overstays detected</p>
+                                ) : (
+                                  <div className="space-y-2">
+                                    {liveData.departmental.overstays.map((o, i) => (
+                                      <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0, transition: { delay: i * 0.03 } }} className="flex items-center justify-between p-3 rounded-xl bg-rose-50 border border-rose-100">
+                                        <div>
+                                          <p className="text-xs font-bold text-rose-700">{o.guest_name}</p>
+                                          <p className="text-[10px] text-rose-500">Rm {o.room_number} · Expired: {new Date(o.check_out_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
+                                        </div>
+                                        <AlertTriangle size={13} className="text-rose-500" />
+                                      </motion.div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* ── HOUSEKEEPING POPUP ── */}
+                          {expandedCard === 'housekeeping' && (
+                            <div className="space-y-5">
+                              <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-md">
+                                    <Sparkles size={20} className="text-white" />
+                                  </div>
+                                  <div>
+                                    <h2 className="text-lg font-serif font-bold text-zinc-900">Housekeeping Queue</h2>
+                                    <p className="text-xs text-zinc-500">Full department snapshot</p>
+                                  </div>
+                                </div>
+                                <motion.button whileHover={{ rotate: 90, scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setExpandedCard(null)} className="p-2 rounded-xl hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-colors">
+                                  <X size={20} />
+                                </motion.button>
+                              </div>
+
+                              <div>
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600 mb-2">Priority Cleaning Rooms ({liveData.departmental.dirtyRooms.length})</p>
+                                {liveData.departmental.dirtyRooms.length === 0 ? (
+                                  <div className="text-center py-10">
+                                    <CheckCircle size={28} className="text-emerald-500 mx-auto mb-2" />
+                                    <p className="text-sm font-bold text-zinc-800">All Clean</p>
+                                    <p className="text-[10px] text-zinc-400">Rooms in order</p>
+                                  </div>
+                                ) : (
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {liveData.departmental.dirtyRooms.map((r, i) => (
+                                      <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0, transition: { delay: i * 0.03 } }} className="flex items-center justify-between p-3 rounded-xl bg-amber-50/60 border border-amber-100">
+                                        <div>
+                                          <p className="text-xs font-bold text-zinc-800">Room {r.room_number}</p>
+                                          <p className="text-[10px] text-zinc-400">{r.room_type}</p>
+                                        </div>
+                                        <span className="text-[9px] font-bold uppercase tracking-wider text-rose-600 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md">Dirty</span>
+                                      </motion.div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* ── ENGINEERING POPUP ── */}
+                          {expandedCard === 'engineering' && (
+                            <div className="space-y-5">
+                              <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-rose-500 to-fuchsia-500 flex items-center justify-center shadow-md">
+                                    <Hammer size={20} className="text-white" />
+                                  </div>
+                                  <div>
+                                    <h2 className="text-lg font-serif font-bold text-zinc-900">Active Workorders</h2>
+                                    <p className="text-xs text-zinc-500">Full department snapshot</p>
+                                  </div>
+                                </div>
+                                <motion.button whileHover={{ rotate: 90, scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setExpandedCard(null)} className="p-2 rounded-xl hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-colors">
+                                  <X size={20} />
+                                </motion.button>
+                              </div>
+
+                              <div>
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-rose-500 mb-2">High Priority Repairs ({liveData.departmental.highPriorityTickets.length})</p>
+                                {liveData.departmental.highPriorityTickets.length === 0 ? (
+                                  <div className="text-center py-10">
+                                    <CheckCircle size={28} className="text-emerald-500 mx-auto mb-2" />
+                                    <p className="text-sm font-bold text-zinc-800">All Operations Clear</p>
+                                    <p className="text-[10px] text-zinc-400">No breakdowns reported</p>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-2">
+                                    {liveData.departmental.highPriorityTickets.map((t, i) => (
+                                      <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0, transition: { delay: i * 0.03 } }} className="p-3 rounded-xl bg-rose-50/60 border border-rose-100">
+                                        <div className="flex justify-between items-center mb-1">
+                                          <p className="text-xs font-bold text-zinc-800">Room {t.room_number}</p>
+                                          <span className="text-[9px] font-bold uppercase tracking-wider text-rose-600 bg-rose-100 px-1.5 py-0.5 rounded">High</span>
+                                        </div>
+                                        <p className="text-[10px] text-zinc-500">{t.issue}</p>
+                                      </motion.div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </motion.div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </motion.div>
               )}
 
@@ -1742,76 +2050,176 @@ export default function ManagerDashboard() {
               {/* ============================================ */}
               {/* TAB 2: PROPERTY CONTROLS                     */}
               {/* ============================================ */}
-              {activeTab === 'properties' && (
+            {activeTab === 'properties' && (
                 <motion.div key="properties" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
-                  
-                  {/* Banner */}
-                  <div className="bg-gradient-to-r from-zinc-900 via-slate-800 to-zinc-900 text-white rounded-[2rem] p-6 shadow-md flex flex-col md:flex-row items-center justify-between gap-4 border border-zinc-700/20">
-                    <div>
-                      <h3 className="text-base font-black tracking-tight">Property Hierarchy & Inventory</h3>
-                      <p className="text-xs text-zinc-400 mt-0.5">Configure individual units, override statuses, and block rooms from booking cycles.</p>
+
+                  {/* Local styles for this section only — shimmering border, floating orbs, dot-grid texture */}
+                  <style>{`
+                    @keyframes rhi-shimmer { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+                    @keyframes rhi-float { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(14px,-10px) scale(1.05); } }
+                    @keyframes rhi-float-rev { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-12px,12px) scale(1.06); } }
+                    @keyframes rhi-pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(99,102,241,0.35); } 70% { box-shadow: 0 0 0 9px rgba(99,102,241,0); } 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0); } }
+                    .rhi-glow-wrap { position: relative; border-radius: 2rem; padding: 2px; background-size: 220% 220%; animation: rhi-shimmer 10s ease-in-out infinite; }
+                    .rhi-dot-grid { background-image: radial-gradient(rgba(99,102,241,0.14) 1px, transparent 1px); background-size: 18px 18px; -webkit-mask-image: radial-gradient(circle at 80% 0%, rgba(0,0,0,0.8), transparent 68%); mask-image: radial-gradient(circle at 80% 0%, rgba(0,0,0,0.8), transparent 68%); }
+                    .rhi-orb { position: absolute; border-radius: 9999px; filter: blur(46px); pointer-events: none; }
+                    .rhi-ring-pulse { animation: rhi-pulse-ring 2.6s cubic-bezier(0.4,0,0.6,1) infinite; }
+                    .rhi-sheen { position: absolute; inset: 0; background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.55) 45%, transparent 60%); transform: translateX(-130%); transition: transform 0.85s cubic-bezier(0.22,1,0.36,1); pointer-events: none; z-index: 3; border-radius: inherit; }
+                    .group:hover .rhi-sheen { transform: translateX(130%); }
+                  `}</style>
+
+                  {/* Banner — aurora gradient, animated blobs, floating hotel glyph */}
+                  <motion.div
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4 }}
+                    className="relative overflow-hidden rounded-[2rem] p-6 shadow-lg border border-white/10"
+                    style={{ background: 'linear-gradient(115deg, #4f46e5 0%, #0ea5e9 45%, #14b8a6 100%)', backgroundSize: '200% 200%', animation: 'rhi-shimmer 10s ease-in-out infinite' }}
+                  >
+                    <motion.div className="rhi-orb w-56 h-56 bg-fuchsia-400/25" style={{ top: '-4rem', right: '-3rem' }} animate={{ x: [0, 20, 0], y: [0, -14, 0] }} transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }} />
+                    <motion.div className="rhi-orb w-48 h-48 bg-teal-300/25" style={{ bottom: '-3.5rem', left: '10%' }} animate={{ x: [0, -18, 0], y: [0, 12, 0] }} transition={{ duration: 11, repeat: Infinity, ease: 'easeInOut' }} />
+                    <div className="relative flex flex-col md:flex-row items-center justify-between gap-4 text-white">
+                      <div className="flex items-center gap-4">
+                        <motion.div
+                          animate={{ rotate: [0, -6, 6, 0], y: [0, -3, 0] }}
+                          transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                          className="hidden sm:flex w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-md border border-white/20 items-center justify-center shadow-lg text-2xl"
+                        >
+                          🏨
+                        </motion.div>
+                        <div>
+                          <h3 className="text-base font-black tracking-tight flex items-center gap-2">
+                            Property Hierarchy &amp; Inventory
+                            <span className="text-amber-200">✦</span>
+                          </h3>
+                          <p className="text-xs text-indigo-100 mt-0.5">Configure individual units, override statuses, and block rooms from booking cycles.</p>
+                        </div>
+                      </div>
+                      <span className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/15 border border-white/20 text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm text-white">
+                        <span className="relative flex h-1.5 w-1.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-300" />
+                        </span>
+                        Inventory Synced
+                      </span>
                     </div>
-                  </div>
+                  </motion.div>
 
                   {/* Room Classes Accordion */}
-                  <div className="space-y-4">
-                    {roomTypes.map(type => {
+                  <div className="space-y-5">
+                    {roomTypes.map((type, typeIdx) => {
                       const classRooms = roomsList.filter(r => r.room_type_id === type.id);
                       const isExpanded = expandedClasses[type.id];
+                      const accentSets = [
+                        { grad: 'from-indigo-500 to-blue-500', ring: 'rgba(99,102,241,0.25)', chip: 'bg-indigo-50 text-indigo-600 border-indigo-100', blob: 'bg-indigo-300/20' },
+                        { grad: 'from-teal-500 to-emerald-500', ring: 'rgba(20,184,166,0.25)', chip: 'bg-teal-50 text-teal-600 border-teal-100', blob: 'bg-teal-300/20' },
+                        { grad: 'from-amber-500 to-orange-500', ring: 'rgba(245,158,11,0.25)', chip: 'bg-amber-50 text-amber-600 border-amber-100', blob: 'bg-amber-300/20' },
+                        { grad: 'from-rose-500 to-fuchsia-500', ring: 'rgba(244,63,94,0.25)', chip: 'bg-rose-50 text-rose-600 border-rose-100', blob: 'bg-rose-300/20' },
+                      ];
+                      const accent = accentSets[typeIdx % accentSets.length];
 
                       return (
-                        <div key={type.id} className="bg-white rounded-[2rem] overflow-hidden border border-zinc-200/60 shadow-xs">
+                        <motion.div
+                          key={type.id}
+                          initial={{ opacity: 0, y: 14 }}
+                          animate={{ opacity: 1, y: 0, transition: { delay: typeIdx * 0.06 } }}
+                          className="rhi-glow-wrap"
+                          style={{ backgroundImage: `linear-gradient(120deg, ${accent.ring}, transparent, ${accent.ring})` }}
+                        >
+                        <div className="relative bg-white/95 backdrop-blur-xl rounded-[calc(2rem-2px)] overflow-hidden shadow-[0_18px_40px_-14px_rgba(56,189,248,0.15)]">
+                          <div className="absolute inset-0 rhi-dot-grid pointer-events-none opacity-70" />
+                          <div className={`rhi-orb -top-10 -right-10 w-40 h-40 ${accent.blob}`} style={{ animation: typeIdx % 2 === 0 ? 'rhi-float 8s ease-in-out infinite' : 'rhi-float-rev 9s ease-in-out infinite' }} />
+
                           {/* Accordion header */}
-                          <div 
-                            className="bg-zinc-50/50 p-5 flex items-center justify-between cursor-pointer hover:bg-zinc-50 transition-colors border-b border-zinc-100"
+                          <div
+                            className="relative bg-gradient-to-r from-zinc-50/70 to-white/40 p-5 flex items-center justify-between cursor-pointer hover:bg-zinc-50/90 transition-colors border-b border-zinc-100"
                             onClick={() => toggleAccordion(type.id)}
                           >
                             <div className="flex items-center gap-4">
-                              <button className="text-zinc-400 hover:text-zinc-600 transition-colors">
-                                {isExpanded ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
-                              </button>
+                              <motion.button
+                                whileHover={{ scale: 1.15 }}
+                                whileTap={{ scale: 0.9 }}
+                                animate={{ rotate: isExpanded ? 180 : 0 }}
+                                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                                className={`flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br ${accent.grad} text-white shadow-sm rhi-ring-pulse`}
+                              >
+                                <ChevronDown size={16}/>
+                              </motion.button>
                               <div>
                                 <h3 className="text-base font-bold text-zinc-900">{type.name} Rooms Class</h3>
-                                <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mt-0.5">Inventory Size: <span className="text-indigo-600">{classRooms.length}</span> Units</p>
+                                <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mt-0.5">
+                                  Inventory Size: <motion.span key={classRooms.length} initial={{ scale: 1.3 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 400, damping: 12 }} className={`px-1.5 py-0.5 rounded-md border ${accent.chip} font-black`}>{classRooms.length}</motion.span> Units
+                                </p>
                               </div>
                             </div>
-                            
+
                             <div className="flex items-center gap-3">
-                              <button 
-                                onClick={(e) => { e.stopPropagation(); setNewRoomForm({ room_number: '', room_type_id: type.id }); setIsAddRoomModalOpen(true); }} 
-                                className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs"
+                              <motion.button
+                                whileHover={{ scale: 1.05, y: -1 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={(e) => { e.stopPropagation(); setNewRoomForm({ room_number: '', room_type_id: type.id }); setIsAddRoomModalOpen(true); }}
+                                className="relative flex items-center gap-1 bg-gradient-to-r from-teal-400 to-emerald-500 hover:shadow-lg hover:shadow-teal-500/30 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-shadow shadow-sm overflow-hidden"
                               >
-                                <Plus size={14} /> Add Room
-                              </button>
+                                <motion.span animate={{ rotate: [0, 90, 0] }} transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }} className="inline-flex">
+                                  <Plus size={14} />
+                                </motion.span>
+                                Add Room
+                              </motion.button>
                             </div>
                           </div>
 
                           {/* Accordion content */}
                           <AnimatePresence>
                             {isExpanded && (
-                              <motion.div 
-                                initial={{ height: 0 }} 
-                                animate={{ height: 'auto' }} 
-                                exit={{ height: 0 }} 
-                                className="overflow-hidden"
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                                className="relative overflow-hidden"
                               >
                                 <div className="p-5">
                                   {classRooms.length === 0 ? (
-                                    <p className="text-sm text-zinc-400 italic text-center py-4">No units configured in this class.</p>
+                                    <motion.p
+                                      initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                                      className="text-sm text-zinc-400 italic text-center py-6"
+                                    >
+                                      No units configured in this class.
+                                    </motion.p>
                                   ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                      {classRooms.map(room => (
-                                        <div 
-                                          key={room.id} 
-                                          className={`p-4 rounded-2xl border flex items-center justify-between transition-all ${
-                                            room.room_blocked 
-                                              ? 'bg-zinc-50 border-zinc-200/80 opacity-75' 
-                                              : 'bg-white border-zinc-200/60 shadow-xs hover:shadow-md'
+                                      {classRooms.map((room, roomIdx) => {
+                                        const statusStyles = {
+                                          AVAILABLE: { text: 'text-emerald-700', accent: '16, 185, 129' },
+                                          OCCUPIED: { text: 'text-rose-700', accent: '244, 63, 94' },
+                                          DIRTY: { text: 'text-amber-700', accent: '245, 158, 11' },
+                                          CLEANING: { text: 'text-violet-700', accent: '139, 92, 246' },
+                                          INSPECTING: { text: 'text-blue-700', accent: '59, 130, 246' },
+                                        };
+                                        const rs = statusStyles[room.status?.toUpperCase()] || { text: 'text-zinc-700', accent: '148, 163, 184' };
+
+                                        return (
+                                        <motion.div
+                                          key={room.id}
+                                          initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                                          animate={{ opacity: 1, y: 0, scale: 1, transition: { delay: roomIdx * 0.03 } }}
+                                          whileHover={!room.room_blocked ? { y: -4, scale: 1.015, boxShadow: `0px 18px 36px -14px rgba(${rs.accent}, 0.35)` } : {}}
+                                          transition={{ type: 'spring', stiffness: 320, damping: 24 }}
+                                          className={`group relative p-4 rounded-2xl border flex items-center justify-between transition-colors overflow-hidden ${
+                                            room.room_blocked
+                                              ? 'bg-zinc-50 border-zinc-200/80 opacity-75'
+                                              : 'bg-white border-zinc-200/60 shadow-xs'
                                           }`}
                                         >
-                                          <div className="flex flex-col items-start gap-2">
-                                            <p className="font-bold text-zinc-900 text-sm">Room {room.room_number}</p>
-                                            
+                                          {!room.room_blocked && <div className="rhi-sheen" />}
+                                          <span
+                                            className="absolute left-0 top-0 bottom-0 w-1"
+                                            style={{ background: `rgba(${rs.accent}, ${room.room_blocked ? 0.25 : 0.8})` }}
+                                          />
+                                          <div className="relative flex flex-col items-start gap-2 pl-2">
+                                            <p className="font-bold text-zinc-900 text-sm flex items-center gap-1.5">
+                                              <span className="text-xs">🛏️</span> Room {room.room_number}
+                                            </p>
+
                                             {room.room_blocked ? (
                                               <span className="px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider bg-zinc-200 text-zinc-600 flex items-center gap-1">
                                                 <Lock size={10}/> Blocked
@@ -1820,7 +2228,7 @@ export default function ManagerDashboard() {
                                               <select
                                                 value={room.status?.toUpperCase()}
                                                 onChange={(e) => handleChangeStatus(room.id, e.target.value)}
-                                                className={`px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border cursor-pointer outline-none transition-colors ${
+                                                className={`px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border cursor-pointer outline-none transition-colors shadow-sm ${
                                                   room.status?.toUpperCase() === 'AVAILABLE' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                                                   room.status?.toUpperCase() === 'OCCUPIED' ? 'bg-rose-50 text-rose-700 border-rose-200' :
                                                   room.status?.toUpperCase() === 'DIRTY' ? 'bg-amber-50 text-amber-700 border-amber-200' :
@@ -1838,29 +2246,34 @@ export default function ManagerDashboard() {
                                               </select>
                                             )}
                                           </div>
-                                          
-                                          <div className="flex flex-col gap-1.5 text-[10px]">
-                                            <button 
+
+                                          <div className="relative flex flex-col gap-1.5 text-[10px]">
+                                            <motion.button
+                                              whileHover={{ scale: 1.04 }}
+                                              whileTap={{ scale: 0.95 }}
                                               onClick={() => handleToggleBlock(room.id)}
                                               className={`font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-lg border transition-colors flex items-center justify-center gap-1 ${
-                                                room.room_blocked 
-                                                  ? 'bg-zinc-200 text-zinc-700 border-transparent hover:bg-zinc-300' 
+                                                room.room_blocked
+                                                  ? 'bg-zinc-200 text-zinc-700 border-transparent hover:bg-zinc-300'
                                                   : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
                                               }`}
                                             >
                                               {room.room_blocked ? <Unlock size={11}/> : <Lock size={11}/>}
                                               {room.room_blocked ? 'Unblock' : 'Block'}
-                                            </button>
-                                            
-                                            <button 
+                                            </motion.button>
+
+                                            <motion.button
+                                              whileHover={{ scale: 1.04 }}
+                                              whileTap={{ scale: 0.95 }}
                                               onClick={() => handleDeleteRoom(room.id, room.room_number)}
                                               className="font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-lg bg-white border border-rose-100 text-rose-500 hover:bg-rose-50 transition-colors flex items-center justify-center gap-1"
                                             >
                                               <Trash2 size={11}/> Delete
-                                            </button>
+                                            </motion.button>
                                           </div>
-                                        </div>
-                                      ))}
+                                        </motion.div>
+                                        );
+                                      })}
                                     </div>
                                   )}
                                 </div>
@@ -1868,126 +2281,213 @@ export default function ManagerDashboard() {
                             )}
                           </AnimatePresence>
                         </div>
+                        </motion.div>
                       );
                     })}
                   </div>
                 </motion.div>
               )}
-
               {/* ============================================ */}
               {/* TAB: YIELD & DISTRIBUTION                   */}
               {/* ============================================ */}
               {activeTab === 'properties_yield' && (
                 <motion.div key="properties_yield" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
-                  {/* Banner */}
-                  <div className="bg-gradient-to-r from-zinc-900 via-slate-800 to-zinc-900 text-white rounded-[2rem] p-6 shadow-md flex flex-col md:flex-row items-center justify-between gap-4 border border-zinc-700/20">
-                    <div>
-                      <h3 className="text-base font-black tracking-tight">Yield & Distribution Controls</h3>
-                      <p className="text-xs text-zinc-400 mt-0.5">Automate dynamic pricing rules and adjust allocations across distribution sync channels.</p>
+
+                  {/* Local styles for this section only — shimmering border, floating orbs, dot-grid texture */}
+                  <style>{`
+                    @keyframes yld-shimmer { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+                    @keyframes yld-float { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(14px,-10px) scale(1.05); } }
+                    @keyframes yld-float-rev { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-12px,12px) scale(1.06); } }
+                    @keyframes yld-pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(45,212,191,0.45); } 70% { box-shadow: 0 0 0 10px rgba(45,212,191,0); } 100% { box-shadow: 0 0 0 0 rgba(45,212,191,0); } }
+                    @keyframes yld-pulse-ring-amber { 0% { box-shadow: 0 0 0 0 rgba(245,158,11,0.45); } 70% { box-shadow: 0 0 0 10px rgba(245,158,11,0); } 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0); } }
+                    .yld-glow-wrap { position: relative; border-radius: 2rem; padding: 2px; background-size: 220% 220%; animation: yld-shimmer 9s ease-in-out infinite; }
+                    .yld-dot-grid { background-image: radial-gradient(rgba(99,102,241,0.16) 1px, transparent 1px); background-size: 18px 18px; -webkit-mask-image: radial-gradient(circle at 30% 20%, rgba(0,0,0,0.9), transparent 70%); mask-image: radial-gradient(circle at 30% 20%, rgba(0,0,0,0.9), transparent 70%); }
+                    .yld-orb { position: absolute; border-radius: 9999px; filter: blur(48px); pointer-events: none; }
+                    .yld-ring-pulse { animation: yld-pulse-ring 2.4s cubic-bezier(0.4,0,0.6,1) infinite; }
+                    .yld-ring-pulse-amber { animation: yld-pulse-ring-amber 2.4s cubic-bezier(0.4,0,0.6,1) infinite; }
+                    .yld-card-hover { transition: box-shadow 0.4s cubic-bezier(0.22,1,0.36,1), border-color 0.3s ease, transform 0.3s ease; }
+                    .yld-sheen { position: absolute; inset: 0; background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.5) 45%, transparent 60%); transform: translateX(-130%); transition: transform 0.9s cubic-bezier(0.22,1,0.36,1); pointer-events: none; z-index: 3; border-radius: inherit; }
+                    .group:hover .yld-sheen { transform: translateX(130%); }
+                  `}</style>
+
+                  {/* Banner — deeper gradient, animated aurora blobs, floating icon */}
+                  <motion.div
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4 }}
+                    className="relative overflow-hidden rounded-[2rem] p-6 shadow-lg border border-white/10"
+                    style={{ background: 'linear-gradient(115deg, #4f46e5 0%, #0ea5e9 45%, #14b8a6 100%)', backgroundSize: '200% 200%', animation: 'yld-shimmer 10s ease-in-out infinite' }}
+                  >
+                    <motion.div className="yld-orb w-56 h-56 bg-fuchsia-400/25" style={{ top: '-4rem', right: '-3rem' }} animate={{ x: [0, 20, 0], y: [0, -14, 0] }} transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }} />
+                    <motion.div className="yld-orb w-48 h-48 bg-teal-300/25" style={{ bottom: '-3.5rem', left: '10%' }} animate={{ x: [0, -18, 0], y: [0, 12, 0] }} transition={{ duration: 11, repeat: Infinity, ease: 'easeInOut' }} />
+                    <div className="relative flex flex-col md:flex-row items-center justify-between gap-4 text-white">
+                      <div className="flex items-center gap-4">
+                        <motion.div
+                          animate={{ rotate: [0, -8, 8, 0], y: [0, -3, 0] }}
+                          transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                          className="hidden sm:flex w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-md border border-white/20 items-center justify-center shadow-lg"
+                        >
+                          <TrendingUp size={22} className="text-white" />
+                        </motion.div>
+                        <div>
+                          <h3 className="text-base font-black tracking-tight flex items-center gap-2">
+                            Yield &amp; Distribution Controls
+                            <Sparkles size={14} className="text-amber-200" />
+                          </h3>
+                          <p className="text-xs text-white/85 mt-0.5">Automate dynamic pricing rules and adjust allocations across distribution sync channels.</p>
+                        </div>
+                      </div>
+                      <span className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/15 border border-white/20 text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm">
+                        <span className="relative flex h-1.5 w-1.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-300" />
+                        </span>
+                        Engine Live
+                      </span>
                     </div>
-                  </div>
+                  </motion.div>
 
                   {/* Dynamic Pricing & Yield Management Engine */}
                   {yieldRules && (
+                    <div className="yld-glow-wrap" style={{ backgroundImage: 'linear-gradient(120deg, #2dd4bf, #6366f1, #0ea5e9, #2dd4bf)' }}>
                     <motion.div 
-                      whileHover={{ y: -4 }}
-                      transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-indigo-50/25 rounded-[2rem] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_28px_-18px_rgba(99,102,241,0.22)] border border-zinc-200/60 space-y-6"
+                      whileHover={{ y: -4, scale: 1.005 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                      className="relative overflow-hidden bg-white/95 backdrop-blur-xl rounded-[calc(2rem-2px)] p-6 shadow-[0_20px_50px_-12px_rgba(20,184,166,0.2)] space-y-6"
                     >
-                      <div className="absolute -top-14 -right-14 w-40 h-40 rounded-full bg-indigo-300/10 blur-3xl pointer-events-none" />
-                      <div className="relative flex items-center gap-2 border-b border-zinc-100 pb-3">
-                        <TrendingUp size={16} className="text-indigo-600" />
-                        <h3 className="text-sm font-black text-zinc-955 uppercase tracking-wider">Dynamic Pricing & Yield Management</h3>
+                      <div className="absolute inset-0 yld-dot-grid pointer-events-none" />
+                      <div className="yld-orb -top-14 -right-14 w-48 h-48 bg-teal-300/25 animate-pulse" />
+                      <div className="yld-orb -bottom-14 -left-14 w-40 h-40 bg-indigo-300/20" />
+                      
+                      <div className="relative flex items-center gap-3 border-b border-zinc-100/80 pb-4">
+                        <motion.div
+                          whileHover={{ rotate: -10, scale: 1.1 }}
+                          transition={{ type: 'spring', stiffness: 400, damping: 14 }}
+                          className="bg-gradient-to-br from-teal-100 to-blue-100 p-2.5 rounded-xl border border-teal-200/60 shadow-sm yld-ring-pulse"
+                        >
+                          <TrendingUp size={20} className="text-teal-600" />
+                        </motion.div>
+                        <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-teal-600 via-blue-600 to-indigo-600">Dynamic Pricing &amp; Yield Engine</h3>
                       </div>
 
                       <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Occupancy surge */}
-                        <div className="bg-zinc-50/50 p-5 rounded-2xl border border-zinc-200/40 flex flex-col justify-between">
-                          <div>
+                        <motion.div 
+                          whileHover={{ y: -4, scale: 1.01 }}
+                          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                          className="group relative bg-gradient-to-br from-teal-50/70 via-white to-white p-5 rounded-2xl border-2 border-teal-100/70 hover:border-teal-300/70 hover:shadow-xl hover:shadow-teal-500/15 flex flex-col justify-between transition-all duration-300 overflow-hidden yld-card-hover"
+                        >
+                          <div className="yld-sheen" />
+                          <div className="absolute top-0 right-0 w-28 h-28 bg-teal-400/10 rounded-full blur-2xl group-hover:bg-teal-400/20 transition-colors" style={{ animation: 'yld-float 7s ease-in-out infinite' }} />
+                          <div className="relative">
                             <div className="flex justify-between items-center mb-2">
-                              <h4 className="text-xs font-black uppercase tracking-wider text-zinc-800">Occupancy-Based Surges</h4>
-                              <label className="relative inline-flex items-center cursor-pointer select-none">
+                              <div className="flex items-center gap-2">
+                                <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-teal-100 text-teal-600 shadow-sm">
+                                  <Activity size={13} />
+                                </span>
+                                <h4 className="text-xs font-black uppercase tracking-wider text-slate-700">Occupancy Surges</h4>
+                              </div>
+                              <label className="relative inline-flex items-center cursor-pointer select-none z-10">
                                 <input 
                                   type="checkbox" 
                                   checked={yieldRules.pricing_surges.enabled}
                                   onChange={e => handleSaveYieldRule('pricing_surges', { ...yieldRules.pricing_surges, enabled: e.target.checked })}
                                   className="sr-only peer"
                                 />
-                                <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-teal-400 peer-checked:to-blue-500 shadow-inner peer-checked:shadow-teal-500/40"></div>
                               </label>
                             </div>
-                            <p className="text-[10px] text-zinc-400 mb-4">Automatically increase room prices by X% when hotel occupancy exceeds the threshold.</p>
+                            <p className="text-[10px] text-slate-400 mb-5">Automatically increase room prices by X% when hotel occupancy exceeds the threshold.</p>
                           </div>
-                          <div className="flex items-center gap-4">
+                          <div className="relative flex items-center gap-4">
                             <div className="flex-1">
-                              <label className="text-[9px] font-bold text-zinc-400 uppercase block mb-1">Occupancy Trigger (%)</label>
+                              <label className="text-[9px] font-bold text-teal-600/80 uppercase block mb-1.5 tracking-wider">Occupancy Trigger (%)</label>
                               <input 
                                 type="number" 
                                 value={yieldRules.pricing_surges.occupancy_threshold}
                                 onChange={e => handleSaveYieldRule('pricing_surges', { ...yieldRules.pricing_surges, occupancy_threshold: parseInt(e.target.value) || 0 })}
-                                className="fd-input py-1.5 px-3 rounded-lg text-xs"
+                                className="w-full bg-white border border-teal-200 focus:border-teal-400 focus:ring-2 focus:ring-teal-400/30 py-2 px-3 rounded-xl text-xs font-bold text-slate-700 outline-none transition-shadow shadow-sm"
                               />
                             </div>
                             <div className="flex-1">
-                              <label className="text-[9px] font-bold text-zinc-400 uppercase block mb-1">Surge Rate Multiplier (%)</label>
+                              <label className="text-[9px] font-bold text-blue-600/80 uppercase block mb-1.5 tracking-wider">Surge Rate Multiplier (%)</label>
                               <input 
                                 type="number" 
                                 value={yieldRules.pricing_surges.surge_percentage}
                                 onChange={e => handleSaveYieldRule('pricing_surges', { ...yieldRules.pricing_surges, surge_percentage: parseInt(e.target.value) || 0 })}
-                                className="fd-input py-1.5 px-3 rounded-lg text-xs"
+                                className="w-full bg-white border border-blue-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30 py-2 px-3 rounded-xl text-xs font-bold text-slate-700 outline-none transition-shadow shadow-sm"
                               />
                             </div>
                           </div>
-                        </div>
+                        </motion.div>
 
                         {/* Length of Stay Discounts */}
-                        <div className="bg-zinc-50/50 p-5 rounded-2xl border border-zinc-200/40 flex flex-col justify-between">
-                          <div>
+                        <motion.div 
+                          whileHover={{ y: -4, scale: 1.01 }}
+                          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                          className="group relative bg-gradient-to-br from-blue-50/70 via-white to-white p-5 rounded-2xl border-2 border-blue-100/70 hover:border-blue-300/70 hover:shadow-xl hover:shadow-blue-500/15 flex flex-col justify-between transition-all duration-300 overflow-hidden yld-card-hover"
+                        >
+                          <div className="yld-sheen" />
+                          <div className="absolute top-0 right-0 w-28 h-28 bg-blue-400/10 rounded-full blur-2xl group-hover:bg-blue-400/20 transition-colors" style={{ animation: 'yld-float-rev 8s ease-in-out infinite' }} />
+                          <div className="relative">
                             <div className="flex justify-between items-center mb-2">
-                              <h4 className="text-xs font-black uppercase tracking-wider text-zinc-800">Length-of-Stay (LOS) Discounts</h4>
-                              <label className="relative inline-flex items-center cursor-pointer select-none">
+                              <div className="flex items-center gap-2">
+                                <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-blue-100 text-blue-600 shadow-sm">
+                                  <Clock size={13} />
+                                </span>
+                                <h4 className="text-xs font-black uppercase tracking-wider text-slate-700">LOS Discounts</h4>
+                              </div>
+                              <label className="relative inline-flex items-center cursor-pointer select-none z-10">
                                 <input 
                                   type="checkbox" 
                                   checked={yieldRules.los_discount.enabled}
                                   onChange={e => handleSaveYieldRule('los_discount', { ...yieldRules.los_discount, enabled: e.target.checked })}
                                   className="sr-only peer"
                                 />
-                                <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-blue-400 peer-checked:to-teal-500 shadow-inner peer-checked:shadow-blue-500/40"></div>
                               </label>
                             </div>
-                            <p className="text-[10px] text-zinc-400 mb-4">Automatically apply discounts for bookings exceeding the threshold to encourage longer stays.</p>
+                            <p className="text-[10px] text-slate-400 mb-5">Automatically apply discounts for bookings exceeding the threshold to encourage longer stays.</p>
                           </div>
-                          <div className="flex items-center gap-4">
+                          <div className="relative flex items-center gap-4">
                             <div className="flex-1">
-                              <label className="text-[9px] font-bold text-zinc-400 uppercase block mb-1">Min Nights Threshold</label>
+                              <label className="text-[9px] font-bold text-blue-600/80 uppercase block mb-1.5 tracking-wider">Min Nights</label>
                               <input 
                                 type="number" 
                                 value={yieldRules.los_discount.min_nights}
                                 onChange={e => handleSaveYieldRule('los_discount', { ...yieldRules.los_discount, min_nights: parseInt(e.target.value) || 0 })}
-                                className="fd-input py-1.5 px-3 rounded-lg text-xs"
+                                className="w-full bg-white border border-blue-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30 py-2 px-3 rounded-xl text-xs font-bold text-slate-700 outline-none transition-shadow shadow-sm"
                               />
                             </div>
                             <div className="flex-1">
-                              <label className="text-[9px] font-bold text-zinc-400 uppercase block mb-1">Discount Amount (%)</label>
+                              <label className="text-[9px] font-bold text-teal-600/80 uppercase block mb-1.5 tracking-wider">Discount Amount (%)</label>
                               <input 
                                 type="number" 
                                 value={yieldRules.los_discount.discount_percentage}
                                 onChange={e => handleSaveYieldRule('los_discount', { ...yieldRules.los_discount, discount_percentage: parseInt(e.target.value) || 0 })}
-                                className="fd-input py-1.5 px-3 rounded-lg text-xs"
+                                className="w-full bg-white border border-teal-200 focus:border-teal-400 focus:ring-2 focus:ring-teal-400/30 py-2 px-3 rounded-xl text-xs font-bold text-slate-700 outline-none transition-shadow shadow-sm"
                               />
                             </div>
                           </div>
-                        </div>
+                        </motion.div>
                       </div>
 
                       {/* Seasonal Multipliers */}
-                      <div className="relative bg-zinc-50/50 p-5 rounded-2xl border border-zinc-200/40">
-                        <div className="flex justify-between items-center mb-4">
-                          <div>
-                            <h4 className="text-xs font-black uppercase tracking-wider text-zinc-800">Seasonal Rate Calendars</h4>
-                            <p className="text-[10px] text-zinc-400">Define rate multipliers for holidays, local festivals, and busy seasonal periods.</p>
+                      <div className="relative bg-gradient-to-br from-indigo-50/60 via-slate-50/60 to-white p-5 rounded-2xl border-2 border-indigo-100/60 mt-4 shadow-inner overflow-hidden">
+                        <div className="absolute -top-10 -right-10 w-32 h-32 bg-indigo-300/15 rounded-full blur-2xl pointer-events-none" />
+                        <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5">
+                          <div className="flex items-center gap-2.5">
+                            <span className="flex items-center justify-center w-8 h-8 rounded-xl bg-indigo-100 text-indigo-600 shadow-sm">
+                              <Clock size={15} />
+                            </span>
+                            <div>
+                              <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">Seasonal Rate Calendars</h4>
+                              <p className="text-[10px] text-slate-400">Define rate multipliers for holidays, local festivals, and busy seasonal periods.</p>
+                            </div>
                           </div>
-                          <button 
+                          <motion.button 
+                            whileHover={{ scale: 1.05, y: -1 }}
+                            whileTap={{ scale: 0.95 }}
                             onClick={() => {
                               const name = prompt('Enter holiday / season name:');
                               const multiplier = parseFloat(prompt('Enter multiplier (e.g. 1.5):') || '1.0');
@@ -1998,76 +2498,132 @@ export default function ManagerDashboard() {
                                 handleSaveYieldRule('seasonal_multiplier', newMultipliers);
                               }
                             }}
-                            className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] uppercase tracking-wider px-3.5 py-1.5 rounded-lg transition-all"
+                            className="relative bg-gradient-to-r from-indigo-500 via-teal-500 to-blue-500 hover:shadow-lg hover:shadow-indigo-500/30 text-white font-bold text-[10px] uppercase tracking-wider px-4 py-2.5 rounded-xl transition-shadow shadow-md whitespace-nowrap flex items-center gap-1.5 overflow-hidden"
                           >
-                            Add Calendar Period
-                          </button>
+                            <motion.span animate={{ rotate: [0, 15, -15, 0] }} transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }} className="inline-flex">
+                              <Sparkles size={12} />
+                            </motion.span>
+                            Add Period
+                          </motion.button>
                         </div>
 
-                        <div className="space-y-2">
+                        <div className="relative space-y-3">
                           {yieldRules.seasonal_multiplier.length === 0 ? (
-                            <p className="text-xs text-zinc-400 italic py-2 text-center">No seasonal multipliers defined</p>
+                            <motion.div
+                              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                              className="flex flex-col items-center justify-center py-8 text-slate-300"
+                            >
+                              <motion.div animate={{ y: [0, -6, 0] }} transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}>
+                                <AlertTriangle size={26} className="mb-2 opacity-50" />
+                              </motion.div>
+                              <p className="text-xs italic">No seasonal multipliers defined</p>
+                            </motion.div>
                           ) : (
-                            yieldRules.seasonal_multiplier.map((sm, idx) => (
-                              <div key={idx} className="flex justify-between items-center p-3 rounded-xl bg-white border border-zinc-200/40 text-xs">
-                                <div>
-                                  <p className="font-bold text-zinc-950">{sm.event_name}</p>
-                                  <p className="text-[10px] text-zinc-400">{sm.start_date} to {sm.end_date}</p>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                  <span className="font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{sm.multiplier}x Multiplier</span>
-                                  <button 
-                                    onClick={() => {
-                                      const updated = yieldRules.seasonal_multiplier.filter((_, i) => i !== idx);
-                                      handleSaveYieldRule('seasonal_multiplier', updated);
-                                    }}
-                                    className="text-rose-500 font-bold text-[10px] uppercase tracking-wider"
-                                  >
-                                    Remove
-                                  </button>
-                                </div>
-                              </div>
-                            ))
+                            <AnimatePresence>
+                              {yieldRules.seasonal_multiplier.map((sm, idx) => (
+                                <motion.div 
+                                  initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                                  animate={{ opacity: 1, y: 0, scale: 1, transition: { delay: idx * 0.05 } }}
+                                  exit={{ opacity: 0, x: -12 }}
+                                  whileHover={{ x: 2 }}
+                                  key={idx} 
+                                  className="group flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 p-3.5 rounded-xl bg-white border border-indigo-100 shadow-sm hover:shadow-lg hover:shadow-indigo-500/10 hover:border-indigo-200 transition-all"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <span className="hidden sm:flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-100 to-teal-100 text-indigo-600 shrink-0">
+                                      <Clock size={14} />
+                                    </span>
+                                    <div>
+                                      <p className="font-black text-slate-800 text-sm">{sm.event_name}</p>
+                                      <p className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-0.5"><Clock size={10}/> {sm.start_date} <span className="text-slate-300">to</span> {sm.end_date}</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
+                                    <span className="font-bold text-teal-700 bg-gradient-to-r from-teal-50 to-blue-50 px-2.5 py-1 rounded-lg border border-teal-100 text-[10px] uppercase tracking-wider shadow-sm">{sm.multiplier}x Multiplier</span>
+                                    <motion.button 
+                                      whileHover={{ scale: 1.15, rotate: -6 }}
+                                      whileTap={{ scale: 0.9 }}
+                                      onClick={() => {
+                                        const updated = yieldRules.seasonal_multiplier.filter((_, i) => i !== idx);
+                                        handleSaveYieldRule('seasonal_multiplier', updated);
+                                      }}
+                                      className="text-slate-300 hover:text-rose-500 hover:bg-rose-50 p-1.5 rounded-lg transition-colors"
+                                      title="Remove"
+                                    >
+                                      <Trash2 size={14} />
+                                    </motion.button>
+                                  </div>
+                                </motion.div>
+                              ))}
+                            </AnimatePresence>
                           )}
                         </div>
                       </div>
                     </motion.div>
+                    </div>
                   )}
 
                   {/* Channel Manager Configuration */}
                   {yieldRules && (
+                    <div className="yld-glow-wrap" style={{ backgroundImage: 'linear-gradient(120deg, #f59e0b, #fb7185, #f59e0b)' }}>
                     <motion.div 
-                      whileHover={{ y: -4 }}
-                      transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-amber-50/20 rounded-[2rem] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_28px_-18px_rgba(245,158,11,0.22)] border border-zinc-200/60 space-y-6"
+                      whileHover={{ y: -4, scale: 1.005 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                      className="relative overflow-hidden bg-white/95 backdrop-blur-xl rounded-[calc(2rem-2px)] p-6 shadow-[0_20px_50px_-12px_rgba(245,158,11,0.2)] space-y-6"
                     >
-                      <div className="absolute -top-14 -left-14 w-40 h-40 rounded-full bg-amber-300/10 blur-3xl pointer-events-none" />
-                      <div className="relative flex items-center justify-between border-b border-zinc-100 pb-3">
-                        <div className="flex items-center gap-2">
-                          <Sliders size={16} className="text-indigo-600" />
-                          <h3 className="text-sm font-black text-zinc-955 uppercase tracking-wider">Channel Manager & OTA Sync</h3>
+                      <div className="absolute inset-0 yld-dot-grid pointer-events-none opacity-60" />
+                      <div className="yld-orb -top-20 -left-20 w-56 h-56 bg-amber-400/15 animate-pulse" />
+                      <div className="yld-orb bottom-0 right-0 w-40 h-40 bg-rose-400/10" />
+                      
+                      <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100/80 pb-4">
+                        <div className="flex items-center gap-3">
+                          <motion.div
+                            whileHover={{ rotate: 10, scale: 1.1 }}
+                            transition={{ type: 'spring', stiffness: 400, damping: 14 }}
+                            className="bg-gradient-to-br from-amber-100 to-rose-100 p-2.5 rounded-xl border border-amber-200/60 shadow-sm yld-ring-pulse-amber"
+                          >
+                            <Sliders size={20} className="text-amber-500" />
+                          </motion.div>
+                          <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500">Channel Manager &amp; OTA Sync</h3>
                         </div>
-                        <div className="flex items-center gap-2 bg-rose-50 border border-rose-100 px-3 py-1.5 rounded-full">
-                          <span className="text-[10px] font-black uppercase text-rose-700 tracking-wider">Master OTA Kill Switch</span>
-                          <label className="relative inline-flex items-center cursor-pointer select-none">
+                        <div className="flex items-center gap-3 bg-white shadow-sm border-2 border-rose-100 px-4 py-2 rounded-2xl relative overflow-hidden group">
+                          <div className="absolute inset-0 bg-gradient-to-r from-rose-50/70 to-orange-50/50 group-hover:from-rose-100/70 group-hover:to-orange-100/50 transition-colors pointer-events-none" />
+                          <span className="relative text-[10px] font-black uppercase text-rose-600 tracking-wider flex items-center gap-1.5">
+                            <motion.span animate={{ scale: [1, 1.2, 1] }} transition={{ duration: 1.6, repeat: Infinity }} className="inline-flex">
+                              <AlertTriangle size={12}/>
+                            </motion.span>
+                            Master OTA Kill Switch
+                          </span>
+                          <label className="relative inline-flex items-center cursor-pointer select-none z-10">
                             <input 
                               type="checkbox" 
                               checked={yieldRules.channel_manager.master_ota_toggle}
                               onChange={e => handleSaveYieldRule('channel_manager', { ...yieldRules.channel_manager, master_ota_toggle: e.target.checked })}
                               className="sr-only peer"
                             />
-                            <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-600"></div>
+                            <div className="w-10 h-5 bg-rose-100 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-rose-200 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-rose-500 peer-checked:to-orange-500 shadow-inner peer-checked:shadow-rose-500/40"></div>
                           </label>
                         </div>
                       </div>
                       
-                      <p className="relative text-[10px] text-zinc-400">Limit specific room allocations to third-party travel platforms to manage distribution commission fees.</p>
+                      <p className="relative text-xs text-slate-400 max-w-2xl">Limit specific room allocations to third-party travel platforms to manage distribution commission fees effectively.</p>
 
-                      <div className="relative grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {['booking_com', 'expedia', 'agoda', 'direct'].map((channel) => (
-                          <div key={channel} className="bg-zinc-50/50 p-4 rounded-2xl border border-zinc-200/40">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">{channel.replace('_', '.')}</p>
-                            <div className="flex items-center gap-2 mt-2">
+                      <div className="relative grid grid-cols-2 md:grid-cols-4 gap-5">
+                        {['booking_com', 'expedia', 'agoda', 'direct'].map((channel, idx) => (
+                          <motion.div 
+                            key={channel} 
+                            initial={{ opacity: 0, y: 14 }}
+                            animate={{ opacity: 1, y: 0, transition: { delay: idx * 0.06 } }}
+                            whileHover={{ scale: 1.04, y: -3 }}
+                            transition={{ type: 'spring', stiffness: 320, damping: 20 }}
+                            className="group relative bg-gradient-to-b from-white to-zinc-50/50 p-5 rounded-2xl border-2 border-zinc-200/50 hover:border-amber-300/70 hover:shadow-xl hover:shadow-amber-500/15 transition-all duration-300 overflow-hidden"
+                          >
+                            <div className="yld-sheen" />
+                            <div className="flex items-center gap-2 mb-3">
+                              <span className={`w-2 h-2 rounded-full ${channel === 'direct' ? 'bg-teal-400 shadow-[0_0_8px_rgba(45,212,191,0.6)]' : 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]'}`} />
+                              <p className="text-[11px] font-black uppercase tracking-wider text-slate-700">{channel.replace('_', '.')}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
                               <input 
                                 type="number" 
                                 value={yieldRules.channel_manager.allotments[channel] || 0}
@@ -2075,14 +2631,15 @@ export default function ManagerDashboard() {
                                   const allotments = { ...yieldRules.channel_manager.allotments, [channel]: parseInt(e.target.value) || 0 };
                                   handleSaveYieldRule('channel_manager', { ...yieldRules.channel_manager, allotments });
                                 }}
-                                className="fd-input py-1.5 px-3 rounded-lg text-xs"
+                                className="w-full bg-white border border-amber-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30 py-2 px-3 rounded-xl text-sm font-bold text-slate-800 outline-none transition-shadow shadow-sm"
                               />
-                              <span className="text-[10px] font-bold text-zinc-500">Units</span>
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Units</span>
                             </div>
-                          </div>
+                          </motion.div>
                         ))}
                       </div>
                     </motion.div>
+                    </div>
                   )}
                 </motion.div>
               )}
@@ -2201,10 +2758,10 @@ export default function ManagerDashboard() {
                 <motion.div key="maintenance" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
                   
                   {/* Header Banner */}
-                  <div className="bg-gradient-to-r from-zinc-900 via-slate-800 to-zinc-900 text-white rounded-[2rem] p-6 shadow-md flex flex-col md:flex-row items-center justify-between gap-4 border border-zinc-700/20">
+                  <div className="bg-gradient-to-r from-blue-500 via-teal-500 to-blue-600 text-white rounded-[2rem] p-6 shadow-md flex flex-col md:flex-row items-center justify-between gap-4 border border-indigo-400/20">
                     <div>
                       <h3 className="text-base font-black tracking-tight">Support Ticket Dashboard</h3>
-                      <p className="text-xs text-zinc-400 mt-0.5">Dispatch technicians, track active repair timelines, and monitor SLA breach limits.</p>
+                      <p className="text-xs text-indigo-100 mt-0.5">Dispatch technicians, track active repair timelines, and monitor SLA breach limits.</p>
                     </div>
                     <button 
                       onClick={() => setIsAddTicketModalOpen(true)} 
