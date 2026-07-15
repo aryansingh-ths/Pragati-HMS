@@ -1852,77 +1852,203 @@ export default function ManagerDashboard() {
               {/* ============================================ */}
               {activeTab === 'analytics' && analyticsData && (
                 <motion.div key="analytics" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
+
+                  {/* Local styles for this section only — shimmering border, floating orbs, sheen sweep */}
+                  <style>{`
+                    @keyframes an-shimmer { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+                    @keyframes an-float { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(14px,-10px) scale(1.06); } }
+                    @keyframes an-float-rev { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-12px,10px) scale(1.05); } }
+                    @keyframes an-pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(79,70,229,0.4); } 70% { box-shadow: 0 0 0 9px rgba(79,70,229,0); } 100% { box-shadow: 0 0 0 0 rgba(79,70,229,0); } }
+                    @keyframes an-pulse-ring-rose { 0% { box-shadow: 0 0 0 0 rgba(244,63,94,0.4); } 70% { box-shadow: 0 0 0 9px rgba(244,63,94,0); } 100% { box-shadow: 0 0 0 0 rgba(244,63,94,0); } }
+                    @keyframes an-dash { to { stroke-dashoffset: 0; } }
+                    .an-glow-wrap { position: relative; border-radius: 2rem; padding: 2px; background-size: 220% 220%; animation: an-shimmer 10s ease-in-out infinite; }
+                    .an-orb { position: absolute; border-radius: 9999px; filter: blur(46px); pointer-events: none; }
+                    .an-ring-indigo { animation: an-pulse-ring 2.4s cubic-bezier(0.4,0,0.6,1) infinite; }
+                    .an-ring-rose { animation: an-pulse-ring-rose 2.4s cubic-bezier(0.4,0,0.6,1) infinite; }
+                    .an-sheen { position: absolute; inset: 0; background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.55) 45%, transparent 60%); transform: translateX(-130%); transition: transform 0.9s cubic-bezier(0.22,1,0.36,1); pointer-events: none; z-index: 3; border-radius: inherit; }
+                    .group:hover .an-sheen { transform: translateX(130%); }
+                    .an-dot-grid { background-image: radial-gradient(rgba(99,102,241,0.14) 1px, transparent 1px); background-size: 18px 18px; -webkit-mask-image: radial-gradient(circle at 90% 0%, rgba(0,0,0,0.8), transparent 68%); mask-image: radial-gradient(circle at 90% 0%, rgba(0,0,0,0.8), transparent 68%); }
+                  `}</style>
+
                   {/* Predictive Analytics Section */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     
                     {/* Pace Report Line Graph */}
-                    <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
-                      <div className="flex items-center gap-2 mb-4">
-                        <TrendingUp size={16} className="text-indigo-600" />
-                        <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider">Booking Velocity Pace Report</h3>
+                    <div className="an-glow-wrap" style={{ backgroundImage: 'linear-gradient(120deg, #6366f1, #0ea5e9, #6366f1)' }}>
+                    <motion.div
+                      initial={{ opacity: 0, y: 14 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      whileHover={{ y: -4, scale: 1.005 }}
+                      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                      className="group relative overflow-hidden bg-white/95 backdrop-blur-xl rounded-[calc(2rem-2px)] p-6 shadow-[0_20px_50px_-14px_rgba(79,70,229,0.18)]"
+                    >
+                      <div className="absolute inset-0 an-dot-grid pointer-events-none opacity-70" />
+                      <div className="an-orb -top-14 -right-14 w-44 h-44 bg-indigo-300/25" style={{ animation: 'an-float 8s ease-in-out infinite' }} />
+                      <div className="an-sheen" />
+
+                      <div className="relative flex items-center gap-2 mb-4">
+                        <motion.div
+                          whileHover={{ rotate: -10, scale: 1.1 }}
+                          className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center shadow-sm an-ring-indigo"
+                        >
+                          <TrendingUp size={15} className="text-white" />
+                        </motion.div>
+                        <h3 className="text-sm font-black uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-indigo-700 to-blue-600">Booking Velocity Pace Report</h3>
                       </div>
-                      <p className="text-[10px] text-zinc-400 uppercase tracking-wider font-bold mb-4">Month-on-Month pace curve (This Year vs Last Year)</p>
+                      <p className="relative text-[10px] text-zinc-400 uppercase tracking-wider font-bold mb-4">Month-on-Month pace curve (This Year vs Last Year)</p>
                       
-                      <div className="h-48 relative border-l border-b border-zinc-100 flex items-end px-2 pt-2">
+                      <div className="relative h-48 border-l border-b border-zinc-100 flex items-end px-2 pt-2">
                         <svg className="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
-                          {/* Target points connecting current pace */}
-                          <path 
-                            d="M 0 100 L 15 88 L 30 74 L 45 62 L 60 51 L 80 37 L 100 26" 
-                            fill="none" 
-                            stroke="#4f46e5" 
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
+                          <defs>
+                            <linearGradient id="an-area-fill" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.35" />
+                              <stop offset="100%" stopColor="#4f46e5" stopOpacity="0" />
+                            </linearGradient>
+                            <linearGradient id="an-line-stroke" x1="0" y1="0" x2="1" y2="0">
+                              <stop offset="0%" stopColor="#6366f1" />
+                              <stop offset="100%" stopColor="#0ea5e9" />
+                            </linearGradient>
+                          </defs>
+
+                          {/* Filled area beneath the current-year pace line */}
+                          <motion.path
+                            d="M 0 100 L 15 88 L 30 74 L 45 62 L 60 51 L 80 37 L 100 26 L 100 100 Z"
+                            fill="url(#an-area-fill)"
+                            stroke="none"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ duration: 0.8, delay: 0.3 }}
                           />
+
                           {/* Last year pace */}
-                          <path 
+                          <motion.path 
                             d="M 0 100 L 15 92 L 30 86 L 45 78 L 60 69 L 80 59 L 100 48" 
                             fill="none" 
                             stroke="#cbd5e1" 
                             strokeWidth="2"
                             strokeDasharray="4"
                             strokeLinecap="round"
+                            initial={{ pathLength: 0, opacity: 0 }}
+                            animate={{ pathLength: 1, opacity: 1 }}
+                            transition={{ duration: 1.2, ease: 'easeInOut' }}
                           />
+
+                          {/* Target points connecting current pace */}
+                          <motion.path 
+                            d="M 0 100 L 15 88 L 30 74 L 45 62 L 60 51 L 80 37 L 100 26" 
+                            fill="none" 
+                            stroke="url(#an-line-stroke)" 
+                            strokeWidth="2.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            initial={{ pathLength: 0 }}
+                            animate={{ pathLength: 1 }}
+                            transition={{ duration: 1.4, ease: [0.22, 1, 0.36, 1] }}
+                          />
+
+                          {/* Animated vertex markers on the current-year line */}
+                          {[[0,100],[15,88],[30,74],[45,62],[60,51],[80,37],[100,26]].map(([cx, cy], i) => (
+                            <motion.circle
+                              key={i}
+                              cx={cx} cy={cy} r="1.8"
+                              fill="#ffffff"
+                              stroke="#4f46e5"
+                              strokeWidth="1.4"
+                              initial={{ scale: 0, opacity: 0 }}
+                              animate={{ scale: 1, opacity: 1 }}
+                              transition={{ delay: 0.3 + i * 0.1, type: 'spring', stiffness: 400, damping: 14 }}
+                            />
+                          ))}
                         </svg>
                         
-                        <div className="absolute top-2 right-2 bg-white/80 p-2 rounded-xl border border-zinc-100 text-[9px] font-bold flex flex-col gap-1">
-                          <div className="flex items-center gap-1.5"><span className="w-2.5 h-0.5 bg-indigo-600 inline-block"></span> This Month (Pace: +15%)</div>
-                          <div className="flex items-center gap-1.5"><span className="w-2.5 h-0.5 border-b border-dashed border-zinc-400 inline-block"></span> Last Year</div>
-                        </div>
+                        <motion.div
+                          initial={{ opacity: 0, y: -6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.6 }}
+                          className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm p-2 rounded-xl border border-indigo-100 shadow-sm text-[9px] font-bold flex flex-col gap-1"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-2.5 h-0.5 rounded-full bg-gradient-to-r from-indigo-600 to-sky-500 inline-block"></span>
+                            <span className="text-indigo-700">This Month</span>
+                            <span className="px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-600 border border-emerald-100">+15%</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-zinc-500"><span className="w-2.5 h-0.5 border-b border-dashed border-zinc-400 inline-block"></span> Last Year</div>
+                        </motion.div>
                       </div>
-                      <div className="flex justify-between text-[9px] text-zinc-400 font-bold uppercase tracking-wider mt-2 px-1">
+                      <div className="relative flex justify-between text-[9px] text-zinc-400 font-bold uppercase tracking-wider mt-2 px-1">
                         <span>Day 1</span>
                         <span>Day 10</span>
                         <span>Day 20</span>
                         <span>Day 30</span>
                       </div>
+                    </motion.div>
                     </div>
 
                     {/* Cancellation Heatmaps */}
-                    <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
-                      <div className="flex items-center gap-2 mb-4">
-                        <AlertTriangle size={16} className="text-rose-500" />
-                        <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider">OTA Channel Cancellation Heatmap</h3>
+                    <div className="an-glow-wrap" style={{ backgroundImage: 'linear-gradient(120deg, #fb7185, #f59e0b, #fb7185)' }}>
+                    <motion.div
+                      initial={{ opacity: 0, y: 14 }}
+                      animate={{ opacity: 1, y: 0, transition: { delay: 0.08 } }}
+                      whileHover={{ y: -4, scale: 1.005 }}
+                      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                      className="group relative overflow-hidden bg-white/95 backdrop-blur-xl rounded-[calc(2rem-2px)] p-6 shadow-[0_20px_50px_-14px_rgba(244,63,94,0.18)]"
+                    >
+                      <div className="absolute inset-0 an-dot-grid pointer-events-none opacity-60" />
+                      <div className="an-orb -bottom-14 -left-14 w-44 h-44 bg-rose-300/25" style={{ animation: 'an-float-rev 9s ease-in-out infinite' }} />
+                      <div className="an-sheen" />
+
+                      <div className="relative flex items-center gap-2 mb-4">
+                        <motion.div
+                          whileHover={{ rotate: 10, scale: 1.1 }}
+                          className="w-8 h-8 rounded-xl bg-gradient-to-br from-rose-500 to-amber-500 flex items-center justify-center shadow-sm an-ring-rose"
+                        >
+                          <AlertTriangle size={15} className="text-white" />
+                        </motion.div>
+                        <h3 className="text-sm font-black uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-rose-600 to-amber-600">OTA Channel Cancellation Heatmap</h3>
                       </div>
-                      <p className="text-[10px] text-zinc-400 uppercase tracking-wider font-bold mb-4">Cancellation ratios per source channel and category</p>
+                      <p className="relative text-[10px] text-zinc-400 uppercase tracking-wider font-bold mb-4">Cancellation ratios per source channel and category</p>
                       
-                      <div className="space-y-3">
-                        {analyticsData.cancellationHeatmap.map((ch, idx) => (
-                          <div key={idx} className="space-y-1">
-                            <div className="flex justify-between text-xs font-bold text-zinc-800">
+                      <div className="relative space-y-4">
+                        {analyticsData.cancellationHeatmap.map((ch, idx) => {
+                          const rowTheme = ch.rate > 25
+                            ? { grad: 'from-rose-500 to-rose-400', chip: 'bg-rose-50 text-rose-700 border-rose-100', glow: 'rgba(244,63,94,0.35)' }
+                            : ch.rate > 15
+                            ? { grad: 'from-amber-500 to-amber-400', chip: 'bg-amber-50 text-amber-700 border-amber-100', glow: 'rgba(245,158,11,0.35)' }
+                            : { grad: 'from-emerald-500 to-emerald-400', chip: 'bg-emerald-50 text-emerald-700 border-emerald-100', glow: 'rgba(16,185,129,0.35)' };
+
+                          return (
+                          <motion.div
+                            key={idx}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0, transition: { delay: idx * 0.07 } }}
+                            whileHover={{ x: 2 }}
+                            className="space-y-1.5"
+                          >
+                            <div className="flex justify-between items-center text-xs font-bold text-zinc-800">
                               <span>{ch.category}</span>
-                              <span>{ch.rate}%</span>
+                              <motion.span
+                                key={ch.rate}
+                                initial={{ scale: 1.3 }} animate={{ scale: 1 }}
+                                transition={{ type: 'spring', stiffness: 400, damping: 12 }}
+                                className={`px-2 py-0.5 rounded-md text-[10px] border ${rowTheme.chip}`}
+                              >
+                                {ch.rate}%
+                              </motion.span>
                             </div>
-                            <div className="w-full h-2 bg-zinc-100 rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full rounded-full ${
-                                  ch.rate > 25 ? 'bg-rose-500' : ch.rate > 15 ? 'bg-amber-500' : 'bg-emerald-500'
-                                }`}
-                                style={{ width: `${ch.rate}%` }}
-                              ></div>
+                            <div className="w-full h-2.5 bg-zinc-100 rounded-full overflow-hidden shadow-inner">
+                              <motion.div 
+                                className={`h-full rounded-full bg-gradient-to-r ${rowTheme.grad}`}
+                                style={{ boxShadow: `0 0 10px -2px ${rowTheme.glow}` }}
+                                initial={{ width: 0 }}
+                                animate={{ width: `${ch.rate}%` }}
+                                transition={{ duration: 0.8, delay: 0.15 + idx * 0.07, ease: [0.22, 1, 0.36, 1] }}
+                              />
                             </div>
-                          </div>
-                        ))}
+                          </motion.div>
+                          );
+                        })}
                       </div>
+                    </motion.div>
                     </div>
 
                   </div>
@@ -2992,73 +3118,103 @@ export default function ManagerDashboard() {
                   </AnimatePresence>
 
                   {/* Preventive Maintenance & Contractor Auto-Routing */}
+                  {/* Preventive Maintenance & Contractor Auto-Routing */}
+                  <style>{`
+                    @keyframes mtn-shimmer { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+                    @keyframes mtn-pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(244,63,94,0.4); } 70% { box-shadow: 0 0 0 9px rgba(244,63,94,0); } 100% { box-shadow: 0 0 0 0 rgba(244,63,94,0); } }
+                    .mtn-orb { position: absolute; border-radius: 9999px; filter: blur(46px); pointer-events: none; }
+                    .mtn-glow-wrap { position: relative; border-radius: 2rem; padding: 2px; background-size: 220% 220%; animation: mtn-shimmer 10s ease-in-out infinite; }
+                    .mtn-ring-pulse { animation: mtn-pulse-ring 2.4s cubic-bezier(0.4,0,0.6,1) infinite; }
+                    .mtn-sheen { position: absolute; inset: 0; background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.55) 45%, transparent 60%); transform: translateX(-130%); transition: transform 0.85s cubic-bezier(0.22,1,0.36,1); pointer-events: none; z-index: 3; border-radius: inherit; }
+                    .group:hover .mtn-sheen { transform: translateX(130%); }
+                    .mtn-dot-grid { background-image: radial-gradient(rgba(99,102,241,0.14) 1px, transparent 1px); background-size: 18px 18px; -webkit-mask-image: radial-gradient(circle at 85% 10%, rgba(0,0,0,0.8), transparent 68%); mask-image: radial-gradient(circle at 85% 10%, rgba(0,0,0,0.8), transparent 68%); }
+                  `}</style>
+
                   {yieldRules && (
-                    <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-zinc-200/60 space-y-6">
-                      <div className="flex items-center gap-2 border-b border-zinc-100 pb-3">
-                        <Sparkles size={16} className="text-rose-500" />
-                        <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider">Preventive Maintenance Automation Rules</h3>
+                    <div className="mtn-glow-wrap" style={{ backgroundImage: 'linear-gradient(120deg, #fb7185, #6366f1, #fb7185)' }}>
+                    <motion.div
+                      whileHover={{ y: -4, scale: 1.005 }}
+                      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                      className="relative overflow-hidden bg-white/95 backdrop-blur-xl rounded-[calc(2rem-2px)] p-6 shadow-[0_20px_50px_-12px_rgba(99,102,241,0.18)] space-y-6"
+                    >
+                      <div className="absolute inset-0 mtn-dot-grid pointer-events-none opacity-70" />
+                      <div className="mtn-orb -top-16 -right-16 w-52 h-52 bg-rose-300/20 animate-pulse" />
+                      <div className="mtn-orb -bottom-14 -left-14 w-40 h-40 bg-indigo-300/20" />
+
+                      <div className="relative flex items-center gap-3 border-b border-zinc-100/80 pb-3">
+                        <motion.div
+                          whileHover={{ rotate: -10, scale: 1.1 }}
+                          transition={{ type: 'spring', stiffness: 400, damping: 14 }}
+                          className="bg-gradient-to-br from-rose-100 to-indigo-100 p-2.5 rounded-xl border border-rose-200/60 shadow-sm mtn-ring-pulse"
+                        >
+                          <Sparkles size={18} className="text-rose-500" />
+                        </motion.div>
+                        <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-rose-600 via-indigo-600 to-blue-600">Preventive Maintenance Automation Rules</h3>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Preventive schedules */}
-                        <div className="bg-zinc-50/50 p-5 rounded-2xl border border-zinc-200/40 space-y-4">
-                          <div>
-                            <h4 className="text-xs font-black uppercase tracking-wider text-zinc-800">Preventive HVAC/Generator Servicing Rules</h4>
-                            <p className="text-[10px] text-zinc-400">Specify rules to automatically flag assets for servicing after a specific interval of days.</p>
+                        <motion.div whileHover={{ y: -2 }} className="group relative bg-gradient-to-br from-indigo-50/60 via-white to-white p-5 rounded-2xl border-2 border-indigo-100/70 hover:border-indigo-300/70 hover:shadow-xl hover:shadow-indigo-500/10 space-y-4 transition-all duration-300 overflow-hidden">
+                          <div className="mtn-sheen" />
+                          <div className="relative">
+                            <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">Preventive HVAC/Generator Servicing Rules</h4>
+                            <p className="text-[10px] text-slate-400">Specify rules to automatically flag assets for servicing after a specific interval of days.</p>
                           </div>
-                          <div className="grid grid-cols-2 gap-4">
+                          <div className="relative grid grid-cols-2 gap-4">
                             <div>
-                              <label className="text-[9px] font-bold text-zinc-400 uppercase block mb-1">AC Servicing Interval (Days)</label>
+                              <label className="text-[9px] font-bold text-indigo-500 uppercase block mb-1.5 tracking-wider">AC Servicing Interval (Days)</label>
                               <input 
                                 type="number" 
                                 value={yieldRules.maintenance_automation.ac_servicing_days}
                                 onChange={e => handleSaveYieldRule('maintenance_automation', { ...yieldRules.maintenance_automation, ac_servicing_days: parseInt(e.target.value) || 0 })}
-                                className="fd-input py-1.5 px-3 rounded-lg text-xs"
+                                className="w-full bg-white border border-indigo-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/30 py-2 px-3 rounded-xl text-xs font-bold text-slate-700 outline-none transition-shadow shadow-sm"
                               />
                             </div>
                             <div>
-                              <label className="text-[9px] font-bold text-zinc-400 uppercase block mb-1">Generator Check (Days)</label>
+                              <label className="text-[9px] font-bold text-blue-500 uppercase block mb-1.5 tracking-wider">Generator Check (Days)</label>
                               <input 
                                 type="number" 
                                 value={yieldRules.maintenance_automation.generator_check_days}
                                 onChange={e => handleSaveYieldRule('maintenance_automation', { ...yieldRules.maintenance_automation, generator_check_days: parseInt(e.target.value) || 0 })}
-                                className="fd-input py-1.5 px-3 rounded-lg text-xs"
+                                className="w-full bg-white border border-blue-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30 py-2 px-3 rounded-xl text-xs font-bold text-slate-700 outline-none transition-shadow shadow-sm"
                               />
                             </div>
                           </div>
-                        </div>
+                        </motion.div>
 
                         {/* Contractor Auto Routing */}
-                        <div className="bg-zinc-50/50 p-5 rounded-2xl border border-zinc-200/40 space-y-4">
-                          <div>
+                        <motion.div whileHover={{ y: -2 }} className="group relative bg-gradient-to-br from-rose-50/60 via-white to-white p-5 rounded-2xl border-2 border-rose-100/70 hover:border-rose-300/70 hover:shadow-xl hover:shadow-rose-500/10 space-y-4 transition-all duration-300 overflow-hidden">
+                          <div className="mtn-sheen" />
+                          <div className="relative">
                             <div className="flex justify-between items-center mb-2">
-                              <h4 className="text-xs font-black uppercase tracking-wider text-zinc-800">Contractor Auto-Routing Engine</h4>
-                              <label className="relative inline-flex items-center cursor-pointer select-none">
+                              <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">Contractor Auto-Routing Engine</h4>
+                              <label className="relative inline-flex items-center cursor-pointer select-none z-10">
                                 <input 
                                   type="checkbox" 
                                   checked={yieldRules.maintenance_automation.auto_route_contractor}
                                   onChange={e => handleSaveYieldRule('maintenance_automation', { ...yieldRules.maintenance_automation, auto_route_contractor: e.target.checked })}
                                   className="sr-only peer"
                                 />
-                                <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                                <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-rose-500 peer-checked:to-indigo-600 shadow-inner peer-checked:shadow-rose-500/40"></div>
                               </label>
                             </div>
-                            <p className="text-[10px] text-zinc-400">Automatically assign specialized third-party contractors if a support ticket is unassigned for over 2 hours.</p>
+                            <p className="text-[10px] text-slate-400">Automatically assign specialized third-party contractors if a support ticket is unassigned for over 2 hours.</p>
                           </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-zinc-400 uppercase block mb-1">Backup Dispatch Contractor</label>
+                          <div className="relative">
+                            <label className="text-[9px] font-bold text-rose-500 uppercase block mb-1.5 tracking-wider">Backup Dispatch Contractor</label>
                             <select 
                               value={yieldRules.maintenance_automation.backup_contractor}
                               onChange={e => handleSaveYieldRule('maintenance_automation', { ...yieldRules.maintenance_automation, backup_contractor: e.target.value })}
-                              className="fd-input bg-white border border-zinc-200/60 rounded-xl"
+                              className="w-full bg-white border border-rose-200 focus:border-rose-400 focus:ring-2 focus:ring-rose-400/30 py-2 px-3 rounded-xl text-xs font-bold text-slate-700 outline-none transition-shadow shadow-sm"
                             >
                               <option value="QuickFix Hospitality Group">QuickFix Hospitality Group</option>
                               <option value="Apex Facilities Management">Apex Facilities Management</option>
                               <option value="Prime Power & Grid Systems">Prime Power & Grid Systems</option>
                             </select>
                           </div>
-                        </div>
+                        </motion.div>
                       </div>
+                    </motion.div>
                     </div>
                   )}
                 </motion.div>
