@@ -30,9 +30,12 @@ export default function App() {
   const [selectedRoomClass, setSelectedRoomClass] = useState(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
 
-  // STEP 3 IMPLEMENTATION: Securely check localStorage to persist session on refresh
-  const [userRole, setUserRole] = useState(() => localStorage.getItem('hms_role') || null);
-  const [authToken, setAuthToken] = useState(() => localStorage.getItem('hms_token') || null);
+  // STEP 3 IMPLEMENTATION: Securely check sessionStorage to persist session on refresh.
+  // sessionStorage (not localStorage) keeps this scoped to a single tab, so each
+  // tab can hold its own independent login and won't be affected by logins or
+  // logouts happening in other tabs.
+  const [userRole, setUserRole] = useState(() => sessionStorage.getItem('hms_role') || null);
+  const [authToken, setAuthToken] = useState(() => sessionStorage.getItem('hms_token') || null);
 
   const fetchRoomClasses = async () => {
     setLoading(true);

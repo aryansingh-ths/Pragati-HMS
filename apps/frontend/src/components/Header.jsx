@@ -184,8 +184,10 @@ export default function Header({
                     setUserRole(null); 
                     setAuthToken(null); 
                     setViewMode('guest'); 
-                    localStorage.removeItem('hms_token'); 
-                    localStorage.removeItem('hms_role'); 
+                    // sessionStorage is per-tab, so this only logs out the
+                    // current tab and leaves other tabs' sessions untouched.
+                    sessionStorage.removeItem('hms_token'); 
+                    sessionStorage.removeItem('hms_role'); 
                     navigate('/'); 
                   }} 
                   className="text-[11px] md:text-sm font-bold text-rose-500 hover:text-rose-700 transition-colors whitespace-nowrap shrink-0"
