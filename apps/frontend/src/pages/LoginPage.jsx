@@ -31,9 +31,12 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
         // Deconstruct authorization payload securely (adjust keys based on your API schema)
         const { token, user } = data;
         
-        // 3. Populate client storage vectors to maintain session across hard refresh cycles
-        localStorage.setItem('hms_token', token);
-        localStorage.setItem('hms_role', user.role);
+        // 3. Populate client storage vectors to maintain session across hard refresh cycles.
+        // sessionStorage is scoped to this single tab only, so opening the login
+        // page in a new tab starts a fresh, independent session instead of
+        // inheriting whichever account is logged into another tab.
+        sessionStorage.setItem('hms_token', token);
+        sessionStorage.setItem('hms_role', user.role);
 
         // 4. Compute role tracking state and trigger target routing maps
         const role = user.role.toUpperCase();

@@ -485,7 +485,7 @@ export default function ManagerDashboard() {
   const [showOnboardModal, setShowOnboardModal] = useState(false);
 
   const fetchWithAuth = async (url, options = {}) => {
-    const token = localStorage.getItem('hms_token');
+    const token = sessionStorage.getItem('hms_token');
     if (!token) { navigate('/login'); return null; }
     try {
       const res = await fetch(url, {

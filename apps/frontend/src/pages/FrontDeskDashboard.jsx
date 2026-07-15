@@ -432,7 +432,7 @@ export default function FrontDeskDashboard() {
 
   // ─── Auth Fetch Wrapper ────────────────────────────────────
   const fetchWithAuth = useCallback(async (url, options = {}) => {
-    const token = localStorage.getItem('hms_token');
+    const token = sessionStorage.getItem('hms_token');
     if (!token) { navigate('/login'); return null; }
     try {
       const res = await fetch(url, {
