@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react';
 
+const GOLD = '#C9971E';
+
 export default function LoginPage({ setUserRole, setAuthToken }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -95,8 +97,17 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
               }}
             />
           </div>
-          <h2 className="text-2xl font-serif italic font-bold text-orange-600 tracking-tight">
-            Techhansa <span className="font-light text-orange-400/80 uppercase tracking-widest text-lg">HMS</span>
+          <h2
+            className="text-3xl leading-none flex items-baseline justify-center gap-1.5 whitespace-nowrap"
+            style={{ fontFamily: "'Outfit', sans-serif" }}
+          >
+            <span style={{ color: GOLD, fontWeight: 500 }}>Pragati</span>
+            <span
+              className="text-2xl uppercase tracking-[0.2em]"
+              style={{ color: GOLD, opacity: 0.65, fontWeight: 500 }}
+            >
+              HMS
+            </span>
           </h2>
           <p className="text-zinc-400 text-[10px] uppercase tracking-widest font-bold mt-2">Authorized Personnel Only</p>
         </div>
@@ -125,7 +136,7 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@techhansa.com" 
+                placeholder="name@pragati.com" 
                 className="w-full pl-10 pr-4 py-3 bg-zinc-50/50 border border-zinc-200 rounded-xl text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 transition-all"
               />
             </div>
@@ -161,9 +172,6 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
             )}
           </button>
         </form>
-
-        {/* Demo Credentials Helper */}
-       
 
       </motion.div>
     </div>

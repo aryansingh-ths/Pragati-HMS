@@ -1000,7 +1000,8 @@ export default function ManagerDashboard() {
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Ledger Logs</p>
             <button
-              onClick={() => navigate('/dashboard/finance')}
+              // Update this line below:
+              onClick={() => navigate('/dashboard/finance', { state: { fromAdmin: true } })}
               className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-500 hover:bg-zinc-50 hover:text-indigo-600 transition-all text-left"
             >
               <span className="flex items-center gap-3"><DollarSign size={15} /> Finance & Ledgers</span>

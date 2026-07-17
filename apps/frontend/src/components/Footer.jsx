@@ -77,8 +77,14 @@ export default function Footer({ scrollToSection }) {
                   }}
                 />
               </div>
-              <span className="text-xl font-serif italic font-bold text-orange-400 tracking-tight">
-                Techhansa <span className="font-serif italic font-bold text-orange-400/80 tracking-tight">HMS</span>
+              <span 
+                className="text-xl leading-none flex items-baseline gap-1"
+                style={{ fontFamily: "'Outfit', sans-serif" }}
+              >
+                <span style={{ color: '#C9971E', fontWeight: 500 }}>Pragati</span>
+                <span style={{ color: '#C9971E', opacity: 0.65, fontWeight: 500 }} className="uppercase tracking-widest text-base">
+                  HMS
+                </span>
               </span>
             </div>
             
