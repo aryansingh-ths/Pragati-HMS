@@ -15,20 +15,13 @@ const API_BASE = 'http://localhost:3000';
 // Same visual language as the Front Desk dashboard — light, airy, teal/sky/amber
 // mesh background, floating glass sidebar, tilting KPI cards, ripple buttons.
 const FD_STYLES = `
-  .fd-scrollbar { scrollbar-width: thin; scrollbar-color: transparent transparent; transition: scrollbar-color 0.3s ease; }
-  .fd-scrollbar:hover { scrollbar-color: rgba(148,163,184,0.4) transparent; }
-  .fd-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-  .fd-scrollbar::-webkit-scrollbar-track { background: transparent; }
-  .fd-scrollbar::-webkit-scrollbar-thumb { background: transparent; border-radius: 999px; }
-  .fd-scrollbar:hover::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.45); }
-  .fd-scrollbar:hover::-webkit-scrollbar-thumb:hover { background: rgba(100,116,139,0.6); }
+  .fd-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+  .fd-scrollbar::-webkit-scrollbar { display: none; }
+  .fd-sidebar-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .fd-sidebar-scroll::-webkit-scrollbar { display: none; }
 
   .fd-app-bg {
-    background:
-      radial-gradient(1000px 520px at 8% -10%, rgba(45,212,191,0.16) 0%, transparent 55%),
-      radial-gradient(900px 500px at 105% 8%, rgba(56,189,248,0.16) 0%, transparent 55%),
-      radial-gradient(760px 500px at 45% 115%, rgba(251,191,36,0.14) 0%, transparent 60%),
-      linear-gradient(180deg, #f0fdfa 0%, #f0f9ff 45%, #fffbeb 100%) !important;
+    background: #F8F1E3 !important;
     background-attachment: fixed;
     background-size: 140% 140%, 140% 140%, 140% 140%, auto;
     animation: fd-mesh-shift 24s ease-in-out infinite;
@@ -48,7 +41,7 @@ const FD_STYLES = `
   .fd-orb { position: absolute; border-radius: 9999px; filter: blur(70px); pointer-events: none; }
 
   .fd-brand-mark {
-    background: linear-gradient(135deg, #14b8a6, #0ea5e9 55%, #2dd4bf);
+    background: linear-gradient(135deg, #D4A373, #B3835B 55%, #D4A373);
     background-size: 200% 200%;
     animation: fd-brand-shimmer 5s ease-in-out infinite;
   }
@@ -83,12 +76,12 @@ const FD_STYLES = `
   }
 
   .fd-dealdeck-focus-card {
-    box-shadow: 0px 20px 45px 0px rgba(20, 184, 166, 0.32) !important;
+    box-shadow: 0px 20px 45px 0px rgba(212, 163, 115, 0.32) !important;
     transition: box-shadow 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
     cursor: pointer;
   }
   .fd-dealdeck-focus-card:hover {
-    box-shadow: 0px 26px 55px 0px rgba(20, 184, 166, 0.42) !important;
+    box-shadow: 0px 26px 55px 0px rgba(212, 163, 115, 0.42) !important;
   }
 
   .fd-kpi-blob {
@@ -278,7 +271,7 @@ const COLUMN_THEMES = {
   dirty: {
     label: 'Needs Cleaning',
     icon: Droplets,
-    gradient: 'from-rose-500 to-red-500',
+    gradient: 'from-[#D4A373] to-[#B3835B]',
     bg: 'bg-rose-50/50',
     border: 'border-rose-200/60',
     badge: 'bg-rose-100 text-rose-700',
@@ -290,7 +283,7 @@ const COLUMN_THEMES = {
   cleaning: {
     label: 'In Progress',
     icon: Sparkles,
-    gradient: 'from-amber-500 to-orange-500',
+    gradient: 'from-[#D4A373] to-[#B3835B]',
     bg: 'bg-amber-50/50',
     border: 'border-amber-200/60',
     badge: 'bg-amber-100 text-amber-700',
@@ -302,7 +295,7 @@ const COLUMN_THEMES = {
   inspecting: {
     label: 'Awaiting Inspection',
     icon: Eye,
-    gradient: 'from-blue-500 to-indigo-500',
+    gradient: 'from-[#D4A373] to-[#B3835B]',
     bg: 'bg-blue-50/50',
     border: 'border-blue-200/60',
     badge: 'bg-blue-100 text-blue-700',
@@ -384,6 +377,16 @@ export default function HousekeepingDashboard() {
   const [stats, setStats] = useState({ dirty: 0, cleaning: 0, inspecting: 0, available: 0 });
   const [allRooms, setAllRooms] = useState([]);
 
+  // ─── Broadcast States ──────────────────────────────────────
+  const [broadcasts, setBroadcasts] = useState([]);
+  const [dismissedBroadcasts, setDismissedBroadcasts] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('hms_dismissed_broadcasts')) || []; } catch { return []; }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('hms_dismissed_broadcasts', JSON.stringify(dismissedBroadcasts));
+  }, [dismissedBroadcasts]);
+
   // ─── UI States ─────────────────────────────────────────────
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -446,6 +449,24 @@ export default function HousekeepingDashboard() {
       setIsRefreshing(false);
     }
   }, [fetchWithAuth]);
+
+  const fetchBroadcasts = useCallback(async () => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/api/broadcasts`);
+      if (res?.ok) {
+        const data = await res.json();
+        setBroadcasts(data.data.broadcasts || []);
+      }
+    } catch (e) {
+      console.error('Failed to fetch broadcasts:', e);
+    }
+  }, [fetchWithAuth]);
+
+  useEffect(() => {
+    fetchBroadcasts();
+    const interval = setInterval(fetchBroadcasts, 30000);
+    return () => clearInterval(interval);
+  }, [fetchBroadcasts]);
 
   const loadAllRooms = useCallback(async () => {
     try {
@@ -572,13 +593,13 @@ export default function HousekeepingDashboard() {
     return (
       <div className="min-h-[calc(100vh-6rem)] flex flex-col items-center justify-center gap-5 fd-app-bg relative overflow-hidden">
         <style>{FD_STYLES}</style>
-        <div className="fd-orb w-72 h-72 bg-teal-300/30 -top-10 -left-10" />
-        <div className="fd-orb w-72 h-72 bg-rose-300/25 bottom-0 right-0" />
+        <div className="fd-orb w-72 h-72 bg-[#D4A373]/15 -top-10 -left-10" />
+        <div className="fd-orb w-72 h-72 bg-[#D4A373]/15 bottom-0 right-0" />
         <div className="fd-orb w-64 h-64 bg-amber-200/25 top-1/2 left-1/2" />
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-          className="relative z-10 w-16 h-16 rounded-2xl fd-brand-mark flex items-center justify-center shadow-xl shadow-teal-500/30"
+          className="relative z-10 w-16 h-16 rounded-2xl fd-brand-mark flex items-center justify-center shadow-xl shadow-[#D4A373]/30"
         >
           <Loader2 size={24} className="text-white" />
         </motion.div>
@@ -611,7 +632,7 @@ export default function HousekeepingDashboard() {
           onClick={() => loadBoard()}
           whileHover={{ scale: 1.03, y: -1 }}
           whileTap={{ scale: 0.97 }}
-          className="mt-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 to-sky-600 text-white text-xs font-bold uppercase tracking-wider shadow-lg shadow-teal-500/25"
+          className="mt-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 to-sky-600 text-white text-xs font-bold uppercase tracking-wider shadow-lg shadow-[#D4A373]/25"
         >
           Retry
         </RippleButton>
@@ -626,7 +647,7 @@ export default function HousekeepingDashboard() {
       {/* Ambient decorative orbs — pure atmosphere, no interaction */}
       <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden">
         <motion.div
-          className="fd-orb w-[30rem] h-[30rem] bg-teal-300/25"
+          className="fd-orb w-[30rem] h-[30rem] bg-[#D4A373]/15"
           style={{ top: '-8rem', left: '-6rem' }}
           animate={{ x: [0, 46, 0], y: [0, 32, 0], scale: [1, 1.08, 1] }}
           transition={{ duration: 17, repeat: Infinity, ease: 'easeInOut' }}
@@ -653,7 +674,7 @@ export default function HousekeepingDashboard() {
         initial={{ opacity: 0, x: -30 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
-        className="w-full lg:w-72 flex-shrink-0 h-full rounded-[2rem] overflow-y-auto fd-scrollbar p-6 flex flex-col gap-6 fd-dealdeck-sidebar z-30"
+        className="w-full lg:w-72 shrink-0 rounded-[2rem] p-6 flex flex-col gap-6 fd-dealdeck-sidebar sticky top-[7.5rem] self-start z-30 lg:h-[calc(100vh-7.8rem)]"
       >
         {/* Brand Header */}
         <div className="flex items-center gap-3">
@@ -661,17 +682,16 @@ export default function HousekeepingDashboard() {
             whileHover={{ rotate: -10, scale: 1.1 }}
             animate={{ y: [0, -3, 0] }}
             transition={{ y: { duration: 3, repeat: Infinity, ease: 'easeInOut' }, rotate: { type: 'spring', stiffness: 400, damping: 12 }, scale: { type: 'spring', stiffness: 400, damping: 12 } }}
-            className="relative w-11 h-11 rounded-xl fd-brand-mark flex items-center justify-center shadow-lg shadow-teal-500/30"
+            className="relative w-11 h-11 rounded-xl fd-brand-mark flex items-center justify-center shadow-xs bg-zinc-50 border border-zinc-100"
           >
-            <SprayCan size={20} className="text-white" />
-            <Sparkles size={11} className="absolute -top-1.5 -right-1.5 text-amber-300 drop-shadow" />
+            <SprayCan size={20} className="text-[#D4A373]" />
           </motion.div>
           <div>
             <h1 className="font-serif font-black text-[25px] text-zinc-500 text-base leading-none">Housekeeping</h1>
-            <span className="text-[9px] font-bold text-teal-600 uppercase tracking-widest mt-1 flex items-center gap-1">
+            <span className="text-[9px] font-bold text-[#D4A373] uppercase tracking-widest mt-1 flex items-center gap-1">
               <span className="relative flex h-1.5 w-1.5">
-                <span className="fd-live-dot absolute inline-flex h-full w-full rounded-full bg-teal-500" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-teal-500" />
+                <span className="fd-live-dot absolute inline-flex h-full w-full rounded-full bg-[#D4A373]" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#D4A373]" />
               </span>
               Staff Operations
             </span>
@@ -679,7 +699,7 @@ export default function HousekeepingDashboard() {
         </div>
 
         {/* Navigation Categories */}
-        <div className="flex flex-col gap-4 flex-1 overflow-y-auto fd-scrollbar pr-1">
+        <div className="flex flex-col gap-6 flex-1 overflow-y-auto fd-sidebar-scroll pr-1">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Workflow Filters</p>
             <div className="flex flex-col gap-1">
@@ -687,11 +707,11 @@ export default function HousekeepingDashboard() {
                 whileHover={{ x: 3 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() => setActiveFilter('all')}
-                className={`relative z-10 flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${activeFilter === 'all' ? 'text-white' : 'text-zinc-500 hover:bg-teal-50 hover:text-teal-700'
+                className={`relative z-10 flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${activeFilter === 'all' ? 'text-white' : 'text-zinc-500 hover:bg-amber-50 hover:text-[#D4A373]'
                   }`}
               >
                 {activeFilter === 'all' && (
-                  <motion.span layoutId="fd-sidebar-pill" transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="absolute inset-0 bg-gradient-to-r from-teal-500 to-sky-500 shadow-md shadow-teal-500/30 rounded-xl" />
+                  <motion.span layoutId="fd-sidebar-pill" transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="absolute inset-0 bg-gradient-to-r from-[#D4A373] to-[#B3835B] shadow-md shadow-[#D4A373]/30 rounded-xl" />
                 )}
                 <span className="relative flex items-center gap-3"><span className="fd-icon-btn"><Building2 size={15} /></span> All Active Rooms</span>
               </motion.button>
@@ -700,14 +720,14 @@ export default function HousekeepingDashboard() {
                 whileHover={{ x: 3 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() => setActiveFilter('dirty')}
-                className={`relative z-10 flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${activeFilter === 'dirty' ? 'text-white' : 'text-zinc-500 hover:bg-rose-50 hover:text-rose-700'
+                className={`relative z-10 flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${activeFilter === 'dirty' ? 'text-white' : 'text-zinc-500 hover:bg-amber-50 hover:text-[#D4A373]'
                   }`}
               >
                 {activeFilter === 'dirty' && (
-                  <motion.span layoutId="fd-sidebar-pill" transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="absolute inset-0 bg-gradient-to-r from-rose-500 to-red-500 shadow-md shadow-rose-500/30 rounded-xl" />
+                  <motion.span layoutId="fd-sidebar-pill" transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="absolute inset-0 bg-gradient-to-r from-[#D4A373] to-[#B3835B] shadow-md shadow-[#D4A373]/30 rounded-xl" />
                 )}
                 <span className="relative flex items-center gap-3"><span className="fd-icon-btn"><Droplets size={15} /></span> Needs Cleaning</span>
-                <span className={`relative px-2 py-0.5 rounded-md text-[10px] transition-transform duration-300 ${activeFilter === 'dirty' ? 'bg-white/25 text-white scale-110' : 'bg-rose-50 text-rose-700 font-bold'}`}>
+                <span className={`relative px-2 py-0.5 rounded-md text-[10px] transition-transform duration-300 ${activeFilter === 'dirty' ? 'bg-white/25 text-white scale-110' : 'bg-amber-50 text-[#D4A373] font-bold'}`}>
                   <CountUp value={stats.dirty} />
                 </span>
               </motion.button>
@@ -716,14 +736,14 @@ export default function HousekeepingDashboard() {
                 whileHover={{ x: 3 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() => setActiveFilter('cleaning')}
-                className={`relative z-10 flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${activeFilter === 'cleaning' ? 'text-white' : 'text-zinc-500 hover:bg-amber-50 hover:text-amber-700'
+                className={`relative z-10 flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${activeFilter === 'cleaning' ? 'text-white' : 'text-zinc-500 hover:bg-amber-50 hover:text-[#D4A373]'
                   }`}
               >
                 {activeFilter === 'cleaning' && (
-                  <motion.span layoutId="fd-sidebar-pill" transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="absolute inset-0 bg-gradient-to-r from-amber-500 to-orange-500 shadow-md shadow-amber-500/30 rounded-xl" />
+                  <motion.span layoutId="fd-sidebar-pill" transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="absolute inset-0 bg-gradient-to-r from-[#D4A373] to-[#B3835B] shadow-md shadow-[#D4A373]/30 rounded-xl" />
                 )}
                 <span className="relative flex items-center gap-3"><span className="fd-icon-btn"><Sparkles size={15} /></span> In Progress</span>
-                <span className={`relative px-2 py-0.5 rounded-md text-[10px] transition-transform duration-300 ${activeFilter === 'cleaning' ? 'bg-white/25 text-white scale-110' : 'bg-amber-50 text-amber-700 font-bold'}`}>
+                <span className={`relative px-2 py-0.5 rounded-md text-[10px] transition-transform duration-300 ${activeFilter === 'cleaning' ? 'bg-white/25 text-white scale-110' : 'bg-amber-50 text-[#D4A373] font-bold'}`}>
                   <CountUp value={stats.cleaning} />
                 </span>
               </motion.button>
@@ -732,14 +752,14 @@ export default function HousekeepingDashboard() {
                 whileHover={{ x: 3 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() => setActiveFilter('inspecting')}
-                className={`relative z-10 flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${activeFilter === 'inspecting' ? 'text-white' : 'text-zinc-500 hover:bg-blue-50 hover:text-blue-700'
+                className={`relative z-10 flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${activeFilter === 'inspecting' ? 'text-white' : 'text-zinc-500 hover:bg-amber-50 hover:text-[#D4A373]'
                   }`}
               >
                 {activeFilter === 'inspecting' && (
-                  <motion.span layoutId="fd-sidebar-pill" transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 shadow-md shadow-blue-500/30 rounded-xl" />
+                  <motion.span layoutId="fd-sidebar-pill" transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="absolute inset-0 bg-gradient-to-r from-[#D4A373] to-[#B3835B] shadow-md shadow-[#D4A373]/30 rounded-xl" />
                 )}
                 <span className="relative flex items-center gap-3"><span className="fd-icon-btn"><Eye size={15} /></span> Awaiting Inspection</span>
-                <span className={`relative px-2 py-0.5 rounded-md text-[10px] transition-transform duration-300 ${activeFilter === 'inspecting' ? 'bg-white/25 text-white scale-110' : 'bg-blue-50 text-blue-700 font-bold'}`}>
+                <span className={`relative px-2 py-0.5 rounded-md text-[10px] transition-transform duration-300 ${activeFilter === 'inspecting' ? 'bg-white/25 text-white scale-110' : 'bg-amber-50 text-[#D4A373] font-bold'}`}>
                   <CountUp value={stats.inspecting} />
                 </span>
               </motion.button>
@@ -747,17 +767,6 @@ export default function HousekeepingDashboard() {
           </div>
         </div>
 
-        {/* Create Ticket Sidebar Action */}
-        <div className="mt-auto pt-4 border-t border-zinc-100 shrink-0">
-          <RippleButton
-            onClick={openGeneralDamageReport}
-            whileHover={{ scale: 1.03, y: -1 }}
-            whileTap={{ scale: 0.96 }}
-            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-rose-400 to-red-400 hover:from-rose-600 hover:to-red-600 text-white font-bold text-xs py-3.5 rounded-xl transition-all shadow-md shadow-rose-600/30"
-          >
-            <Wrench size={14} /> Create Ticket
-          </RippleButton>
-        </div>
       </motion.div>
 
       {/* ═══════════════════════════════════════════════════════
@@ -797,17 +806,70 @@ export default function HousekeepingDashboard() {
             </motion.button>
 
             {/* Profile Avatar Widget */}
-            <motion.div whileHover={{ y: -2 }} className="flex items-center gap-2 bg-white pl-2.5 pr-3 py-1.5 rounded-xl border border-zinc-200/60 shadow-xs hover:shadow-md transition-shadow duration-300">
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white font-bold text-xs flex items-center justify-center shadow-xs">
-                H
-              </div>
-              <div className="hidden sm:block text-left leading-none">
-                <span className="text-xs font-bold text-zinc-900 block">Rajnish</span> {/*username*/}
-                <span className="text-[8px] font-semibold text-zinc-600 uppercase tracking-widest mt-0.5 block">Housekeeper</span>
-              </div>
-            </motion.div>
+            {(() => {
+              const staffName = localStorage.getItem('hms_name') || 'Staff';
+              const staffRole = localStorage.getItem('hms_role') || 'HOUSEKEEPING';
+              const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'HK';
+              const designationMap = {
+                FRONT_DESK: 'Front Desk Agent', RECEPTION: 'Front Desk Agent',
+                HOUSEKEEPING: 'Housekeeper', ADMIN: 'Administrator',
+                FINANCE: 'Finance Officer', RESTAURANT: 'Restaurant Staff'
+              };
+              const designation = designationMap[staffRole] || 'Staff';
+              return (
+                <motion.div whileHover={{ y: -2 }} className="flex items-center gap-2 bg-white pl-2.5 pr-3 py-1.5 rounded-xl border border-zinc-200/60 shadow-xs hover:shadow-md transition-shadow duration-300">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white font-bold text-xs flex items-center justify-center shadow-xs">
+                    {initials}
+                  </div>
+                  <div className="hidden sm:block text-left leading-none">
+                    <span className="text-xs font-bold text-zinc-900 block">{staffName}</span>
+                    <span className="text-[8px] font-semibold text-zinc-600 uppercase tracking-widest mt-0.5 block">{designation}</span>
+                  </div>
+                </motion.div>
+              );
+            })()}
           </div>
         </motion.div>
+
+        {/* BROADCAST BANNER */}
+        <AnimatePresence>
+          {broadcasts.filter(b => !dismissedBroadcasts.includes(b.id) && (!b.expires_at || new Date(b.expires_at) > new Date())).map((broadcast) => (
+            <motion.div
+              key={broadcast.id}
+              initial={{ opacity: 0, y: -20, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+              className="relative overflow-hidden rounded-[1.5rem] bg-gradient-to-r from-rose-500 via-rose-600 to-amber-500 p-[2px] shadow-lg shadow-rose-500/20 mb-4 min-h-[72px]"
+            >
+              <div className="w-full h-full relative bg-white/10 backdrop-blur-md rounded-[calc(1.5rem-2px)] px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  <div className="relative shrink-0">
+                    <div className="absolute inset-0 bg-white/40 rounded-full animate-ping opacity-75"></div>
+                    <div className="relative w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white border border-white/40 shadow-sm backdrop-blur-lg">
+                      <Zap size={18} className="drop-shadow-md" />
+                    </div>
+                  </div>
+                  <div className="flex-1 text-white flex flex-col justify-center">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] font-black uppercase tracking-widest bg-white/20 px-2 py-0.5 rounded-full backdrop-blur-sm border border-white/20">
+                        {broadcast.target_dept === 'ALL' ? 'GLOBAL BROADCAST' : 'DEPARTMENT ALERT'}
+                      </span>
+                      <span className="text-[10px] font-semibold text-white/80 border-l border-white/20 pl-2">From: {broadcast.sender_name}</span>
+                    </div>
+                    <p className="text-sm font-bold tracking-wide drop-shadow-sm leading-snug">{broadcast.message}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDismissedBroadcasts(prev => [...prev, broadcast.id])}
+                  className="shrink-0 w-8 h-8 rounded-full bg-white/10 hover:bg-white/25 flex items-center justify-center text-white transition-colors border border-white/10 self-end sm:self-center"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
 
         {/* 4 TOP KPI STATS CARD ROW */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -816,7 +878,7 @@ export default function HousekeepingDashboard() {
             onClick={() => setActiveFilter('dirty')}
             glowHex="#f43f5e"
             className={`fd-kpi-tilt rounded-[2rem] p-6 flex flex-col justify-between relative overflow-hidden h-36 select-none cursor-pointer ${activeFilter === 'dirty'
-              ? 'fd-dealdeck-focus-card text-white bg-gradient-to-br from-rose-500 to-red-500'
+              ? 'fd-dealdeck-focus-card text-white bg-gradient-to-br from-[#D4A373] to-[#B3835B]'
               : 'fd-dealdeck-card text-zinc-900 bg-white'
               }`}
           >
@@ -830,7 +892,7 @@ export default function HousekeepingDashboard() {
               <motion.span
                 animate={stats.dirty > 0 && activeFilter !== 'dirty' ? { scale: [1, 1.08, 1] } : {}}
                 transition={{ duration: 1.6, repeat: Infinity }}
-                className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'dirty' ? 'bg-white/20 text-white' : 'bg-rose-50 text-rose-700 border border-rose-100'
+                className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'dirty' ? 'bg-white/20 text-white' : 'bg-amber-50 text-[#D4A373] border border-rose-100'
                   }`}>
                 <Droplets size={10} /> Dirty
               </motion.span>
@@ -844,7 +906,7 @@ export default function HousekeepingDashboard() {
             onClick={() => setActiveFilter('cleaning')}
             glowHex="#f59e0b"
             className={`fd-kpi-tilt rounded-[2rem] p-6 flex flex-col justify-between relative overflow-hidden h-36 select-none cursor-pointer ${activeFilter === 'cleaning'
-              ? 'fd-dealdeck-focus-card text-white bg-gradient-to-br from-amber-500 to-orange-500'
+              ? 'fd-dealdeck-focus-card text-white bg-gradient-to-br from-[#D4A373] to-[#B3835B]'
               : 'fd-dealdeck-card text-zinc-900 bg-white'
               }`}
           >
@@ -855,7 +917,7 @@ export default function HousekeepingDashboard() {
                   }`}>In Progress</p>
                 <h3 className="text-3xl font-black mt-1 leading-none"><CountUp value={stats.cleaning} /></h3>
               </div>
-              <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'cleaning' ? 'bg-white/20 text-white' : 'bg-amber-50 text-amber-700 border border-amber-100'
+              <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'cleaning' ? 'bg-white/20 text-white' : 'bg-amber-50 text-[#D4A373] border border-amber-100'
                 }`}>
                 <motion.span animate={{ rotate: 360 }} transition={{ duration: 3, repeat: Infinity, ease: 'linear' }} className="inline-flex">
                   <Sparkles size={10} />
@@ -872,7 +934,7 @@ export default function HousekeepingDashboard() {
             onClick={() => setActiveFilter('inspecting')}
             glowHex="#3b82f6"
             className={`fd-kpi-tilt rounded-[2rem] p-6 flex flex-col justify-between relative overflow-hidden h-36 select-none cursor-pointer ${activeFilter === 'inspecting'
-              ? 'fd-dealdeck-focus-card text-white bg-gradient-to-br from-blue-500 to-indigo-500'
+              ? 'fd-dealdeck-focus-card text-white bg-gradient-to-br from-[#D4A373] to-[#B3835B]'
               : 'fd-dealdeck-card text-zinc-900 bg-white'
               }`}
           >
@@ -883,7 +945,7 @@ export default function HousekeepingDashboard() {
                   }`}>Awaiting Inspection</p>
                 <h3 className="text-3xl font-black mt-1 leading-none"><CountUp value={stats.inspecting} /></h3>
               </div>
-              <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'inspecting' ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-700 border border-blue-100'
+              <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'inspecting' ? 'bg-white/20 text-white' : 'bg-amber-50 text-[#D4A373] border border-blue-100'
                 }`}>
                 <Eye size={10} /> Inspecting
               </span>
@@ -897,7 +959,7 @@ export default function HousekeepingDashboard() {
             onClick={() => setActiveFilter('all')}
             glowHex="#10b981"
             className={`fd-kpi-tilt rounded-[2rem] p-6 flex flex-col justify-between relative overflow-hidden h-36 select-none cursor-pointer ${activeFilter === 'all'
-              ? 'fd-dealdeck-focus-card text-white bg-gradient-to-br from-emerald-500 to-teal-500'
+              ? 'fd-dealdeck-focus-card text-white bg-gradient-to-br from-[#D4A373] to-[#B3835B]'
               : 'fd-dealdeck-card text-zinc-900 bg-white'
               }`}
           >
@@ -908,7 +970,7 @@ export default function HousekeepingDashboard() {
                   }`}>Clean & Available</p>
                 <h3 className="text-3xl font-black mt-1 leading-none"><CountUp value={stats.available} /></h3>
               </div>
-              <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'all' ? 'bg-white/20 text-white' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+              <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'all' ? 'bg-white/20 text-white' : 'bg-amber-50 text-[#D4A373] border border-emerald-100'
                 }`}>
                 <CheckCircle2 size={10} /> Ready
               </span>
@@ -923,33 +985,36 @@ export default function HousekeepingDashboard() {
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15, duration: 0.45 }}
-          className="relative overflow-hidden bg-gradient-to-r from-teal-500 to-sky-500 shadow-md shadow-teal-500/30 rounded-xl p-10 flex flex-col md:flex-row items-center justify-between gap-8"
+          className="fd-glow-border-wrap rounded-[2rem] p-[2px]"
+          style={{ background: 'linear-gradient(120deg, #D4A373, #B3835B, #D4A373)', backgroundSize: '200% 200%', animation: 'fd-brand-shimmer 8s ease-in-out infinite' }}
         >
-          <div className="absolute inset-0 bg-[radial-gradient(420px_200px_at_15%_0%,rgba(255,255,255,0.14),transparent_60%)] pointer-events-none" />
-          <div className="relative flex items-center gap-6">
-            <motion.div
-              animate={{ scale: [1, 1.12, 1], rotate: [0, -6, 6, 0] }}
-              transition={{ repeat: Infinity, duration: 2.6, ease: 'easeInOut' }}
-              className="hidden sm:flex w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-sm items-center justify-center shrink-0 shadow-lg text-white"
-            >
-              <Zap size={24} />
-            </motion.div>
-            <div>
-              <h3 className="text-xl font-black tracking-tight text-white">Direct Maintenance Dispatch</h3>
-              <p className="text-sm text-teal-50 mt-1.5 leading-relaxed max-w-lg">
-                Instantly report a room issue to engineering. This blocks the room and assigns a pending work order.
-              </p>
+          <div className="relative overflow-hidden bg-gradient-to-r from-[#D4A373] via-[#D4A373] to-[#B3835B] text-white rounded-[calc(2rem-2px)] p-5 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="absolute inset-0 bg-[radial-gradient(420px_200px_at_15%_0%,rgba(255,255,255,0.18),transparent_60%)] pointer-events-none" />
+            <div className="relative flex items-center gap-4">
+              <motion.div
+                animate={{ scale: [1, 1.12, 1], rotate: [0, -6, 6, 0] }}
+                transition={{ repeat: Infinity, duration: 2.6, ease: 'easeInOut' }}
+                className="hidden sm:flex w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm items-center justify-center shrink-0 shadow-lg text-white"
+              >
+                <Zap size={20} className="text-white" />
+              </motion.div>
+              <div>
+                <h3 className="text-lg font-black tracking-tight text-white">Direct Maintenance Dispatch</h3>
+                <p className="text-xs text-white/80 mt-0.5 leading-relaxed max-w-lg">
+                  Instantly report a room issue to engineering. This blocks the room and assigns a pending work order.
+                </p>
+              </div>
             </div>
-          </div>
-          <div className="relative flex items-center gap-3 shrink-0 w-full md:w-auto justify-end mt-4 md:mt-0">
-            <RippleButton
-              onClick={openGeneralDamageReport}
-              whileHover={{ scale: 1.05, y: -2 }}
-              whileTap={{ scale: 0.95 }}
-              className="bg-white/20 hover:bg-white/30 border border-white/20 text-white font-bold text-base px-14 py-4.5 rounded-xl transition-colors duration-200 shadow-md w-full sm:w-auto flex items-center justify-center gap-3"
-            >
-              <Wrench size={18} /> Report Room Issue / Create Ticket
-            </RippleButton>
+            <div className="relative flex items-center gap-3 shrink-0 w-full md:w-auto justify-end">
+              <RippleButton
+                onClick={openGeneralDamageReport}
+                whileHover={{ scale: 1.05, y: -2 }}
+                whileTap={{ scale: 0.95 }}
+                className="bg-white text-[#B3835B] font-bold text-xs px-6 py-3 rounded-xl transition-colors duration-200 shadow-lg w-full sm:w-auto hover:bg-amber-50 flex items-center justify-center gap-2"
+              >
+                <Wrench size={14} /> Report Room Issue
+              </RippleButton>
+            </div>
           </div>
         </motion.div>
 
@@ -1052,7 +1117,7 @@ export default function HousekeepingDashboard() {
                                       disabled={isSubmitting}
                                       whileHover={{ scale: 1.02, y: -1 }}
                                       whileTap={{ scale: 0.97 }}
-                                      className="flex-1 flex items-center justify-center gap-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-bold py-2.5 rounded-lg transition-all shadow-sm hover:shadow-md disabled:opacity-50"
+                                      className="flex-1 flex items-center justify-center gap-1.5 bg-gradient-to-r from-[#D4A373] to-[#B3835B] hover:from-amber-600 hover:to-orange-600 text-white text-xs font-bold py-2.5 rounded-lg transition-all shadow-sm hover:shadow-md disabled:opacity-50"
                                     >
                                       <Sparkles size={13} /> Start Cleaning
                                     </RippleButton>
@@ -1065,7 +1130,7 @@ export default function HousekeepingDashboard() {
                                         disabled={isSubmitting}
                                         whileHover={{ scale: 1.02, y: -1 }}
                                         whileTap={{ scale: 0.97 }}
-                                        className="flex-1 flex items-center justify-center gap-1.5 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white text-xs font-bold py-2.5 rounded-lg transition-all shadow-sm hover:shadow-md disabled:opacity-50"
+                                        className="flex-1 flex items-center justify-center gap-1.5 bg-gradient-to-r from-[#D4A373] to-[#B3835B] hover:from-blue-600 hover:to-indigo-600 text-white text-xs font-bold py-2.5 rounded-lg transition-all shadow-sm hover:shadow-md disabled:opacity-50"
                                       >
                                         <ClipboardCheck size={13} /> Request Inspection
                                       </RippleButton>
@@ -1088,7 +1153,7 @@ export default function HousekeepingDashboard() {
                                         disabled={isSubmitting}
                                         whileHover={{ scale: 1.02, y: -1 }}
                                         whileTap={{ scale: 0.97 }}
-                                        className="flex-1 flex items-center justify-center gap-1.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white text-xs font-bold py-2.5 rounded-lg transition-all shadow-sm hover:shadow-md disabled:opacity-50"
+                                        className="flex-1 flex items-center justify-center gap-1.5 bg-gradient-to-r from-[#D4A373] to-[#B3835B] hover:from-emerald-600 hover:to-teal-600 text-white text-xs font-bold py-2.5 rounded-lg transition-all shadow-sm hover:shadow-md disabled:opacity-50"
                                       >
                                         <ShieldCheck size={13} /> Approve
                                       </RippleButton>
