@@ -1015,7 +1015,7 @@ export default function FrontDeskDashboard() {
             </div>
           </div>
 
-        {/* Section: History — pinned footer action, matches Manager & Housekeeping convention */}
+        {/* Section: History — pinned footer action, matches Admin & Housekeeping convention */}
         <div className="pt-4 border-t border-zinc-100 shrink-0">
           <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">History &amp; Ledger</p>
           <motion.button

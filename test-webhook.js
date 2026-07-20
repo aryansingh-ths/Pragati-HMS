@@ -14,7 +14,7 @@ const data = JSON.stringify({
 const options = {
   hostname: 'localhost',
   port: 3000,
-  path: '/api/channel-manager/webhook',
+  path: '/api/channel-Admin/webhook',
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',

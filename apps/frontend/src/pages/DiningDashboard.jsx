@@ -226,7 +226,7 @@ export default function DiningDashboard() {
           {isAdmin && (
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Command Center</p>
-              <button onClick={() => navigate('/dashboard/manager')} className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-500 hover:bg-orange-50 hover:text-amber-600 transition-all text-left">
+              <button onClick={() => navigate('/dashboard/Admin')} className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-500 hover:bg-orange-50 hover:text-amber-600 transition-all text-left">
                 <span className="flex items-center gap-3"><Building2 size={15} /> Back to Admin</span><ArrowUpRight size={14} className="opacity-50" />
               </button>
             </div>
@@ -248,7 +248,7 @@ export default function DiningDashboard() {
             <div className="hidden md:flex items-center gap-2 bg-white pl-2.5 pr-3 py-1.5 rounded-xl border border-zinc-200 shadow-xs">
               <div className="w-7 h-7 rounded-full bg-amber-500 text-white font-bold text-xs flex items-center justify-center shadow-xs">D</div>
               <div className="text-left leading-none">
-                <span className="text-xs font-bold text-zinc-900 block">F&B Manager</span>
+                <span className="text-xs font-bold text-zinc-900 block">F&B Admin</span>
                 <span className="text-[8px] font-semibold text-zinc-500 uppercase tracking-widest mt-0.5 block">Restaurant</span>
               </div>
             </div>

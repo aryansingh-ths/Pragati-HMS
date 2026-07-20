@@ -404,7 +404,7 @@ app.get('/api/front-desk/rooms/available', verifyToken, requireRole(['FRONT_DESK
   }
 });
 
-// Helper function to push inventory changes to your Channel Manager
+// Helper function to push inventory changes to your Channel Admin
 const pushInventoryUpdateToOTA = async (roomTypeId, dateFrom, dateTo) => {
   try {
     // 1. Calculate how many rooms of this type are left
@@ -415,10 +415,10 @@ const pushInventoryUpdateToOTA = async (roomTypeId, dateFrom, dateTo) => {
 
     const remainingInventory = countRes.rows[0].remaining;
 
-    // 2. Make an HTTP request to your Channel Manager (e.g., Channex, SiteMinder)
-    /* await fetch('https://api.yourchannelmanager.com/v1/inventory', {
+    // 2. Make an HTTP request to your Channel Admin (e.g., Channex, SiteMinder)
+    /* await fetch('https://api.yourchannelAdmin.com/v1/inventory', {
       method: 'POST',
-      headers: { 'Authorization': \`Bearer \${process.env.CHANNEL_MANAGER_API_KEY}\` },
+      headers: { 'Authorization': \`Bearer \${process.env.CHANNEL_Admin_API_KEY}\` },
       body: JSON.stringify({
         room_type_id: roomTypeId,
         start_date: dateFrom,
@@ -427,7 +427,7 @@ const pushInventoryUpdateToOTA = async (roomTypeId, dateFrom, dateTo) => {
       })
     });
     */
-    console.log(`📡 [OTA SYNC] Pushed new inventory count (${remainingInventory}) to Channel Manager for RoomType ${roomTypeId}`);
+    console.log(`📡 [OTA SYNC] Pushed new inventory count (${remainingInventory}) to Channel Admin for RoomType ${roomTypeId}`);
   } catch (err) {
     console.error('Failed to sync inventory to OTA:', err);
   }
@@ -969,11 +969,11 @@ app.get('/api/travel/customers', verifyToken, requireTravel, async (req, res) =>
 
 
 // ==========================================
-// MANAGER (ADMIN) ADMINISTRATIVE ENDPOINTS
+// Admin (ADMIN) ADMINISTRATIVE ENDPOINTS
 // ==========================================
 
 // 1. COMPREHENSIVE LIVE OPERATIONS DASHBOARD ENDPOINT
-app.get('/api/manager/live-operations', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/live-operations', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     // === KPIs ===
     const totalRoomsRes = await pool.query("SELECT COUNT(*) FROM rooms;");
@@ -1123,7 +1123,7 @@ app.get('/api/manager/live-operations', verifyToken, requireRole(['ADMIN']), asy
 
 // 2. GET ALL ROOMS CONFIGURATION LIST FOR ADMIN MANAGEMENT
 // FETCH ALL ROOMS FOR INVENTORY GRID (Updated for Hierarchical Grouping)
-app.get('/api/manager/rooms', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/rooms', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const query = `
       SELECT 
@@ -1141,7 +1141,7 @@ app.get('/api/manager/rooms', verifyToken, requireRole(['ADMIN']), async (req, r
 });
 
 // 3. ACTION TRIGGER: TOGGLE ADMINISTRATIVE ROOM BLOCK (Out of Order)
-app.post('/api/manager/rooms/:id/toggle-block', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/Admin/rooms/:id/toggle-block', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { id } = req.params;
   try {
     // 1. Check current status
@@ -1169,7 +1169,7 @@ app.post('/api/manager/rooms/:id/toggle-block', verifyToken, requireRole(['ADMIN
 });
 
 // 4. GET ROOM TYPES (For the Add Room Dropdown)
-app.get('/api/manager/room-types', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/room-types', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const result = await pool.query('SELECT id, name, base_price FROM room_types ORDER BY base_price ASC');
     res.json({ status: 'success', data: { roomTypes: result.rows } });
@@ -1179,7 +1179,7 @@ app.get('/api/manager/room-types', verifyToken, requireRole(['ADMIN']), async (r
 });
 
 // 5. ADD NEW ROOM TO INVENTORY
-app.post('/api/manager/rooms', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/Admin/rooms', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { room_number, room_type_id } = req.body;
   try {
     // Check if room number already exists
@@ -1198,7 +1198,7 @@ app.post('/api/manager/rooms', verifyToken, requireRole(['ADMIN']), async (req, 
 });
 
 // 6. REMOVE ROOM FROM INVENTORY (Force Delete connected records)
-app.delete('/api/manager/rooms/:id', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.delete('/api/Admin/rooms/:id', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { id } = req.params;
 
   try {
@@ -1216,7 +1216,7 @@ app.delete('/api/manager/rooms/:id', verifyToken, requireRole(['ADMIN']), async 
 });
 
 // 7. GET MAINTENANCE TICKETS
-app.get('/api/manager/maintenance', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/maintenance', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const query = `
       SELECT m.id, m.issue, m.assigned_to, m.priority, m.status, m.created_at, m.room_id, r.room_number, r.room_blocked 
@@ -1233,7 +1233,7 @@ app.get('/api/manager/maintenance', verifyToken, requireRole(['ADMIN']), async (
 });
 
 // 8. CREATE MAINTENANCE TICKET
-app.post('/api/manager/maintenance', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/Admin/maintenance', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { room_id, issue, priority, assigned_to } = req.body;
   try {
     await pool.query('BEGIN');
@@ -1260,7 +1260,7 @@ app.post('/api/manager/maintenance', verifyToken, requireRole(['ADMIN']), async 
 });
 
 // 9. UPDATE TICKET STATUS
-app.patch('/api/manager/maintenance/:id/status', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.patch('/api/Admin/maintenance/:id/status', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
   try {
@@ -1291,7 +1291,7 @@ app.patch('/api/manager/maintenance/:id/status', verifyToken, requireRole(['ADMI
 });
 
 // 10. DYNAMIC STAFF ASSIGNMENT
-app.patch('/api/manager/maintenance/:id/assign', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.patch('/api/Admin/maintenance/:id/assign', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { id } = req.params;
   const { assigned_to } = req.body;
   try {
@@ -1311,7 +1311,7 @@ app.patch('/api/manager/maintenance/:id/assign', verifyToken, requireRole(['ADMI
   }
 });
 
-app.patch('/api/manager/rooms/:id/status', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.patch('/api/Admin/rooms/:id/status', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
 
@@ -1437,14 +1437,14 @@ app.post('/api/bookings', async (req, res) => {
 });
 
 // ==========================================
-// OTA & CHANNEL MANAGER INTEGRATION
+// OTA & CHANNEL Admin INTEGRATION
 // ==========================================
 
-// Helper: Secure Channel Manager Webhook Endpoint
-app.post('/api/channel-manager/webhook', async (req, res) => {
-  // 1. SECURITY: Verify Channel Manager Secret Key
+// Helper: Secure Channel Admin Webhook Endpoint
+app.post('/api/channel-Admin/webhook', async (req, res) => {
+  // 1. SECURITY: Verify Channel Admin Secret Key
   const apiKey = req.headers['x-channel-api-key'];
-  if (apiKey !== (process.env.CHANNEL_MANAGER_SECRET || 'fallback_secret_key_123')) {
+  if (apiKey !== (process.env.CHANNEL_Admin_SECRET || 'fallback_secret_key_123')) {
     return res.status(403).json({ error: 'Unauthorized OTA payload' });
   }
 
@@ -1550,7 +1550,7 @@ app.post('/api/channel-manager/webhook', async (req, res) => {
 
   } catch (err) {
     await pool.query('ROLLBACK');
-    console.error('Channel Manager Webhook Error:', err);
+    console.error('Channel Admin Webhook Error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1575,18 +1575,18 @@ app.patch('/api/rooms/:id/status', verifyStaffToken, async (req, res) => {
 });
 
 // =========================================================================
-// MANAGER / ADMIN COMMAND CENTER EXTENDED ENDPOINTS
+// Admin / ADMIN COMMAND CENTER EXTENDED ENDPOINTS
 // =========================================================================
 
 // 1. DYNAMIC PRICING & YIELD MANAGEMENT: Fetch All Rules
-app.get('/api/manager/yield-rules', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/yield-rules', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const rules = await pool.query('SELECT * FROM yield_rules;');
     const rulesObj = {
       pricing_surges: { enabled: false, surge_percentage: 20, occupancy_threshold: 80 },
       los_discount: { enabled: false, min_nights: 5, discount_percentage: 10 },
       seasonal_multiplier: [],
-      channel_manager: { master_ota_toggle: false, allotments: { agoda: 5, direct: 10, expedia: 5, booking_com: 5 } },
+      channel_Admin: { master_ota_toggle: false, allotments: { agoda: 5, direct: 10, expedia: 5, booking_com: 5 } },
       crm_triggers: { pre_arrival_upsell: false, post_checkout_feedback: false },
       maintenance_automation: { ac_servicing_days: 90, backup_contractor: 'QuickFix Hospitality Group', auto_route_contractor: false, generator_check_days: 30 }
     };
@@ -1599,7 +1599,7 @@ app.get('/api/manager/yield-rules', verifyToken, requireRole(['ADMIN']), async (
 });
 
 // 2. DYNAMIC PRICING & YIELD MANAGEMENT: Update Yield Rule
-app.post('/api/manager/yield-rules', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/Admin/yield-rules', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { key, value } = req.body;
   if (!key || value === undefined) return res.status(400).json({ error: 'Key and value are required' });
 
@@ -1617,7 +1617,7 @@ app.post('/api/manager/yield-rules', verifyToken, requireRole(['ADMIN']), async 
 });
 
 // 3. SYSTEM WATCHDOG: Fetch Immutable Audit Trail
-app.get('/api/manager/audit-logs', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/audit-logs', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { q } = req.query;
   try {
     let query = 'SELECT * FROM system_audit_logs ORDER BY created_at DESC LIMIT 100;';
@@ -1639,7 +1639,7 @@ app.get('/api/manager/audit-logs', verifyToken, requireRole(['ADMIN']), async (r
 });
 
 // 4. ACCESS CONTROL: Fetch All User Roles & Custom Permissions
-app.get('/api/manager/permissions', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/permissions', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const permQuery = `
       SELECT u.id, u.name, u.email, u.role, 
@@ -1659,7 +1659,7 @@ app.get('/api/manager/permissions', verifyToken, requireRole(['ADMIN']), async (
 });
 
 // 5. ACCESS CONTROL: Save Specific User Permissions
-app.post('/api/manager/permissions/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/Admin/permissions/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { userId } = req.params;
   const { role, can_process_refunds, can_apply_discounts, can_overbook } = req.body;
 
@@ -1690,7 +1690,7 @@ app.post('/api/manager/permissions/:userId', verifyToken, requireRole(['ADMIN'])
 });
 
 // 6. SHIFT & ACTIVE STAFF SESSION MONITORING
-app.get('/api/manager/shifts', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/shifts', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const shiftQuery = `
       SELECT s.id, u.id as user_id, u.name, u.email, u.role, s.login_time, s.logout_time,
@@ -1711,7 +1711,7 @@ app.get('/api/manager/shifts', verifyToken, requireRole(['ADMIN']), async (req, 
 });
 
 // 6b. STAFF SALARY CONFIGURATION
-app.get('/api/manager/salaries', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/salaries', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM staff_salaries');
     res.json({ status: 'success', data: { salaries: result.rows } });
@@ -1721,7 +1721,7 @@ app.get('/api/manager/salaries', verifyToken, requireRole(['ADMIN']), async (req
   }
 });
 
-app.get('/api/manager/salary/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/salary/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const { userId } = req.params;
     const result = await pool.query('SELECT * FROM staff_salaries WHERE user_id = $1', [userId]);
@@ -1736,7 +1736,7 @@ app.get('/api/manager/salary/:userId', verifyToken, requireRole(['ADMIN']), asyn
   }
 });
 
-app.post('/api/manager/salary/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/Admin/salary/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const { userId } = req.params;
     const { base_salary_monthly, daily_deduction } = req.body;
@@ -1757,7 +1757,7 @@ app.post('/api/manager/salary/:userId', verifyToken, requireRole(['ADMIN']), asy
 });
 
 // 7. CRM / GUEST REGISTRY: VIP & Blacklist Controls
-app.get('/api/manager/crm/guests', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/crm/guests', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const guests = await pool.query('SELECT * FROM guests ORDER BY is_vip DESC, is_blacklisted DESC, name ASC;');
     res.json({ status: 'success', data: { guests: guests.rows } });
@@ -1767,7 +1767,7 @@ app.get('/api/manager/crm/guests', verifyToken, requireRole(['ADMIN']), async (r
   }
 });
 
-app.post('/api/manager/crm/guests/:id', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/Admin/crm/guests/:id', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { id } = req.params;
   const { is_vip, is_blacklisted } = req.body;
 
@@ -1789,7 +1789,7 @@ app.post('/api/manager/crm/guests/:id', verifyToken, requireRole(['ADMIN']), asy
 });
 
 // 8. DEPARTMENTAL BROADCASTING
-app.post('/api/manager/broadcast', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/Admin/broadcast', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { targetDept, message } = req.body;
   if (!message) return res.status(400).json({ error: 'Message content is required' });
 
@@ -1836,7 +1836,7 @@ app.get('/api/broadcasts', verifyToken, async (req, res) => {
 });
 
 // 9. HR lifecycle: Onboard Employee
-app.post('/api/manager/staff/onboard', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/Admin/staff/onboard', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { email, password, name, role } = req.body;
   if (!email || !password || !name) return res.status(400).json({ error: 'All fields are required' });
 
@@ -1866,7 +1866,7 @@ app.post('/api/manager/staff/onboard', verifyToken, requireRole(['ADMIN']), asyn
 });
 
 // 10. HR lifecycle: Update Employee Details
-app.patch('/api/manager/staff/:id', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.patch('/api/Admin/staff/:id', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { id } = req.params;
   const { name, email } = req.body;
   if (!name || !email) return res.status(400).json({ error: 'Name and email are required' });
@@ -1886,7 +1886,7 @@ app.patch('/api/manager/staff/:id', verifyToken, requireRole(['ADMIN']), async (
 });
 
 // 11. HR lifecycle: Offboard Employee
-app.post('/api/manager/staff/offboard/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/Admin/staff/offboard/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { userId } = req.params;
   if (userId === req.user.userId) return res.status(400).json({ error: 'You cannot offboard your own administrator account' });
 
@@ -1904,7 +1904,7 @@ app.post('/api/manager/staff/offboard/:userId', verifyToken, requireRole(['ADMIN
 });
 
 // 11. PREDICTIVE ANALYTICS & STATS PACE ENGINE
-app.get('/api/manager/analytics', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/analytics', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     // A. Pace Report: Simulated comparison series (booking pace this month vs last year)
     const currentMonthPace = [
@@ -1977,7 +1977,7 @@ async function runMigrations() {
       { key: 'pricing_surges', value: { enabled: false, surge_percentage: 20, occupancy_threshold: 80 } },
       { key: 'los_discount', value: { enabled: false, min_nights: 5, discount_percentage: 10 } },
       { key: 'seasonal_multiplier', value: [] },
-      { key: 'channel_manager', value: { master_ota_toggle: false, allotments: { agoda: 5, direct: 10, expedia: 5, booking_com: 5 } } },
+      { key: 'channel_Admin', value: { master_ota_toggle: false, allotments: { agoda: 5, direct: 10, expedia: 5, booking_com: 5 } } },
       { key: 'crm_triggers', value: { pre_arrival_upsell: false, post_checkout_feedback: false } },
       { key: 'maintenance_automation', value: { ac_servicing_days: 90, backup_contractor: 'QuickFix Hospitality Group', auto_route_contractor: false, generator_check_days: 30 } }
     ];
@@ -2130,7 +2130,7 @@ async function runMigrations() {
       const travelHash = await bcrypt.hash('password123', 10);
       await pool.query(
         'INSERT INTO users (email, password_hash, name, role) VALUES ($1, $2, $3, $4)',
-        ['travel@techhansa.com', travelHash, 'Travel Desk Manager', 'TRAVEL']
+        ['travel@techhansa.com', travelHash, 'Travel Desk Admin', 'TRAVEL']
       );
     }
 
@@ -2152,7 +2152,7 @@ async function runMigrations() {
       const hash = await bcrypt.hash('password123', 10);
       await pool.query(
         "INSERT INTO users (email, password_hash, name, role) VALUES ($1, $2, $3, 'RESTAURANT')",
-        ['dinning@techhansa.com', hash, 'F&B Manager']
+        ['dinning@techhansa.com', hash, 'F&B Admin']
       );
     }
 }

@@ -848,7 +848,7 @@ export default function FinanceDashboard() {
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Command Center</p>
             <button
-              onClick={() => navigate('/dashboard/manager')}
+              onClick={() => navigate('/dashboard/Admin')}
               className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-500 hover:bg-zinc-50 hover:text-emerald-600 transition-all text-left"
             >
               <span className="flex items-center gap-3"><Building2 size={15} /> Back to Admin</span>
@@ -1977,7 +1977,7 @@ export default function FinanceDashboard() {
                   <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
                     <div className="p-5 border-b border-zinc-150 flex justify-between items-center bg-white/40">
                       <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><Users size={16} className="text-indigo-600" /> Payroll by Department</h3>
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Ties into Manager Dashboard · Staff Hub</span>
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Ties into Admin Dashboard · Staff Hub</span>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-left border-collapse">
