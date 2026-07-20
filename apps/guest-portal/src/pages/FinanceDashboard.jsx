@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { 
   DollarSign, FileText, CreditCard, 
   ArrowUpRight, ArrowDownRight, Download, 
-  CheckCircle2, Clock, Building2
+  CheckCircle2, Clock, Building2, Zap, X
 } from 'lucide-react';
+
+const API_BASE = 'http://localhost:3000';
 
 const COMMON_STYLES = `
   .fd-app-bg {
@@ -43,7 +46,57 @@ const COMMON_STYLES = `
 `;
 
 export default function FinanceDashboard() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
+
+  // ─── Broadcast States ──────────────────────────────────────
+  const [broadcasts, setBroadcasts] = useState([]);
+  const [dismissedBroadcasts, setDismissedBroadcasts] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('hms_dismissed_broadcasts')) || []; } catch { return []; }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('hms_dismissed_broadcasts', JSON.stringify(dismissedBroadcasts));
+  }, [dismissedBroadcasts]);
+
+  // ─── Auth Fetch Wrapper ────────────────────────────────────
+  const fetchWithAuth = useCallback(async (url, options = {}) => {
+    const token = localStorage.getItem('hms_token');
+    if (!token) { navigate('/login'); return null; }
+    try {
+      const res = await fetch(url, {
+        ...options,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          ...options.headers
+        }
+      });
+      if (res.status === 401 || res.status === 403) { navigate('/login'); return null; }
+      return res;
+    } catch (err) {
+      console.error('Network error:', err);
+      return null;
+    }
+  }, [navigate]);
+
+  const fetchBroadcasts = useCallback(async () => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/api/broadcasts`);
+      if (res?.ok) {
+        const data = await res.json();
+        setBroadcasts(data.data.broadcasts || []);
+      }
+    } catch (e) {
+      console.error('Failed to fetch broadcasts:', e);
+    }
+  }, [fetchWithAuth]);
+
+  useEffect(() => {
+    fetchBroadcasts();
+    const interval = setInterval(fetchBroadcasts, 30000);
+    return () => clearInterval(interval);
+  }, [fetchBroadcasts]);
 
   useEffect(() => {
     // Dynamically apply background to App wrapper and body
@@ -106,7 +159,49 @@ export default function FinanceDashboard() {
       </div>
 
       {/* Main Workspace Area */}
-      <div className="flex-1 p-6 md:p-10 overflow-y-auto relative z-10">
+      <div className="flex-1 p-6 md:p-10 overflow-y-auto relative z-10 flex flex-col gap-6">
+        
+        {/* BROADCAST BANNER */}
+        <AnimatePresence>
+          {broadcasts.filter(b => !dismissedBroadcasts.includes(b.id) && (!b.expires_at || new Date(b.expires_at) > new Date())).map((broadcast) => (
+            <motion.div
+              key={broadcast.id}
+              initial={{ opacity: 0, y: -20, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+              className="relative overflow-hidden rounded-[1.5rem] bg-gradient-to-r from-rose-500 via-rose-600 to-amber-500 p-[2px] shadow-lg shadow-rose-500/20 w-full mb-4 min-h-[72px] shrink-0"
+            >
+              <div className="absolute inset-0 bg-white/20 opacity-30" />
+              <div className="w-full h-full relative bg-white/10 backdrop-blur-md rounded-[calc(1.5rem-2px)] px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  <div className="relative shrink-0">
+                    <div className="absolute inset-0 bg-white/40 rounded-full animate-ping opacity-75"></div>
+                    <div className="relative w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white border border-white/40 shadow-sm backdrop-blur-lg">
+                      <Zap size={18} className="drop-shadow-md" />
+                    </div>
+                  </div>
+                  <div className="flex-1 text-white flex flex-col justify-center">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] font-black uppercase tracking-widest bg-white/20 px-2 py-0.5 rounded-full backdrop-blur-sm border border-white/20">
+                        {broadcast.target_dept === 'ALL' ? 'GLOBAL BROADCAST' : 'DEPARTMENT ALERT'}
+                      </span>
+                      <span className="text-[10px] font-semibold text-white/80 border-l border-white/20 pl-2">From: {broadcast.sender_name}</span>
+                    </div>
+                    <p className="text-sm font-bold tracking-wide drop-shadow-sm leading-snug">{broadcast.message}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDismissedBroadcasts(prev => [...prev, broadcast.id])}
+                  className="shrink-0 w-8 h-8 rounded-full bg-white/10 hover:bg-white/25 flex items-center justify-center text-white transition-colors border border-white/10 self-end sm:self-center"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+
         <AnimatePresence mode="wait">
           
           {/* TAB 1: FINANCIAL OVERVIEW */}

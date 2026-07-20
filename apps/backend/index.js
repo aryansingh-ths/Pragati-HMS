@@ -135,6 +135,28 @@ const verifyToken = (req, res, next) => {
   }
 };
 
+// 3. Logout — records logout_time on the most recent active shift for this user
+app.post('/api/auth/logout', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    // Update the most recent open shift (logout_time IS NULL) for this user
+    await pool.query(
+      `UPDATE staff_shifts SET logout_time = NOW()
+       WHERE id = (
+         SELECT id FROM staff_shifts
+         WHERE user_id = $1 AND logout_time IS NULL
+         ORDER BY login_time DESC LIMIT 1
+       )`,
+      [userId]
+    );
+    await logAuditAction(userId, 'Staff Logout', `User logged out of dashboard`);
+    res.json({ status: 'success', message: 'Session closed and logout time recorded.' });
+  } catch (err) {
+    console.error('Logout error:', err);
+    res.status(500).json({ error: 'Failed to record logout time' });
+  }
+});
+
 // Granular permission wrapper
 const requireRole = (allowedRoles) => {
   return (req, res, next) => {
@@ -1467,17 +1489,66 @@ app.post('/api/manager/permissions/:userId', verifyToken, requireRole(['ADMIN'])
 app.get('/api/manager/shifts', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const shiftQuery = `
-      SELECT s.id, u.name, u.email, u.role, s.login_time, s.logout_time,
-             (CASE WHEN s.logout_time IS NULL THEN true ELSE false END) as is_active
+      SELECT s.id, u.id as user_id, u.name, u.email, u.role, s.login_time, s.logout_time,
+             (CASE WHEN s.logout_time IS NULL THEN true ELSE false END) as is_active,
+             ROUND(
+               EXTRACT(EPOCH FROM (COALESCE(s.logout_time, NOW()) - s.login_time)) / 60
+             )::int AS duration_minutes
       FROM staff_shifts s
       JOIN users u ON s.user_id = u.id
-      ORDER BY s.login_time DESC LIMIT 40;
+      ORDER BY s.login_time DESC LIMIT 60;
     `;
     const shifts = await pool.query(shiftQuery);
     res.json({ status: 'success', data: { shifts: shifts.rows } });
   } catch (err) {
     console.error('Shifts fetch error:', err);
     res.status(500).json({ error: 'Failed to access active staff logs' });
+  }
+});
+
+// 6b. STAFF SALARY CONFIGURATION
+app.get('/api/manager/salaries', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM staff_salaries');
+    res.json({ status: 'success', data: { salaries: result.rows } });
+  } catch (err) {
+    console.error('Salaries fetch error:', err);
+    res.status(500).json({ error: 'Failed to access salary configurations' });
+  }
+});
+
+app.get('/api/manager/salary/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const result = await pool.query('SELECT * FROM staff_salaries WHERE user_id = $1', [userId]);
+    if (result.rows.length === 0) {
+      // Return default if none found
+      return res.json({ status: 'success', data: { salaryConfig: { base_salary_monthly: 0, daily_deduction: 0 } } });
+    }
+    res.json({ status: 'success', data: { salaryConfig: result.rows[0] } });
+  } catch (err) {
+    console.error('Salary config fetch error:', err);
+    res.status(500).json({ error: 'Failed to access salary configuration' });
+  }
+});
+
+app.post('/api/manager/salary/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { base_salary_monthly, daily_deduction } = req.body;
+    
+    await pool.query(`
+      INSERT INTO staff_salaries (user_id, base_salary_monthly, daily_deduction)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (user_id) 
+      DO UPDATE SET base_salary_monthly = EXCLUDED.base_salary_monthly, daily_deduction = EXCLUDED.daily_deduction, updated_at = NOW()
+    `, [userId, base_salary_monthly, daily_deduction]);
+    
+    await logAuditAction(req.user.userId, 'Salary Config Updated', `Updated salary rules for user ID ${userId}`);
+    res.json({ status: 'success', message: 'Salary configuration saved successfully' });
+  } catch (err) {
+    console.error('Salary config update error:', err);
+    res.status(500).json({ error: 'Failed to update salary configuration' });
   }
 });
 
@@ -1519,6 +1590,15 @@ app.post('/api/manager/broadcast', verifyToken, requireRole(['ADMIN']), async (r
   if (!message) return res.status(400).json({ error: 'Message content is required' });
 
   try {
+    const senderName = await pool.query('SELECT name FROM users WHERE id = $1', [req.user.userId]);
+    const name = senderName.rows.length > 0 ? senderName.rows[0].name : 'Admin';
+
+    await pool.query(
+      `INSERT INTO broadcasts (target_dept, message, sender_id, sender_name, expires_at)
+       VALUES ($1, $2, $3, $4, NOW() + INTERVAL '24 hours')`,
+      [targetDept || 'ALL', message, req.user.userId, name]
+    );
+
     await logAuditAction(
       req.user.userId,
       'Department Broadcast',
@@ -1526,7 +1606,28 @@ app.post('/api/manager/broadcast', verifyToken, requireRole(['ADMIN']), async (r
     );
     res.json({ status: 'success', message: 'Operational broadcast transmitted successfully' });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Failed to process broadcasting task' });
+  }
+});
+
+// 8b. Fetch Active Broadcasts
+app.get('/api/broadcasts', verifyToken, async (req, res) => {
+  try {
+    const userRes = await pool.query('SELECT role FROM users WHERE id = $1', [req.user.userId]);
+    const userRole = userRes.rows.length > 0 ? userRes.rows[0].role : 'NONE';
+
+    const result = await pool.query(
+      `SELECT id, target_dept, message, sender_name, created_at, expires_at 
+       FROM broadcasts 
+       WHERE (target_dept = 'ALL' OR UPPER(target_dept) = UPPER($1) OR $1 = 'ADMIN')
+       ORDER BY created_at DESC`,
+      [userRole]
+    );
+    res.json({ status: 'success', data: { broadcasts: result.rows } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch broadcasts' });
   }
 });
 
@@ -1560,7 +1661,27 @@ app.post('/api/manager/staff/onboard', verifyToken, requireRole(['ADMIN']), asyn
   }
 });
 
-// 10. HR lifecycle: Offboard Employee
+// 10. HR lifecycle: Update Employee Details
+app.patch('/api/manager/staff/:id', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+  const { id } = req.params;
+  const { name, email } = req.body;
+  if (!name || !email) return res.status(400).json({ error: 'Name and email are required' });
+
+  try {
+    const updated = await pool.query(
+      'UPDATE users SET name = $1, email = $2 WHERE id = $3 RETURNING id, email, name, role;',
+      [name, email.toLowerCase().trim(), id]
+    );
+    if (updated.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    await logAuditAction(req.user.userId, 'Update Staff Member', `Updated profile for ${email}`);
+    res.json({ status: 'success', data: { user: updated.rows[0] } });
+  } catch (err) {
+    console.error('Staff update error:', err);
+    res.status(500).json({ error: 'Failed to update employee details' });
+  }
+});
+
+// 11. HR lifecycle: Offboard Employee
 app.post('/api/manager/staff/offboard/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { userId } = req.params;
   if (userId === req.user.userId) return res.status(400).json({ error: 'You cannot offboard your own administrator account' });
@@ -1674,7 +1795,27 @@ async function runMigrations() {
           status VARCHAR(50) NOT NULL,
           created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS staff_salaries (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+          base_salary_monthly DECIMAL(10, 2) DEFAULT 0,
+          daily_deduction DECIMAL(10, 2) DEFAULT 0,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS broadcasts (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          target_dept VARCHAR(50) NOT NULL DEFAULT 'ALL',
+          message TEXT NOT NULL,
+          sender_id UUID REFERENCES users(id) ON DELETE SET NULL,
+          sender_name VARCHAR(255) NOT NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          expires_at TIMESTAMP WITH TIME ZONE
+      );
     `);
+    
+    console.log('✅ Auto-migrations completed successfully.');
 
     // Add columns dynamically (ignore error if they already exist)
     const columnsToAdd = [

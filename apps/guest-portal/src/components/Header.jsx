@@ -81,9 +81,9 @@ export default function Header({
           />
           
           {/* Adjusted font sizes to be a little larger */}
-          <span className="text-2xl md:text-2xl font-serif italic font-bold tracking-tight flex items-center drop-shadow-sm" style={{ color: '#e4aa19ff' }}>
+          <span className="text-2xl md:text-2xl font-serif italic font-bold tracking-tight flex items-center drop-shadow-sm" style={{ color: '#D4A373' }}>
             Pragati
-            <span className="font-light ml-2 uppercase text-xl md:text-xl tracking-widest" style={{ color: '#e4a215ff', opacity: 0.8 }}>
+            <span className="font-light ml-2 uppercase text-xl md:text-xl tracking-widest" style={{ color: '#D4A373', opacity: 0.9 }}>
               HMS
             </span>
           </span>
@@ -146,8 +146,8 @@ export default function Header({
                 className="flex items-center gap-1.5 md:gap-3 min-w-0"
               >
                 {/* Role badge — hidden on mobile, fine */}
-                <span className="hidden sm:inline-block text-[9px] md:text-[10px] font-bold text-zinc-800 bg-orange-50 px-3 py-1.5 rounded-md border border-orange-200 uppercase tracking-widest whitespace-nowrap shrink-0">
-                  Role: <span className="text-orange-600">{userRole.replace('_', ' ')}</span>
+                <span className="hidden sm:inline-block text-[9px] md:text-[10px] font-bold text-[#D4A373] bg-[#FDF6E9] px-3 py-1.5 rounded-md border border-[#D4A373]/30 uppercase tracking-widest whitespace-nowrap shrink-0">
+                  Role: <span className="text-[#D4A373] font-black">{userRole.replace('_', ' ')}</span>
                 </span>
                 
                 {!location.pathname.includes('/dashboard') && isStaffRole(userRole) && (
@@ -180,12 +180,26 @@ export default function Header({
                     extra space to the right of the button, compounding the
                     overflow instead of fixing it. Flex gap handles spacing. */}
                 <button 
-                  onClick={() => { 
+                  onClick={async () => { 
+                    // Record logout time in the database before clearing session
+                    const token = localStorage.getItem('hms_token');
+                    if (token) {
+                      try {
+                        await fetch('http://localhost:3000/api/auth/logout', {
+                          method: 'POST',
+                          headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                      } catch (e) {
+                        // silent — even if network fails, we still clear client session
+                      }
+                    }
                     setUserRole(null); 
                     setAuthToken(null); 
                     setViewMode('guest'); 
                     localStorage.removeItem('hms_token'); 
-                    localStorage.removeItem('hms_role'); 
+                    localStorage.removeItem('hms_role');
+                    localStorage.removeItem('hms_name');
+                    localStorage.removeItem('hms_user_id');
                     navigate('/'); 
                   }} 
                   className="text-[11px] md:text-sm font-bold text-rose-500 hover:text-rose-700 transition-colors whitespace-nowrap shrink-0"
