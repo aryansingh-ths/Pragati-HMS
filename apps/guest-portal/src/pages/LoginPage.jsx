@@ -34,6 +34,8 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
         // 3. Populate client storage vectors to maintain session across hard refresh cycles
         localStorage.setItem('hms_token', token);
         localStorage.setItem('hms_role', user.role);
+        localStorage.setItem('hms_name', user.name || '');
+        localStorage.setItem('hms_user_id', user.id || '');
 
         // 4. Compute role tracking state and trigger target routing maps
         const role = user.role.toUpperCase();
