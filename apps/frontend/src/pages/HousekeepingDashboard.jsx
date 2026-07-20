@@ -404,7 +404,7 @@ export default function HousekeepingDashboard() {
 
   // ─── Auth Fetch Wrapper ────────────────────────────────────
   const fetchWithAuth = useCallback(async (url, options = {}) => {
-    const token = localStorage.getItem('hms_token');
+    const token = sessionStorage.getItem('hms_token');
     if (!token) { navigate('/login'); return null; }
     try {
       const res = await fetch(url, {
@@ -702,7 +702,7 @@ export default function HousekeepingDashboard() {
         <div className="flex flex-col gap-6 flex-1 overflow-y-auto fd-sidebar-scroll pr-1">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Workflow Filters</p>
-            <div className="flex flex-col gap-2.5">
+            <div className="flex flex-col gap-1">
               <motion.button
                 whileHover={{ x: 3 }}
                 whileTap={{ scale: 0.97 }}
@@ -766,7 +766,6 @@ export default function HousekeepingDashboard() {
             </div>
           </div>
         </div>
-
 
       </motion.div>
 

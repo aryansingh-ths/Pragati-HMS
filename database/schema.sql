@@ -137,10 +137,34 @@ CREATE TABLE ledger_transactions (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS staff_salaries (
+-- 8. TRAVEL DESK MODULE (Travel Packages & Customer Purchases)
+-- Note: 'TRAVEL' is added to the user_role enum at runtime via migration
+-- (ALTER TYPE user_role ADD VALUE), since it postdates this base schema file.
+
+CREATE TABLE IF NOT EXISTS travel_packages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
-    base_salary_monthly DECIMAL(10, 2) DEFAULT 0,
-    daily_deduction DECIMAL(10, 2) DEFAULT 0,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    name VARCHAR(255) NOT NULL,
+    destination VARCHAR(255) NOT NULL,
+    description TEXT,
+    category VARCHAR(100) NOT NULL DEFAULT 'Leisure',
+    price DECIMAL(10, 2) NOT NULL,
+    duration_days INT NOT NULL DEFAULT 3,
+    max_travelers INT NOT NULL DEFAULT 4,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS travel_bookings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    package_id UUID REFERENCES travel_packages(id) ON DELETE SET NULL,
+    guest_name VARCHAR(255) NOT NULL,
+    guest_email VARCHAR(255),
+    guest_phone VARCHAR(50),
+    travelers_count INT NOT NULL DEFAULT 1,
+    travel_date DATE NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL,
+    payment_status VARCHAR(50) NOT NULL DEFAULT 'Pending',  -- Pending, Partial, Paid, Refunded
+    booking_status VARCHAR(50) NOT NULL DEFAULT 'Confirmed', -- Confirmed, Completed, Cancelled
+    booked_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

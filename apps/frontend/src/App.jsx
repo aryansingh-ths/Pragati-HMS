@@ -22,6 +22,9 @@ import FrontDeskDashboard from './pages/FrontDeskDashboard';
 import HousekeepingDashboard from './pages/HousekeepingDashboard';
 import FinanceDashboard from './pages/FinanceDashboard';
 import ManagerDashboard from './pages/ManagerDashboard';
+import SalesDashboard from './pages/SalesDashboard';
+import TravelDashboard from './pages/TravelDashboard';
+import DiningDashboard from './pages/DiningDashboard'; // Ensure this matches your file name (e.g., DinningDashboard if you kept the double 'n')
 
 export default function App() {
   const [viewMode, setViewMode] = useState('guest');
@@ -30,9 +33,18 @@ export default function App() {
   const [selectedRoomClass, setSelectedRoomClass] = useState(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
 
-  // STEP 3 IMPLEMENTATION: Securely check localStorage to persist session on refresh
-  const [userRole, setUserRole] = useState(() => localStorage.getItem('hms_role') || null);
-  const [authToken, setAuthToken] = useState(() => localStorage.getItem('hms_token') || null);
+  // Sync state with sessionStorage
+  const [userRole, setUserRole] = useState(() => sessionStorage.getItem('hms_role') || null);
+  const [authToken, setAuthToken] = useState(() => sessionStorage.getItem('hms_token') || null);
+
+  // Listen for storage changes to keep state in sync across components
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setUserRole(sessionStorage.getItem('hms_role'));
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   const fetchRoomClasses = async () => {
     setLoading(true);
@@ -50,17 +62,6 @@ export default function App() {
   useEffect(() => {
     fetchRoomClasses();
   }, []);
-
-  const getUserIdFromToken = () => {
-    if (!authToken) return null;
-    try {
-      const payload = authToken.split('.')[1];
-      const decoded = JSON.parse(atob(payload));
-      return decoded.userId;
-    } catch (e) {
-      return null;
-    }
-  };
 
   const scrollToSection = (id) => {
     setViewMode('guest');
@@ -148,6 +149,22 @@ export default function App() {
             <Route element={<ProtectedRoute isAllowed={userRole?.toUpperCase() === 'ADMIN'} />}>
               <Route path="/dashboard/manager" element={<ManagerDashboard />} />
             </Route>
+
+            {/* ROUTE 7: PROTECTED SALES DASHBOARD */}
+            <Route element={<ProtectedRoute isAllowed={userRole?.toUpperCase() === 'SALES' || userRole?.toUpperCase() === 'ADMIN'} />}>
+              <Route path="/dashboard/sales" element={<SalesDashboard />} />
+            </Route>
+
+            {/* ROUTE 8: PROTECTED TRAVEL DESK ROUTE */}
+            <Route element={<ProtectedRoute isAllowed={userRole?.toUpperCase() === 'TRAVEL' || userRole?.toUpperCase() === 'ADMIN'} />}>
+              <Route path="/dashboard/travel" element={<TravelDashboard />} />
+            </Route>
+
+            {/* ROUTE 9: CORRECTED SINGLE PROTECTED DINING ROUTE */}
+            <Route element={<ProtectedRoute isAllowed={userRole?.toUpperCase() === 'RESTAURANT' || userRole?.toUpperCase() === 'ADMIN'} />}>
+              <Route path="/dashboard/dining" element={<DiningDashboard />} />
+            </Route>
+
             {/* Catch-all safety boundary */}
             <Route path="*" element={<Navigate to="/" replace />} />
 
