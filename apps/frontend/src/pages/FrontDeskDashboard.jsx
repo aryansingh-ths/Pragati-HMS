@@ -838,7 +838,7 @@ export default function FrontDeskDashboard() {
         initial={{ opacity: 0, x: -30 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
-        className="w-full lg:w-76 xl:w-88 flex-shrink-0 h-full rounded-3xl overflow-y-auto fd-scrollbar p-6 flex flex-col gap-6 fd-dealdeck-sidebar z-30"
+        className="w-full lg:w-72 flex-shrink-0 h-full rounded-[2rem] overflow-y-auto fd-scrollbar p-6 flex flex-col gap-6 fd-dealdeck-sidebar z-30"
       >
         {/* Brand Header */}
         <div className="flex items-center gap-3">
@@ -864,7 +864,7 @@ export default function FrontDeskDashboard() {
         </div>
 
         {/* Navigation Categories */}
-        <div className="flex flex-col gap-4 flex-1">
+        <div className="flex flex-col gap-4 flex-1 overflow-y-auto fd-scrollbar pr-1">
           {/* Section: Menu */}
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Menu</p>
@@ -975,42 +975,42 @@ export default function FrontDeskDashboard() {
               </motion.button>
             </div>
           </div>
+        </div>
 
-          {/* Live pulse strip — decorative "system health" element */}
-          <div className="rounded-2xl border border-teal-100 bg-gradient-to-br from-teal-50 to-sky-50/60 p-4 relative overflow-hidden">
-            <div className="flex items-center gap-2 mb-2">
-              <Radio size={13} className="text-teal-600" />
-              <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Board Pulse</span>
-            </div>
-            <div className="flex items-end gap-1 h-8">
-              {[...Array(12)].map((_, i) => (
-                <motion.span
-                  key={i}
-                  className="flex-1 rounded-full bg-gradient-to-t from-teal-500 to-sky-400"
-                  animate={{ height: [`${20 + (i % 5) * 8}%`, `${40 + ((i + 3) % 5) * 12}%`, `${20 + (i % 5) * 8}%`] }}
-                  transition={{ duration: 1.6 + (i % 4) * 0.2, repeat: Infinity, ease: 'easeInOut', delay: i * 0.07 }}
-                />
-              ))}
-            </div>
+        {/* Live pulse strip — decorative "system health" element, pinned above footer */}
+        <div className="rounded-2xl border border-teal-100 bg-gradient-to-br from-teal-50 to-sky-50/60 p-4 relative overflow-hidden shrink-0">
+          <div className="flex items-center gap-2 mb-2">
+            <Radio size={13} className="text-teal-600" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Board Pulse</span>
           </div>
+          <div className="flex items-end gap-1 h-8">
+            {[...Array(12)].map((_, i) => (
+              <motion.span
+                key={i}
+                className="flex-1 rounded-full bg-gradient-to-t from-teal-500 to-sky-400"
+                animate={{ height: [`${20 + (i % 5) * 8}%`, `${40 + ((i + 3) % 5) * 12}%`, `${20 + (i % 5) * 8}%`] }}
+                transition={{ duration: 1.6 + (i % 4) * 0.2, repeat: Infinity, ease: 'easeInOut', delay: i * 0.07 }}
+              />
+            ))}
+          </div>
+        </div>
 
-          {/* Section: History */}
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">History &amp; Ledger</p>
-            <motion.button
-              whileHover={{ x: 3 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => { setViewMode('history'); loadAllBookings(); }}
-              className={`relative z-10 w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-colors duration-300 text-left overflow-hidden ${viewMode === 'history' ? 'text-white' : 'text-zinc-500 hover:bg-amber-50 hover:text-amber-700'
-                }`}
-            >
-              {viewMode === 'history' && (
-                <motion.span layoutId="fd-sidebar-pill" transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="absolute inset-0 bg-gradient-to-r from-amber-500 to-orange-400 shadow-md shadow-amber-500/30 rounded-xl" />
-              )}
-              <span className="relative fd-icon-btn"><History size={15} /></span>
-              <span className="relative">Booking History Log</span>
-            </motion.button>
-          </div>
+        {/* Section: History — pinned footer action, matches Manager & Housekeeping convention */}
+        <div className="pt-4 border-t border-zinc-100 shrink-0">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">History &amp; Ledger</p>
+          <motion.button
+            whileHover={{ x: 3 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={() => { setViewMode('history'); loadAllBookings(); }}
+            className={`relative z-10 w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-colors duration-300 text-left overflow-hidden ${viewMode === 'history' ? 'text-white' : 'text-zinc-500 hover:bg-amber-50 hover:text-amber-700'
+              }`}
+          >
+            {viewMode === 'history' && (
+              <motion.span layoutId="fd-sidebar-pill" transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="absolute inset-0 bg-gradient-to-r from-amber-500 to-orange-400 shadow-md shadow-amber-500/30 rounded-xl" />
+            )}
+            <span className="relative fd-icon-btn"><History size={15} /></span>
+            <span className="relative">Booking History Log</span>
+          </motion.button>
         </div>
 
       </motion.div>

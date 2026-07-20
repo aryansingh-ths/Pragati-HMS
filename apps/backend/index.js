@@ -743,6 +743,210 @@ app.get('/api/finance/overview', verifyToken, requireRole(['FINANCE', 'ADMIN']),
 
 
 // ==========================================
+// TRAVEL DESK ENDPOINTS
+// ==========================================
+const requireTravel = requireRole(['TRAVEL', 'ADMIN']);
+
+// 1. Overview: KPIs, 7-day booking trend, package popularity split, recent bookings
+app.get('/api/travel/overview', verifyToken, requireTravel, async (req, res) => {
+  try {
+    const kpiRes = await pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE booking_status != 'Cancelled') AS total_bookings,
+        COALESCE(SUM(amount) FILTER (WHERE created_at >= date_trunc('month', CURRENT_DATE) AND booking_status != 'Cancelled'), 0) AS revenue_this_month,
+        COUNT(*) FILTER (WHERE travel_date >= CURRENT_DATE AND booking_status = 'Confirmed') AS upcoming_departures,
+        COALESCE(SUM(amount) FILTER (WHERE payment_status IN ('Pending', 'Partial')), 0) AS pending_payments_value,
+        COUNT(*) FILTER (WHERE payment_status IN ('Pending', 'Partial')) AS pending_payments_count
+      FROM travel_bookings;
+    `);
+
+    const trendRes = await pool.query(`
+      SELECT to_char(d::date, 'Dy') AS label, d::date AS day,
+        COALESCE(SUM(tb.amount), 0) AS value
+      FROM generate_series(CURRENT_DATE - INTERVAL '6 days', CURRENT_DATE, INTERVAL '1 day') d
+      LEFT JOIN travel_bookings tb ON tb.created_at::date = d::date AND tb.booking_status != 'Cancelled'
+      GROUP BY d
+      ORDER BY d;
+    `);
+
+    const popularityRes = await pool.query(`
+      SELECT tp.name AS label, COUNT(tb.id) AS bookings, COALESCE(SUM(tb.amount), 0) AS value
+      FROM travel_packages tp
+      LEFT JOIN travel_bookings tb ON tb.package_id = tp.id AND tb.booking_status != 'Cancelled'
+      GROUP BY tp.name
+      ORDER BY value DESC
+      LIMIT 6;
+    `);
+
+    const recentRes = await pool.query(`
+      SELECT tb.id, tb.guest_name, tp.name AS package_name, tb.travel_date, tb.amount, tb.payment_status, tb.booking_status, tb.created_at
+      FROM travel_bookings tb
+      LEFT JOIN travel_packages tp ON tp.id = tb.package_id
+      ORDER BY tb.created_at DESC
+      LIMIT 6;
+    `);
+
+    res.json({
+      status: 'success',
+      data: {
+        kpis: kpiRes.rows[0],
+        trend: trendRes.rows,
+        popularity: popularityRes.rows,
+        recentBookings: recentRes.rows,
+      }
+    });
+  } catch (err) {
+    console.error('Travel overview error:', err);
+    res.status(500).json({ error: 'Unable to load travel desk overview' });
+  }
+});
+
+// 2. Package catalog — list with computed bookings/revenue
+app.get('/api/travel/packages', verifyToken, requireTravel, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT tp.*, COUNT(tb.id) FILTER (WHERE tb.booking_status != 'Cancelled') AS bookings_count,
+        COALESCE(SUM(tb.amount) FILTER (WHERE tb.booking_status != 'Cancelled'), 0) AS revenue
+      FROM travel_packages tp
+      LEFT JOIN travel_bookings tb ON tb.package_id = tp.id
+      GROUP BY tp.id
+      ORDER BY tp.created_at DESC;
+    `);
+    res.json({ status: 'success', results: result.rows.length, data: { packages: result.rows } });
+  } catch (err) {
+    console.error('Travel packages fetch error:', err);
+    res.status(500).json({ error: 'Unable to load travel package catalog' });
+  }
+});
+
+// 3. Create a new package
+app.post('/api/travel/packages', verifyToken, requireTravel, async (req, res) => {
+  const { name, destination, description, category, price, duration_days, max_travelers } = req.body;
+  if (!name || !destination || !price) {
+    return res.status(400).json({ error: 'Name, destination and price are required' });
+  }
+  try {
+    const result = await pool.query(
+      `INSERT INTO travel_packages (name, destination, description, category, price, duration_days, max_travelers)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [name, destination, description || '', category || 'Leisure', price, duration_days || 3, max_travelers || 4]
+    );
+    await logAuditAction(req.user.userId, 'Create Travel Package', `Added new package: ${name} (${destination})`);
+    res.status(201).json({ status: 'success', data: { package: result.rows[0] } });
+  } catch (err) {
+    console.error('Create travel package error:', err);
+    res.status(500).json({ error: 'Unable to create travel package' });
+  }
+});
+
+// 4. Toggle a package's active status
+app.patch('/api/travel/packages/:id/toggle-active', verifyToken, requireTravel, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'UPDATE travel_packages SET is_active = NOT is_active WHERE id = $1 RETURNING *',
+      [req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Package not found' });
+    await logAuditAction(req.user.userId, 'Toggle Package Status', `${result.rows[0].name} set to ${result.rows[0].is_active ? 'Active' : 'Inactive'}`);
+    res.json({ status: 'success', data: { package: result.rows[0] } });
+  } catch (err) {
+    res.status(500).json({ error: 'Unable to update package status' });
+  }
+});
+
+// 5. Bookings / purchases — list with filters
+app.get('/api/travel/bookings', verifyToken, requireTravel, async (req, res) => {
+  const { status, search } = req.query;
+  try {
+    const conditions = [];
+    const params = [];
+    if (status && status !== 'All') {
+      params.push(status);
+      conditions.push(`tb.booking_status = $${params.length}`);
+    }
+    if (search) {
+      params.push(`%${search.toLowerCase()}%`);
+      conditions.push(`(LOWER(tb.guest_name) LIKE $${params.length} OR LOWER(tp.name) LIKE $${params.length} OR LOWER(tb.guest_email) LIKE $${params.length})`);
+    }
+    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const result = await pool.query(`
+      SELECT tb.*, tp.name AS package_name, tp.destination
+      FROM travel_bookings tb
+      LEFT JOIN travel_packages tp ON tp.id = tb.package_id
+      ${whereClause}
+      ORDER BY tb.created_at DESC;
+    `, params);
+    res.json({ status: 'success', results: result.rows.length, data: { bookings: result.rows } });
+  } catch (err) {
+    console.error('Travel bookings fetch error:', err);
+    res.status(500).json({ error: 'Unable to load travel bookings' });
+  }
+});
+
+// 6. Create a new booking (purchase) against a package
+app.post('/api/travel/bookings', verifyToken, requireTravel, async (req, res) => {
+  const { package_id, guest_name, guest_email, guest_phone, travelers_count, travel_date, payment_status } = req.body;
+  if (!package_id || !guest_name || !travel_date) {
+    return res.status(400).json({ error: 'Package, guest name and travel date are required' });
+  }
+  try {
+    const pkgRes = await pool.query('SELECT price FROM travel_packages WHERE id = $1', [package_id]);
+    if (pkgRes.rows.length === 0) return res.status(404).json({ error: 'Selected package not found' });
+
+    const amount = Number(pkgRes.rows[0].price) * Number(travelers_count || 1);
+    const result = await pool.query(
+      `INSERT INTO travel_bookings (package_id, guest_name, guest_email, guest_phone, travelers_count, travel_date, amount, payment_status, booked_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [package_id, guest_name, guest_email || null, guest_phone || null, travelers_count || 1, travel_date, amount, payment_status || 'Pending', req.user.userId]
+    );
+    await logAuditAction(req.user.userId, 'New Travel Booking', `Booked for ${guest_name}: ₹${amount}`);
+    res.status(201).json({ status: 'success', data: { booking: result.rows[0] } });
+  } catch (err) {
+    console.error('Create travel booking error:', err);
+    res.status(500).json({ error: 'Unable to create travel booking' });
+  }
+});
+
+// 7. Update a booking's status (payment or booking lifecycle)
+app.patch('/api/travel/bookings/:id/status', verifyToken, requireTravel, async (req, res) => {
+  const { payment_status, booking_status } = req.body;
+  try {
+    const result = await pool.query(
+      `UPDATE travel_bookings SET
+         payment_status = COALESCE($1, payment_status),
+         booking_status = COALESCE($2, booking_status)
+       WHERE id = $3 RETURNING *`,
+      [payment_status || null, booking_status || null, req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Booking not found' });
+    await logAuditAction(req.user.userId, 'Update Travel Booking', `Booking ${req.params.id} → payment: ${result.rows[0].payment_status}, status: ${result.rows[0].booking_status}`);
+    res.json({ status: 'success', data: { booking: result.rows[0] } });
+  } catch (err) {
+    res.status(500).json({ error: 'Unable to update booking' });
+  }
+});
+
+// 8. Customers — aggregated purchase history per guest
+app.get('/api/travel/customers', verifyToken, requireTravel, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT guest_name, guest_email, guest_phone,
+        COUNT(*) AS total_bookings,
+        COALESCE(SUM(amount), 0) AS total_spent,
+        MAX(travel_date) AS last_travel_date
+      FROM travel_bookings
+      GROUP BY guest_name, guest_email, guest_phone
+      ORDER BY total_spent DESC;
+    `);
+    res.json({ status: 'success', results: result.rows.length, data: { customers: result.rows } });
+  } catch (err) {
+    console.error('Travel customers fetch error:', err);
+    res.status(500).json({ error: 'Unable to load travel customers' });
+  }
+});
+
+
+// ==========================================
 // MANAGER (ADMIN) ADMINISTRATIVE ENDPOINTS
 // ==========================================
 
@@ -1694,9 +1898,122 @@ async function runMigrations() {
       }
     }
 
+    // 5. TRAVEL DESK MODULE — enum value, tables, seed data, seed login
+    const travelRoleCheck = await pool.query(
+      "SELECT 1 FROM pg_enum WHERE enumlabel = 'TRAVEL' AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'user_role')"
+    );
+    if (travelRoleCheck.rows.length === 0) {
+      await pool.query("ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'TRAVEL'");
+    }
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS travel_packages (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL,
+        destination VARCHAR(255) NOT NULL,
+        description TEXT,
+        category VARCHAR(100) NOT NULL DEFAULT 'Leisure',
+        price DECIMAL(10, 2) NOT NULL,
+        duration_days INT NOT NULL DEFAULT 3,
+        max_travelers INT NOT NULL DEFAULT 4,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS travel_bookings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        package_id UUID REFERENCES travel_packages(id) ON DELETE SET NULL,
+        guest_name VARCHAR(255) NOT NULL,
+        guest_email VARCHAR(255),
+        guest_phone VARCHAR(50),
+        travelers_count INT NOT NULL DEFAULT 1,
+        travel_date DATE NOT NULL,
+        amount DECIMAL(10, 2) NOT NULL,
+        payment_status VARCHAR(50) NOT NULL DEFAULT 'Pending',
+        booking_status VARCHAR(50) NOT NULL DEFAULT 'Confirmed',
+        booked_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Seed sample packages if the catalog is empty
+    const pkgCountRes = await pool.query('SELECT COUNT(*) FROM travel_packages');
+    if (parseInt(pkgCountRes.rows[0].count, 10) === 0) {
+      const packages = [
+        ['Goa Beach Escape', 'Goa, India', 'A relaxed 4-day beach holiday with resort stay, water sports and sunset cruise.', 'Beach & Leisure', 18500, 4, 4],
+        ['Kerala Backwaters Retreat', 'Alleppey, Kerala', 'Houseboat stay through the backwaters with Ayurvedic spa sessions included.', 'Wellness', 24500, 5, 4],
+        ['Rajasthan Heritage Trail', 'Jaipur–Udaipur–Jodhpur', 'Palace hotels, fort tours and a private heritage-city guide across 3 cities.', 'Heritage', 42000, 7, 6],
+        ['Himalayan Trek Adventure', 'Manali, Himachal Pradesh', 'Guided high-altitude trek with camping gear, permits and porter support.', 'Adventure', 27500, 6, 8],
+        ['Dubai City Break', 'Dubai, UAE', 'Skyline hotel stay with desert safari, Burj Khalifa entry and city tour.', 'International', 68000, 5, 4],
+        ['Maldives Honeymoon Special', 'Maldives', 'Overwater villa stay with private dinners, snorkeling and spa credits.', 'Honeymoon', 125000, 5, 2],
+      ];
+      for (const p of packages) {
+        await pool.query(
+          `INSERT INTO travel_packages (name, destination, description, category, price, duration_days, max_travelers)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          p
+        );
+      }
+
+      // Seed a handful of bookings against the freshly created packages
+      const seededPackages = await pool.query('SELECT id, price, name FROM travel_packages');
+      const findPkg = (name) => seededPackages.rows.find(r => r.name === name);
+      const bookingSeeds = [
+        ['Aryan Singh', 'aryan.singh@example.com', '+91 98200 11122', 2, 12, 'Goa Beach Escape', 'Paid', 'Confirmed'],
+        ['Priya Nair', 'priya.nair@example.com', '+91 98450 33221', 4, 20, 'Kerala Backwaters Retreat', 'Paid', 'Confirmed'],
+        ['Meridian Corporate Travel', 'travel@meridiancorp.com', '+91 98220 44556', 6, 35, 'Rajasthan Heritage Trail', 'Partial', 'Confirmed'],
+        ['Rohan Desai', 'rohan.desai@example.com', '+91 99870 55221', 2, -5, 'Dubai City Break', 'Paid', 'Completed'],
+        ['Vikram & Anjali Malhotra', 'vikram.m@example.com', '+91 98330 77441', 2, 45, 'Maldives Honeymoon Special', 'Partial', 'Confirmed'],
+        ['Zenith Adventure Club', 'contact@zenithadventure.com', '+91 97410 88332', 8, 18, 'Himalayan Trek Adventure', 'Pending', 'Confirmed'],
+        ['Sanya Kapoor', 'sanya.kapoor@example.com', '+91 98110 22114', 1, -12, 'Goa Beach Escape', 'Paid', 'Completed'],
+        ['Corporate Account — Infosys', 'travel.desk@infosys.com', '+91 98800 99112', 10, 40, 'Dubai City Break', 'Pending', 'Confirmed'],
+      ];
+      for (const b of bookingSeeds) {
+        const [guest, email, phone, travelers, dayOffset, pkgName, paymentStatus, bookingStatus] = b;
+        const pkg = findPkg(pkgName);
+        if (!pkg) continue;
+        const amount = Number(pkg.price) * travelers;
+        await pool.query(
+          `INSERT INTO travel_bookings (package_id, guest_name, guest_email, guest_phone, travelers_count, travel_date, amount, payment_status, booking_status)
+           VALUES ($1, $2, $3, $4, $5, CURRENT_DATE + $6::int, $7, $8, $9)`,
+          [pkg.id, guest, email, phone, travelers, dayOffset, amount, paymentStatus, bookingStatus]
+        );
+      }
+    }
+
+    // Seed the Travel Desk login (idempotent — skipped if it already exists)
+    const travelUserRes = await pool.query('SELECT id FROM users WHERE email = $1', ['travel@techhansa.com']);
+    if (travelUserRes.rows.length === 0) {
+      const travelHash = await bcrypt.hash('password123', 10);
+      await pool.query(
+        'INSERT INTO users (email, password_hash, name, role) VALUES ($1, $2, $3, $4)',
+        ['travel@techhansa.com', travelHash, 'Travel Desk Manager', 'TRAVEL']
+      );
+    }
+
   } catch (err) {
     console.error('⚠️ Migration warning (non-fatal):', err.message);
   }
+
+  // Add RESTAURANT to the ENUM if it's missing
+    const enumRestCheck = await pool.query(
+      "SELECT 1 FROM pg_enum WHERE enumlabel = 'RESTAURANT' AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'user_role')"
+    );
+    if (enumRestCheck.rows.length === 0) {
+      await pool.query("ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'RESTAURANT'");
+    }
+
+    // Auto-create the requested Dining user credentials
+    const diningUserCheck = await pool.query("SELECT * FROM users WHERE email = 'dinning@techhansa.com'");
+    if (diningUserCheck.rows.length === 0) {
+      const hash = await bcrypt.hash('password123', 10);
+      await pool.query(
+        "INSERT INTO users (email, password_hash, name, role) VALUES ($1, $2, $3, 'RESTAURANT')",
+        ['dinning@techhansa.com', hash, 'F&B Manager']
+      );
+    }
 }
 
 // Start the server

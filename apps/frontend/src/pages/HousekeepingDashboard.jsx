@@ -653,7 +653,7 @@ export default function HousekeepingDashboard() {
         initial={{ opacity: 0, x: -30 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
-        className="w-full lg:w-76 xl:w-88 flex-shrink-0 h-full rounded-3xl overflow-y-auto fd-scrollbar p-6 flex flex-col gap-6 fd-dealdeck-sidebar z-30"
+        className="w-full lg:w-72 flex-shrink-0 h-full rounded-[2rem] overflow-y-auto fd-scrollbar p-6 flex flex-col gap-6 fd-dealdeck-sidebar z-30"
       >
         {/* Brand Header */}
         <div className="flex items-center gap-3">
@@ -679,15 +679,15 @@ export default function HousekeepingDashboard() {
         </div>
 
         {/* Navigation Categories */}
-        <div className="flex flex-col gap-6 flex-1">
+        <div className="flex flex-col gap-4 flex-1 overflow-y-auto fd-scrollbar pr-1">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Workflow Filters</p>
-            <div className="flex flex-col gap-2.5">
+            <div className="flex flex-col gap-1">
               <motion.button
                 whileHover={{ x: 3 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() => setActiveFilter('all')}
-                className={`relative z-10 flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${activeFilter === 'all' ? 'text-white' : 'text-zinc-500 hover:bg-teal-50 hover:text-teal-700'
+                className={`relative z-10 flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${activeFilter === 'all' ? 'text-white' : 'text-zinc-500 hover:bg-teal-50 hover:text-teal-700'
                   }`}
               >
                 {activeFilter === 'all' && (
@@ -700,7 +700,7 @@ export default function HousekeepingDashboard() {
                 whileHover={{ x: 3 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() => setActiveFilter('dirty')}
-                className={`relative z-10 flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${activeFilter === 'dirty' ? 'text-white' : 'text-zinc-500 hover:bg-rose-50 hover:text-rose-700'
+                className={`relative z-10 flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${activeFilter === 'dirty' ? 'text-white' : 'text-zinc-500 hover:bg-rose-50 hover:text-rose-700'
                   }`}
               >
                 {activeFilter === 'dirty' && (
@@ -716,7 +716,7 @@ export default function HousekeepingDashboard() {
                 whileHover={{ x: 3 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() => setActiveFilter('cleaning')}
-                className={`relative z-10 flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${activeFilter === 'cleaning' ? 'text-white' : 'text-zinc-500 hover:bg-amber-50 hover:text-amber-700'
+                className={`relative z-10 flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${activeFilter === 'cleaning' ? 'text-white' : 'text-zinc-500 hover:bg-amber-50 hover:text-amber-700'
                   }`}
               >
                 {activeFilter === 'cleaning' && (
@@ -732,7 +732,7 @@ export default function HousekeepingDashboard() {
                 whileHover={{ x: 3 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() => setActiveFilter('inspecting')}
-                className={`relative z-10 flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${activeFilter === 'inspecting' ? 'text-white' : 'text-zinc-500 hover:bg-blue-50 hover:text-blue-700'
+                className={`relative z-10 flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${activeFilter === 'inspecting' ? 'text-white' : 'text-zinc-500 hover:bg-blue-50 hover:text-blue-700'
                   }`}
               >
                 {activeFilter === 'inspecting' && (
@@ -748,7 +748,7 @@ export default function HousekeepingDashboard() {
         </div>
 
         {/* Create Ticket Sidebar Action */}
-        <div className="mt-auto pt-6 border-t border-zinc-100">
+        <div className="mt-auto pt-4 border-t border-zinc-100 shrink-0">
           <RippleButton
             onClick={openGeneralDamageReport}
             whileHover={{ scale: 1.03, y: -1 }}

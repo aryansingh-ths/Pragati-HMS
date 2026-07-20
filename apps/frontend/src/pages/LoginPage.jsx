@@ -19,7 +19,6 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
     setError('');
 
     try {
-      // 1. Dispatch real authentication payload to your local backend server instance
       const response = await fetch('http://localhost:3000/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -28,19 +27,13 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
 
       const data = await response.json();
 
-      // 2. Validate operational success criteria from response status boundaries
       if (response.ok) {
-        // Deconstruct authorization payload securely (adjust keys based on your API schema)
         const { token, user } = data;
         
-        // 3. Populate client storage vectors to maintain session across hard refresh cycles.
-        // sessionStorage is scoped to this single tab only, so opening the login
-        // page in a new tab starts a fresh, independent session instead of
-        // inheriting whichever account is logged into another tab.
         sessionStorage.setItem('hms_token', token);
         sessionStorage.setItem('hms_role', user.role);
 
-        // 4. Compute role tracking state and trigger target routing maps
+        // Computed role tracking state and target routing maps
         const role = user.role.toUpperCase();
         let redirectPath = '/';
         
@@ -48,10 +41,13 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
         else if (role === 'FRONT_DESK' || role === 'RECEPTION') redirectPath = '/dashboard/front-desk';
         else if (role === 'HOUSEKEEPING') redirectPath = '/dashboard/housekeeping';
         else if (role === 'FINANCE') redirectPath = '/dashboard/finance';
+        else if (role === 'SALES') redirectPath = '/dashboard/sales';
+        else if (role === 'TRAVEL') redirectPath = '/dashboard/travel';
+        else if (role === 'RESTAURANT') redirectPath = '/dashboard/dining'; // <-- ADD THIS LINE
 
         completeLogin(role, token, redirectPath);
+
       } else {
-        // Fallback message parsing derived from standard custom error signatures
         setError(data.error || data.message || 'Invalid credentials. Please check your email and password.');
         setIsLoading(false);
       }
