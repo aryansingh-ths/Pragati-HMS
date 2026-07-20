@@ -496,7 +496,7 @@ export default function ManagerDashboard() {
   const [staffSalaries, setStaffSalaries] = useState([]);
   const [salaryForm, setSalaryForm] = useState({ base_salary_monthly: 0, daily_deduction: 0 });
 
-  const fetchWithAuth = async (url, options = {}) => {
+  const fetchWithAuth = useCallback(async (url, options = {}) => {
     const token = localStorage.getItem('hms_token');
     if (!token) { navigate('/login'); return null; }
     try {
