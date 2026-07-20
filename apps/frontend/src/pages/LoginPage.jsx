@@ -32,6 +32,7 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
         
         sessionStorage.setItem('hms_token', token);
         sessionStorage.setItem('hms_role', user.role);
+        sessionStorage.setItem('hms_name',user.name);
 
         // Computed role tracking state and target routing maps
         const role = user.role.toUpperCase();
