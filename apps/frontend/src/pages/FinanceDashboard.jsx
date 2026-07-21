@@ -1,15 +1,13 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import {
-  DollarSign, FileText, CreditCard, ArrowUpRight, Download,
+import { DollarSign, FileText, CreditCard, ArrowUpRight, Download,
   CheckCircle2, Clock, Building2, RefreshCw, TrendingUp, Landmark, Receipt,
   Wallet, ShieldCheck, Search, Plus, X, Loader2, AlertTriangle, Link2, ScanLine,
   PieChart, Plane, UtensilsCrossed, Sofa, Car, Sparkles, ChefHat, PartyPopper,
   BedDouble, Filter, TrendingDown, Printer, Truck, CalendarClock, Scale,
   Target, Percent, Users, UserCheck, LockKeyhole, Undo2, History, ShieldAlert,
-  ArrowRightLeft, FileBarChart2, FileSpreadsheet, FileDown
-} from 'lucide-react';
+  ArrowRightLeft, FileBarChart2, FileSpreadsheet, FileDown, LogOut } from 'lucide-react';
 
 // =============================================
 // SVG DONUT CHART (payment method split)
@@ -151,7 +149,7 @@ function RevenueTrendLine({ data = [] }) {
           <motion.div
             initial={{ opacity: 0, y: 6, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 6, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-            className="absolute pointer-events-none px-2.5 py-1.5 rounded-lg bg-zinc-900 text-white text-[10px] font-bold shadow-lg shadow-emerald-500/20 whitespace-nowrap"
+            className="absolute pointer-events-none px-2.5 py-1.5 rounded-lg bg-zinc-900 text-white text-[10px] font-bold shadow-lg shadow-[#D4A373]/20 whitespace-nowrap"
             style={{ left: `${(active.x / width) * 100}%`, top: `${(active.y / height) * 100}%`, transform: 'translate(-50%, -140%)' }}
           >
             {active.label}: <span className="text-emerald-300">₹{active.value.toLocaleString('en-IN')}</span>
@@ -162,8 +160,9 @@ function RevenueTrendLine({ data = [] }) {
       <div className="flex justify-between mt-1 px-1">
         {data.map((t, i) => (
           <span key={i} onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)}
-            className={`text-[9px] font-black uppercase tracking-wide cursor-pointer transition-all duration-200 ${hoverIdx === i ? 'text-emerald-600' : (t.isToday ? 'text-orange-500 animate-pulse font-extrabold' : 'text-zinc-400')
-              }`}
+            className={`text-[9px] font-black uppercase tracking-wide cursor-pointer transition-all duration-200 ${
+              hoverIdx === i ? 'text-[#D4A373]' : (t.isToday ? 'text-[#D4A373] animate-pulse font-extrabold' : 'text-zinc-400')
+            }`}
           >
             {t.label}
           </span>
@@ -267,8 +266,9 @@ function ExpenseTrendLine({ data = [] }) {
       <div className="flex justify-between mt-1 px-1">
         {data.map((t, i) => (
           <span key={i} onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)}
-            className={`text-[9px] font-black uppercase tracking-wide cursor-pointer transition-all duration-200 ${hoverIdx === i ? 'text-rose-600' : (t.isToday ? 'text-orange-500 animate-pulse font-extrabold' : 'text-zinc-400')
-              }`}
+            className={`text-[9px] font-black uppercase tracking-wide cursor-pointer transition-all duration-200 ${
+              hoverIdx === i ? 'text-rose-600' : (t.isToday ? 'text-[#D4A373] animate-pulse font-extrabold' : 'text-zinc-400')
+            }`}
           >
             {t.label}
           </span>
@@ -365,15 +365,16 @@ export default function FinanceDashboard() {
 
   // --- Simulated data ---
   const metrics = [
-    { label: "Today's Revenue", value: "₹1,42,500", sub: "82% of ₹1,75,000 target", icon: <DollarSign size={16} />, theme: 'emerald', pct: 82 },
-    { label: "Pending Receivables", value: "₹34,200", sub: "3 invoices outstanding", icon: <Clock size={16} />, theme: 'amber', bars: [40, 65, 30, 55] },
+    { label: "Today's Revenue", value: "₹1,42,500", sub: "82% of ₹1,75,000 target", icon: <DollarSign size={16} />, theme: '#D4A373', pct: 82 },
+    { label: "Pending Receivables", value: "₹34,200", sub: "3 invoices outstanding", icon: <Clock size={16} />, theme: '#D4A373', bars: [40, 65, 30, 55] },
     { label: "Tax Collected (GST)", value: "₹25,650", sub: "CGST + SGST this month", icon: <FileText size={16} />, theme: 'indigo', pct: 61 },
     { label: "Cash Register", value: "₹18,400", sub: "Balanced • counted 6:00 PM", icon: <Wallet size={16} />, theme: 'sky', balanced: true },
   ];
 
   const themeMap = {
-    emerald: { iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30', glow: 'rgba(16,185,129,0.35)', ring: '#059669', track: '#eefcf5' },
-    amber: { iconBg: 'bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-lg shadow-amber-500/30', glow: 'rgba(245,158,11,0.35)', ring: '#d97706', track: '#fffaf0' },
+    '#D4A373': { iconBg: 'bg-[#D4A373] text-zinc-900', glow: 'rgba(212,163,115,0.35)' },
+    emerald: { iconBg: 'bg-gradient-to-br from-[#D4A373] to-[#D4A373] text-white shadow-lg shadow-[#D4A373]/20', glow: 'rgba(16,185,129,0.35)', ring: '#059669', track: '#eefcf5' },
+    amber: { iconBg: 'bg-gradient-to-br from-[#D4A373] to-[#D4A373] text-white shadow-lg shadow-[#D4A373]/20', glow: 'rgba(245,158,11,0.35)', ring: '#d97706', track: '#fffaf0' },
     indigo: { iconBg: 'bg-gradient-to-br from-indigo-500 to-blue-600 text-white shadow-lg shadow-indigo-500/30', glow: 'rgba(99,102,241,0.35)', ring: '#4f46e5', track: '#eef2ff' },
     sky: { iconBg: 'bg-gradient-to-br from-sky-500 to-blue-500 text-white shadow-lg shadow-sky-500/30', glow: 'rgba(14,165,233,0.35)', ring: '#0284c7', track: '#f0f9ff' },
   };
@@ -757,18 +758,7 @@ export default function FinanceDashboard() {
         .fd-sidebar-scroll:hover::-webkit-scrollbar-thumb:hover { background: rgba(113, 113, 122, 0.65); }
 
         .fd-app-bg {
-          background:
-            radial-gradient(1000px 520px at 8% -10%, rgba(45,212,191,0.16) 0%, transparent 55%),
-            radial-gradient(900px 500px at 105% 8%, rgba(56,189,248,0.16) 0%, transparent 55%),
-            radial-gradient(760px 500px at 45% 115%, rgba(251,191,36,0.14) 0%, transparent 60%),
-            linear-gradient(180deg, #f0fdfa 0%, #f0f9ff 45%, #fffbeb 100%) !important;
-          background-attachment: fixed;
-          background-size: 140% 140%, 140% 140%, 140% 140%, auto;
-          animation: fd-mesh-shift 24s ease-in-out infinite;
-        }
-        @keyframes fd-mesh-shift {
-          0%, 100% { background-position: 0% 0%, 100% 0%, 50% 100%, 0 0; }
-          50% { background-position: 10% 8%, 90% 10%, 44% 92%, 0 0; }
+          background: #F8F1E3 !important;
         }
 
         .fd-dealdeck-sidebar {
@@ -812,12 +802,12 @@ export default function FinanceDashboard() {
           ═══════════════════════════════════════════════════════ */}
       <div className="w-full lg:w-72 shrink-0 rounded-[2rem] p-6 flex flex-col gap-6 fd-dealdeck-sidebar sticky top-[7.5rem] self-start z-30 lg:h-[calc(100vh-7.8rem)]">
         <div className="flex items-center gap-3 px-2">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white shadow-md shadow-emerald-500/30 shrink-0">
-            <Landmark size={19} />
+          <div className="w-10 h-10 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center justify-center shadow-xs shrink-0">
+            <Landmark size={19} className="text-[#D4A373]" />
           </div>
           <div>
             <h1 className="font-serif font-black text-[25px] text-zinc-500 text-base leading-none">Finance Head</h1>
-            <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest mt-1 block">Finance Dashboard</span>
+            <span className="text-[9px] font-bold text-[#D4A373] uppercase tracking-widest mt-1 block">Finance Dashboard</span>
           </div>
         </div>
 
@@ -830,8 +820,9 @@ export default function FinanceDashboard() {
                   <button
                     key={item.key}
                     onClick={() => setActiveTab(item.key)}
-                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === item.key
-                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/10'
+                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${
+                      activeTab === item.key
+                        ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
                         : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
                       }`}
                   >
@@ -845,8 +836,8 @@ export default function FinanceDashboard() {
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Command Center</p>
             <button
-              onClick={() => navigate('/dashboard/Admin')}
-              className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-500 hover:bg-zinc-50 hover:text-emerald-600 transition-all text-left"
+              onClick={() => navigate('/dashboard/admin')}
+              className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-500 hover:bg-zinc-50 hover:text-[#D4A373] transition-all text-left"
             >
               <span className="flex items-center gap-3"><Building2 size={15} /> Back to Admin</span>
               <ArrowUpRight size={14} className="opacity-50" />
@@ -854,8 +845,8 @@ export default function FinanceDashboard() {
           </div>
         </div>
 
-        <div className="rounded-2xl bg-gradient-to-br from-emerald-50 to-white border border-emerald-100 p-4 flex items-start gap-3">
-          <ShieldCheck size={18} className="text-emerald-600 shrink-0 mt-0.5" />
+        <div className="rounded-2xl bg-gradient-to-br from-zinc-50 to-white border border-zinc-100 p-4 flex items-start gap-3">
+          <ShieldCheck size={18} className="text-[#D4A373] shrink-0 mt-0.5" />
           <div>
             <p className="text-[11px] font-bold text-zinc-900 leading-tight">Books balanced</p>
             <p className="text-[10px] text-zinc-500 mt-0.5">No variance flagged today.</p>
@@ -898,10 +889,10 @@ export default function FinanceDashboard() {
           </div>
 
           <div className="flex items-center gap-3 self-end sm:self-center">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-50 border border-[#D4A373]/30 text-[#D4A373]">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#D4A373]" />
               </span>
               <span className="text-[9px] font-bold uppercase tracking-wider">Books Live</span>
             </div>
@@ -913,17 +904,37 @@ export default function FinanceDashboard() {
               <RefreshCw size={15} />
             </button>
 
-            <button className="bg-zinc-900 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-emerald-600 transition-colors flex items-center gap-2 shadow-sm">
+            <button className="bg-zinc-900 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#D4A373] transition-colors flex items-center gap-2 shadow-sm">
               <Download size={14} /> Export
             </button>
 
-            <div className="hidden md:flex items-center gap-2 bg-white pl-2.5 pr-3 py-1.5 rounded-xl border border-zinc-200/60 shadow-xs">
-              <div className="w-7 h-7 rounded-full bg-emerald-600 text-white font-bold text-xs flex items-center justify-center shadow-xs">F</div>
-              <div className="text-left leading-none">
-                <span className="text-xs font-bold text-zinc-900 block">Finance Controller</span>
-                <span className="text-[8px] font-semibold text-zinc-600 uppercase tracking-widest mt-0.5 block">Accounts</span>
-              </div>
-            </div>
+            {/* Profile Avatar Widget */}
+            {(() => {
+              const staffName = localStorage.getItem('hms_name') || 'Staff';
+              const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
+              const designation = 'Finance Officer';
+              return (
+                <motion.button
+                  whileHover={{ y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => {
+                    localStorage.clear();
+                    window.location.href = '/login';
+                  }}
+                  className="group flex items-center gap-3 bg-white pl-3 pr-4 py-1.5 rounded-2xl border border-zinc-200/60 shadow-xs hover:shadow-md hover:border-rose-200 hover:bg-rose-50 transition-all duration-300 cursor-pointer"
+                  title="Sign Out"
+                >
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-600 to-teal-600 group-hover:from-rose-500 group-hover:to-rose-600 text-white font-bold text-xs flex items-center justify-center shadow-xs transition-colors">
+                    {initials}
+                  </div>
+                  <div className="hidden sm:block text-left leading-none pr-1">
+                    <span className="text-xs font-bold text-zinc-900 group-hover:text-rose-600 transition-colors block">{staffName}</span>
+                    <span className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mt-0.5 block group-hover:text-rose-400 transition-colors">{designation}</span>
+                  </div>
+                  <LogOut size={16} className="text-zinc-400 group-hover:text-rose-500 transition-colors ml-1" />
+                </motion.button>
+              );
+            })()}
           </div>
         </div>
 
@@ -1013,17 +1024,17 @@ export default function FinanceDashboard() {
                     <motion.div
                       whileHover={{ y: -6, scale: 1.01 }}
                       transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-emerald-50/40 rounded-[2rem] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_28px_-18px_rgba(5,150,105,0.25)] border border-zinc-200/60"
+                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-zinc-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60"
                     >
                       <div className="absolute -bottom-16 -right-10 w-56 h-56 rounded-full bg-emerald-200/20 blur-3xl pointer-events-none" />
                       <div className="relative flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-md shadow-emerald-500/30">
+                          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#D4A373] to-[#D4A373] flex items-center justify-center shadow-md shadow-[#D4A373]/20">
                             <TrendingUp size={14} className="text-white" />
                           </div>
                           <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">7-Day Revenue Trend</h3>
                         </div>
-                        <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">Live</span>
+                        <span className="text-[9px] font-bold text-[#D4A373] uppercase tracking-widest bg-zinc-50 px-2.5 py-1 rounded-full border border-[#D4A373]/30">Live</span>
                       </div>
                       <div className="relative">
                         <RevenueTrendLine data={revenueTrend} />
@@ -1033,7 +1044,7 @@ export default function FinanceDashboard() {
                     <motion.div
                       whileHover={{ y: -6, scale: 1.01 }}
                       transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-indigo-50/40 rounded-[2rem] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_28px_-18px_rgba(99,102,241,0.25)] border border-zinc-200/60"
+                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-indigo-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60"
                     >
                       <div className="absolute -top-14 -right-14 w-40 h-40 rounded-full bg-indigo-300/20 blur-3xl pointer-events-none" />
                       <div className="relative flex items-center gap-2 mb-4">
@@ -1061,8 +1072,8 @@ export default function FinanceDashboard() {
                   {/* Recent Transactions Table */}
                   <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
                     <div className="p-5 border-b border-zinc-150 flex justify-between items-center bg-white/40">
-                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><DollarSign size={16} className="text-emerald-600" /> Recent Transactions</h3>
-                      <button onClick={() => setActiveTab('reconciliation')} className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 flex items-center gap-1">
+                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><DollarSign size={16} className="text-[#D4A373]" /> Recent Transactions</h3>
+                      <button onClick={() => setActiveTab('reconciliation')} className="text-xs font-semibold text-[#D4A373] hover:text-[#D4A373] flex items-center gap-1">
                         View Full Ledger <ArrowUpRight size={12} />
                       </button>
                     </div>
@@ -1087,8 +1098,9 @@ export default function FinanceDashboard() {
                               <td className="p-4 text-sm text-zinc-600">{txn.date}</td>
                               <td className="p-4 text-sm font-bold text-zinc-900 text-right">{txn.amount}</td>
                               <td className="p-4 text-right">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${txn.status === 'Settled' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-amber-50 text-amber-600 border-amber-200'
-                                  }`}>
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
+                                  txn.status === 'Settled' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30' : 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                }`}>
                                   {txn.status === 'Settled' ? <CheckCircle2 size={12} /> : <Clock size={12} />}
                                   {txn.status}
                                 </span>
@@ -1113,8 +1125,8 @@ export default function FinanceDashboard() {
                     {[
                       { label: 'Total Monthly Expense', value: `₹${totalExpense.toLocaleString('en-IN')}`, sub: `${expenseUtilizationPct}% of ₹${totalExpenseBudget.toLocaleString('en-IN')} budget`, icon: <Wallet size={16} />, theme: 'rose' },
                       { label: 'Highest Category', value: topExpenseCategory.label, sub: `₹${topExpenseCategory.spent.toLocaleString('en-IN')} spent`, icon: topExpenseCategory.icon, theme: 'indigo' },
-                      { label: 'Budget Utilization', value: `${expenseUtilizationPct}%`, sub: `${overBudgetCount} categor${overBudgetCount === 1 ? 'y' : 'ies'} over budget`, icon: <ScanLine size={16} />, theme: overBudgetCount > 0 ? 'amber' : 'emerald' },
-                      { label: 'Month-on-Month', value: `${momChangePct > 0 ? '+' : ''}${momChangePct}%`, sub: `vs ₹${expenseTrend[4].value.toLocaleString('en-IN')} last month`, icon: momChangePct > 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />, theme: momChangePct > 0 ? 'amber' : 'emerald' },
+                      { label: 'Budget Utilization', value: `${expenseUtilizationPct}%`, sub: `${overBudgetCount} categor${overBudgetCount === 1 ? 'y' : 'ies'} over budget`, icon: <ScanLine size={16} />, theme: overBudgetCount > 0 ? '#D4A373' : '#D4A373' },
+                      { label: 'Month-on-Month', value: `${momChangePct > 0 ? '+' : ''}${momChangePct}%`, sub: `vs ₹${expenseTrend[4].value.toLocaleString('en-IN')} last month`, icon: momChangePct > 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />, theme: momChangePct > 0 ? '#D4A373' : '#D4A373' },
                     ].map((kpi, i) => {
                       const t = { rose: { iconBg: 'bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-lg shadow-rose-500/30', glow: 'rgba(225,29,72,0.3)' }, ...themeMap }[kpi.theme];
                       return (
@@ -1137,7 +1149,7 @@ export default function FinanceDashboard() {
                     <motion.div
                       whileHover={{ y: -6, scale: 1.01 }}
                       transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-rose-50/40 rounded-[2rem] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_28px_-18px_rgba(225,29,72,0.2)] border border-zinc-200/60"
+                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-rose-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60"
                     >
                       <div className="absolute -top-14 -left-14 w-40 h-40 rounded-full bg-rose-200/20 blur-3xl pointer-events-none" />
                       <div className="relative flex items-center gap-2 mb-5">
@@ -1154,7 +1166,7 @@ export default function FinanceDashboard() {
                     <motion.div
                       whileHover={{ y: -6, scale: 1.01 }}
                       transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-indigo-50/40 rounded-[2rem] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_28px_-18px_rgba(99,102,241,0.25)] border border-zinc-200/60"
+                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-indigo-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60"
                     >
                       <div className="absolute -top-14 -right-14 w-40 h-40 rounded-full bg-indigo-300/20 blur-3xl pointer-events-none" />
                       <div className="relative flex items-center gap-2 mb-4">
@@ -1183,7 +1195,7 @@ export default function FinanceDashboard() {
                   <motion.div
                     whileHover={{ y: -4 }}
                     transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                    className="relative overflow-hidden bg-gradient-to-br from-white via-white to-rose-50/40 rounded-[2rem] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_28px_-18px_rgba(225,29,72,0.2)] border border-zinc-200/60"
+                    className="relative overflow-hidden bg-gradient-to-br from-white via-white to-rose-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60"
                   >
                     <div className="absolute -bottom-16 -right-10 w-56 h-56 rounded-full bg-rose-200/20 blur-3xl pointer-events-none" />
                     <div className="relative flex items-center justify-between mb-4">
@@ -1223,7 +1235,7 @@ export default function FinanceDashboard() {
                                 initial={{ width: 0 }}
                                 animate={{ width: `${Math.min(pct, 100)}%` }}
                                 transition={{ duration: 0.9, delay: i * 0.05, ease: 'easeOut' }}
-                                className={`h-full rounded-full ${over ? 'bg-rose-500' : pct >= 90 ? 'bg-amber-400' : 'bg-emerald-500'}`}
+                                className={`h-full rounded-full ${over ? 'bg-rose-500' : pct >= 90 ? 'bg-amber-400' : 'bg-[#D4A373]'}`}
                               />
                             </div>
                             {over && <p className="text-[10px] text-rose-500 font-semibold mt-1 flex items-center gap-1"><AlertTriangle size={10} /> Over budget by ₹{(c.spent - c.budget).toLocaleString('en-IN')}</p>}
@@ -1282,8 +1294,9 @@ export default function FinanceDashboard() {
                               <td className="p-4 text-sm text-zinc-600">{e.date}</td>
                               <td className="p-4 text-sm font-bold text-zinc-900 text-right">{e.amount}</td>
                               <td className="p-4 text-right">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${e.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-amber-50 text-amber-600 border-amber-200'
-                                  }`}>
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
+                                  e.status === 'Approved' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30' : 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                }`}>
                                   {e.status === 'Approved' ? <CheckCircle2 size={12} /> : <Clock size={12} />}
                                   {e.status}
                                 </span>
@@ -1305,8 +1318,8 @@ export default function FinanceDashboard() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
                     {[
-                      { label: 'Matched', value: reconciliationItems.filter(r => r.status === 'Matched').length, icon: <CheckCircle2 size={16} />, theme: 'emerald' },
-                      { label: 'Unmatched', value: reconciliationItems.filter(r => r.status === 'Unmatched').length, icon: <AlertTriangle size={16} />, theme: 'amber' },
+                      { label: 'Matched', value: reconciliationItems.filter(r => r.status === 'Matched').length, icon: <CheckCircle2 size={16} />, theme: '#D4A373' },
+                      { label: 'Unmatched', value: reconciliationItems.filter(r => r.status === 'Unmatched').length, icon: <AlertTriangle size={16} />, theme: '#D4A373' },
                       { label: 'Total Variance', value: '₹6,750', icon: <ScanLine size={16} />, theme: 'indigo' },
                     ].map((kpi, i) => {
                       const t = themeMap[kpi.theme];
@@ -1326,7 +1339,7 @@ export default function FinanceDashboard() {
 
                   <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
                     <div className="p-5 border-b border-zinc-150 flex flex-col sm:flex-row gap-3 sm:items-center justify-between bg-white/40">
-                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><Link2 size={16} className="text-emerald-600" /> Bank &amp; Gateway Matching</h3>
+                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><Link2 size={16} className="text-[#D4A373]" /> Bank &amp; Gateway Matching</h3>
                       <div className="relative w-full sm:w-64">
                         <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
                         <input
@@ -1359,15 +1372,16 @@ export default function FinanceDashboard() {
                               <td className="p-4 text-xs font-mono text-zinc-500">{r.matchedWith || '—'}</td>
                               <td className="p-4 text-sm font-bold text-zinc-900 text-right">{r.amount}</td>
                               <td className="p-4 text-right">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${r.status === 'Matched' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-amber-50 text-amber-600 border-amber-200'
-                                  }`}>
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
+                                  r.status === 'Matched' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30' : 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                }`}>
                                   {r.status === 'Matched' ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
                                   {r.status}
                                 </span>
                               </td>
                               <td className="p-4 text-right">
                                 {r.status === 'Unmatched' ? (
-                                  <button className="text-xs font-bold text-emerald-600 hover:text-emerald-700">Mark Matched</button>
+                                  <button className="text-xs font-bold text-[#D4A373] hover:text-[#D4A373]">Mark Matched</button>
                                 ) : (
                                   <span className="text-xs text-zinc-300">—</span>
                                 )}
@@ -1401,10 +1415,10 @@ export default function FinanceDashboard() {
 
                   <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
                     <div className="p-5 border-b border-zinc-150 flex justify-between items-center bg-white/40">
-                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><Receipt size={16} className="text-emerald-600" /> General Ledger</h3>
+                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><Receipt size={16} className="text-[#D4A373]" /> General Ledger</h3>
                       <button
                         onClick={() => setIsEntryModalOpen(true)}
-                        className="bg-zinc-900 text-white px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-emerald-600 transition-colors flex items-center gap-2"
+                        className="bg-zinc-900 text-white px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-[#D4A373] transition-colors flex items-center gap-2"
                       >
                         <Plus size={13} /> New Entry
                       </button>
@@ -1428,7 +1442,7 @@ export default function FinanceDashboard() {
                               <td className="p-4 text-sm font-bold text-zinc-900">{l.account}</td>
                               <td className="p-4 text-sm text-zinc-600">{l.date}</td>
                               <td className="p-4 text-sm text-red-500 text-right">{l.debit}</td>
-                              <td className="p-4 text-sm text-emerald-600 text-right">{l.credit}</td>
+                              <td className="p-4 text-sm text-[#D4A373] text-right">{l.credit}</td>
                               <td className="p-4 text-sm font-bold text-zinc-900 text-right">{l.balance}</td>
                             </tr>
                           ))}
@@ -1447,8 +1461,8 @@ export default function FinanceDashboard() {
                   {/* KPI Cards Row */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                     {[
-                      { label: 'Total Invoiced', value: `₹${totalInvoiced.toLocaleString('en-IN')}`, sub: `${allInvoices.filter(i => i.amount > 0).length} invoices this month`, icon: <FileText size={16} />, theme: 'emerald' },
-                      { label: 'Outstanding', value: `₹${totalOutstanding.toLocaleString('en-IN')}`, sub: 'Across guest & corporate accounts', icon: <Clock size={16} />, theme: 'amber' },
+                      { label: 'Total Invoiced', value: `₹${totalInvoiced.toLocaleString('en-IN')}`, sub: `${allInvoices.filter(i => i.amount > 0).length} invoices this month`, icon: <FileText size={16} />, theme: '#D4A373' },
+                      { label: 'Outstanding', value: `₹${totalOutstanding.toLocaleString('en-IN')}`, sub: 'Across guest & corporate accounts', icon: <Clock size={16} />, theme: '#D4A373' },
                       { label: 'Overdue', value: `₹${overdueAmount.toLocaleString('en-IN')}`, sub: `${overdueInvoices.length} invoice${overdueInvoices.length === 1 ? '' : 's'} past due`, icon: <AlertTriangle size={16} />, theme: 'rose' },
                       { label: 'Credit Notes Issued', value: creditNotesCount, sub: 'This month', icon: <Undo2 size={16} />, theme: 'indigo' },
                     ].map((kpi, i) => {
@@ -1471,7 +1485,7 @@ export default function FinanceDashboard() {
                   {/* Charts row: aging + status split */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <motion.div whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-rose-50/40 rounded-[2rem] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_28px_-18px_rgba(225,29,72,0.2)] border border-zinc-200/60">
+                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-rose-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
                       <div className="absolute -top-14 -left-14 w-40 h-40 rounded-full bg-rose-200/20 blur-3xl pointer-events-none" />
                       <div className="relative flex items-center gap-2 mb-5">
                         <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center shadow-md shadow-rose-500/30"><CalendarClock size={14} className="text-white" /></div>
@@ -1481,10 +1495,10 @@ export default function FinanceDashboard() {
                     </motion.div>
 
                     <motion.div whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-emerald-50/40 rounded-[2rem] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_28px_-18px_rgba(5,150,105,0.2)] border border-zinc-200/60">
+                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-zinc-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
                       <div className="absolute -top-14 -right-14 w-40 h-40 rounded-full bg-emerald-200/20 blur-3xl pointer-events-none" />
                       <div className="relative flex items-center gap-2 mb-4">
-                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-md shadow-emerald-500/30"><PieChart size={14} className="text-white" /></div>
+                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#D4A373] to-[#D4A373] flex items-center justify-center shadow-md shadow-[#D4A373]/20"><PieChart size={14} className="text-white" /></div>
                         <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Invoice Status Split</h3>
                       </div>
                       <div className="relative flex flex-col sm:flex-row items-center justify-around gap-6">
@@ -1506,7 +1520,7 @@ export default function FinanceDashboard() {
                   {/* Invoices Table */}
                   <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
                     <div className="p-5 border-b border-zinc-150 flex flex-col lg:flex-row gap-3 lg:items-center justify-between bg-white/40">
-                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><FileText size={16} className="text-emerald-600" /> All Invoices &amp; Credit Notes</h3>
+                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><FileText size={16} className="text-[#D4A373]" /> All Invoices &amp; Credit Notes</h3>
                       <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
                         <div className="relative w-full sm:w-56">
                           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
@@ -1520,7 +1534,7 @@ export default function FinanceDashboard() {
                           <option value="Draft">Draft</option>
                           <option value="Issued">Issued</option>
                         </select>
-                        <button onClick={() => setIsInvoiceModalOpen(true)} className="bg-zinc-900 text-white px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-emerald-600 transition-colors flex items-center justify-center gap-2 shrink-0">
+                        <button onClick={() => setIsInvoiceModalOpen(true)} className="bg-zinc-900 text-white px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-[#D4A373] transition-colors flex items-center justify-center gap-2 shrink-0">
                           <Plus size={13} /> Create Invoice
                         </button>
                       </div>
@@ -1548,18 +1562,19 @@ export default function FinanceDashboard() {
                               <td className="p-4 text-sm text-zinc-600">{inv.dueDate}</td>
                               <td className={`p-4 text-sm font-bold text-right ${inv.amount < 0 ? 'text-rose-500' : 'text-zinc-900'}`}>{inv.amount < 0 ? '-' : ''}₹{Math.abs(inv.amount).toLocaleString('en-IN')}</td>
                               <td className="p-4 text-right">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${inv.status === 'Paid' ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                                    : inv.status === 'Partial' ? 'bg-amber-50 text-amber-600 border-amber-200'
-                                      : inv.status === 'Overdue' ? 'bg-rose-50 text-rose-600 border-rose-200'
-                                        : inv.status === 'Issued' ? 'bg-indigo-50 text-indigo-600 border-indigo-200'
-                                          : 'bg-zinc-100 text-zinc-500 border-zinc-200'
-                                  }`}>
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
+                                  inv.status === 'Paid' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                  : inv.status === 'Partial' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                  : inv.status === 'Overdue' ? 'bg-rose-50 text-rose-600 border-rose-200'
+                                  : inv.status === 'Issued' ? 'bg-indigo-50 text-indigo-600 border-indigo-200'
+                                  : 'bg-zinc-100 text-zinc-500 border-zinc-200'
+                                }`}>
                                   {inv.status === 'Paid' ? <CheckCircle2 size={12} /> : inv.status === 'Overdue' ? <AlertTriangle size={12} /> : <Clock size={12} />}
                                   {inv.status}
                                 </span>
                               </td>
                               <td className="p-4 text-right">
-                                <button className="text-xs font-bold text-emerald-600 hover:text-emerald-700 inline-flex items-center gap-1"><Download size={12} /> PDF</button>
+                                <button className="text-xs font-bold text-[#D4A373] hover:text-[#D4A373] inline-flex items-center gap-1"><Download size={12} /> PDF</button>
                               </td>
                             </tr>
                           ))}
@@ -1579,9 +1594,9 @@ export default function FinanceDashboard() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                     {[
                       { label: 'Total Payables', value: `₹${totalPayables.toLocaleString('en-IN')}`, sub: `${allPayables.length} vendor bills`, icon: <Truck size={16} />, theme: 'indigo' },
-                      { label: 'Due This Week', value: `₹${dueThisWeek.reduce((s, b) => s + b.amount, 0).toLocaleString('en-IN')}`, sub: `${dueThisWeek.length} bills scheduled`, icon: <CalendarClock size={16} />, theme: 'amber' },
+                      { label: 'Due This Week', value: `₹${dueThisWeek.reduce((s, b) => s + b.amount, 0).toLocaleString('en-IN')}`, sub: `${dueThisWeek.length} bills scheduled`, icon: <CalendarClock size={16} />, theme: '#D4A373' },
                       { label: 'Overdue Payables', value: `₹${overduePayables.reduce((s, b) => s + b.amount, 0).toLocaleString('en-IN')}`, sub: `${overduePayables.length} bill${overduePayables.length === 1 ? '' : 's'} past due`, icon: <AlertTriangle size={16} />, theme: 'rose' },
-                      { label: 'Active Vendors', value: new Set(allPayables.map(b => b.vendor)).size, sub: 'With open balances', icon: <Building2 size={16} />, theme: 'emerald' },
+                      { label: 'Active Vendors', value: new Set(allPayables.map(b => b.vendor)).size, sub: 'With open balances', icon: <Building2 size={16} />, theme: '#D4A373' },
                     ].map((kpi, i) => {
                       const t = { rose: { iconBg: 'bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-lg shadow-rose-500/30', glow: 'rgba(225,29,72,0.3)' }, ...themeMap }[kpi.theme];
                       return (
@@ -1599,7 +1614,7 @@ export default function FinanceDashboard() {
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <motion.div whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-indigo-50/40 rounded-[2rem] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_28px_-18px_rgba(99,102,241,0.2)] border border-zinc-200/60">
+                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-indigo-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
                       <div className="absolute -top-14 -left-14 w-40 h-40 rounded-full bg-indigo-200/20 blur-3xl pointer-events-none" />
                       <div className="relative flex items-center gap-2 mb-5">
                         <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-md shadow-indigo-500/30"><Truck size={14} className="text-white" /></div>
@@ -1609,10 +1624,10 @@ export default function FinanceDashboard() {
                     </motion.div>
 
                     <motion.div whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-amber-50/40 rounded-[2rem] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_28px_-18px_rgba(217,119,6,0.2)] border border-zinc-200/60">
+                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-zinc-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
                       <div className="absolute -top-14 -right-14 w-40 h-40 rounded-full bg-amber-200/20 blur-3xl pointer-events-none" />
                       <div className="relative flex items-center gap-2 mb-4">
-                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md shadow-amber-500/30"><CalendarClock size={14} className="text-white" /></div>
+                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#D4A373] to-[#D4A373] flex items-center justify-center shadow-md shadow-[#D4A373]/20"><CalendarClock size={14} className="text-white" /></div>
                         <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Upcoming Payment Schedule</h3>
                       </div>
                       <div className="relative flex flex-col gap-3">
@@ -1671,8 +1686,9 @@ export default function FinanceDashboard() {
                               <td className="p-4 text-sm text-zinc-600">{b.dueDate}</td>
                               <td className="p-4 text-sm font-bold text-zinc-900 text-right">₹{b.amount.toLocaleString('en-IN')}</td>
                               <td className="p-4 text-right">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${b.status === 'Paid' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : b.status === 'Overdue' ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-amber-50 text-amber-600 border-amber-200'
-                                  }`}>
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
+                                  b.status === 'Paid' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30' : b.status === 'Overdue' ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                }`}>
                                   {b.status === 'Paid' ? <CheckCircle2 size={12} /> : b.status === 'Overdue' ? <AlertTriangle size={12} /> : <Clock size={12} />}
                                   {b.status}
                                 </span>
@@ -1699,8 +1715,9 @@ export default function FinanceDashboard() {
                       { key: 'cashflow', label: 'Cash Flow', icon: <ArrowRightLeft size={13} /> },
                     ].map(v => (
                       <button key={v.key} onClick={() => setStatementView(v.key)}
-                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${statementView === v.key ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20' : 'text-zinc-500 hover:bg-zinc-50'
-                          }`}>
+                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                          statementView === v.key ? 'bg-[#D4A373] text-white shadow-md shadow-emerald-600/20' : 'text-zinc-500 hover:bg-zinc-50'
+                        }`}>
                         {v.icon} {v.label}
                       </button>
                     ))}
@@ -1711,7 +1728,7 @@ export default function FinanceDashboard() {
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
                         <div className="bg-white rounded-[1.5rem] p-5 border border-zinc-200/60" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 14px 30px -18px rgba(5,150,105,0.2)' }}>
                           <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Total Revenue</p>
-                          <p className="text-2xl font-black text-emerald-600">₹{totalRevenuePnl.toLocaleString('en-IN')}</p>
+                          <p className="text-2xl font-black text-[#D4A373]">₹{totalRevenuePnl.toLocaleString('en-IN')}</p>
                         </div>
                         <div className="bg-white rounded-[1.5rem] p-5 border border-zinc-200/60" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 14px 30px -18px rgba(225,29,72,0.2)' }}>
                           <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Total Expenses</p>
@@ -1719,15 +1736,15 @@ export default function FinanceDashboard() {
                         </div>
                         <div className="bg-white rounded-[1.5rem] p-5 border border-zinc-200/60" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 14px 30px -18px rgba(79,70,229,0.2)' }}>
                           <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Net Profit</p>
-                          <p className="text-2xl font-black text-zinc-900">₹{netProfit.toLocaleString('en-IN')} <span className="text-xs font-bold text-emerald-600">({((netProfit / totalRevenuePnl) * 100).toFixed(1)}% margin)</span></p>
+                          <p className="text-2xl font-black text-zinc-900">₹{netProfit.toLocaleString('en-IN')} <span className="text-xs font-bold text-[#D4A373]">({((netProfit / totalRevenuePnl) * 100).toFixed(1)}% margin)</span></p>
                         </div>
                       </div>
 
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <motion.div whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                          className="relative overflow-hidden bg-gradient-to-br from-white via-white to-emerald-50/40 rounded-[2rem] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_28px_-18px_rgba(5,150,105,0.2)] border border-zinc-200/60">
+                          className="relative overflow-hidden bg-gradient-to-br from-white via-white to-zinc-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
                           <div className="relative flex items-center gap-2 mb-4">
-                            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-md shadow-emerald-500/30"><BedDouble size={14} className="text-white" /></div>
+                            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#D4A373] to-[#D4A373] flex items-center justify-center shadow-md shadow-[#D4A373]/20"><BedDouble size={14} className="text-white" /></div>
                             <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Revenue by Department</h3>
                           </div>
                           <div className="relative flex flex-col sm:flex-row items-center justify-around gap-6">
@@ -1745,7 +1762,7 @@ export default function FinanceDashboard() {
                         </motion.div>
 
                         <motion.div whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                          className="relative overflow-hidden bg-gradient-to-br from-white via-white to-rose-50/40 rounded-[2rem] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_28px_-18px_rgba(225,29,72,0.2)] border border-zinc-200/60">
+                          className="relative overflow-hidden bg-gradient-to-br from-white via-white to-rose-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
                           <div className="relative flex items-center gap-2 mb-5">
                             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center shadow-md shadow-rose-500/30"><Wallet size={14} className="text-white" /></div>
                             <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Expenses Breakdown</h3>
@@ -1759,7 +1776,7 @@ export default function FinanceDashboard() {
                   {statementView === 'balance' && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       <div className="fd-dealdeck-card rounded-[2rem] p-6">
-                        <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider mb-4"><Landmark size={16} className="text-emerald-600" /> Assets</h3>
+                        <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider mb-4"><Landmark size={16} className="text-[#D4A373]" /> Assets</h3>
                         <div className="divide-y divide-zinc-100">
                           {balanceSheet.assets.map((a, i) => (
                             <div key={i} className="flex items-center justify-between py-3">
@@ -1770,7 +1787,7 @@ export default function FinanceDashboard() {
                         </div>
                         <div className="flex items-center justify-between pt-4 mt-2 border-t-2 border-zinc-900">
                           <span className="text-sm font-black uppercase tracking-wider text-zinc-900">Total Assets</span>
-                          <span className="text-lg font-black text-emerald-600">₹{totalAssets.toLocaleString('en-IN')}</span>
+                          <span className="text-lg font-black text-[#D4A373]">₹{totalAssets.toLocaleString('en-IN')}</span>
                         </div>
                       </div>
 
@@ -1798,7 +1815,7 @@ export default function FinanceDashboard() {
                           <span className="text-sm font-black uppercase tracking-wider text-zinc-900">Total Liabilities + Equity</span>
                           <span className="text-lg font-black text-indigo-600">₹{(totalLiabilities + totalEquity).toLocaleString('en-IN')}</span>
                         </div>
-                        <div className={`mt-4 flex items-center gap-2 text-[11px] font-bold px-3 py-2 rounded-xl ${totalAssets === (totalLiabilities + totalEquity) ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                        <div className={`mt-4 flex items-center gap-2 text-[11px] font-bold px-3 py-2 rounded-xl ${totalAssets === (totalLiabilities + totalEquity) ? 'bg-zinc-50 text-[#D4A373]' : 'bg-zinc-50 text-[#D4A373]'}`}>
                           <CheckCircle2 size={14} /> Books balance: Assets = Liabilities + Equity
                         </div>
                       </div>
@@ -1809,9 +1826,9 @@ export default function FinanceDashboard() {
                     <div className="space-y-6">
                       <div className="grid grid-cols-1 sm:grid-cols-4 gap-5">
                         {[
-                          { label: 'Operating', value: cfOperating, theme: 'emerald' },
+                          { label: 'Operating', value: cfOperating, theme: '#D4A373' },
                           { label: 'Investing', value: cfInvesting, theme: 'rose' },
-                          { label: 'Financing', value: cfFinancing, theme: 'amber' },
+                          { label: 'Financing', value: cfFinancing, theme: '#D4A373' },
                           { label: 'Net Cash Flow', value: netCashFlow, theme: 'indigo' },
                         ].map((c, i) => {
                           const t = { rose: { iconBg: 'bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-lg shadow-rose-500/30', glow: 'rgba(225,29,72,0.3)' }, ...themeMap }[c.theme];
@@ -1843,7 +1860,7 @@ export default function FinanceDashboard() {
                             </div>
                             <div className="flex items-center justify-between pt-3 mt-2 border-t border-zinc-200">
                               <span className="text-xs font-black uppercase tracking-wider text-zinc-900">Subtotal</span>
-                              <span className={`text-sm font-black ${section.subtotal < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{section.subtotal < 0 ? '-' : ''}₹{Math.abs(section.subtotal).toLocaleString('en-IN')}</span>
+                              <span className={`text-sm font-black ${section.subtotal < 0 ? 'text-rose-600' : 'text-[#D4A373]'}`}>{section.subtotal < 0 ? '-' : ''}₹{Math.abs(section.subtotal).toLocaleString('en-IN')}</span>
                             </div>
                           </div>
                         ))}
@@ -1863,8 +1880,8 @@ export default function FinanceDashboard() {
                     {[
                       { label: 'Total Budget', value: `₹${totalBudget.toLocaleString('en-IN')}`, sub: 'Across 6 departments', icon: <Target size={16} />, theme: 'indigo' },
                       { label: 'Actual Spend', value: `₹${totalActual.toLocaleString('en-IN')}`, sub: 'Month to date', icon: <Wallet size={16} />, theme: 'sky' },
-                      { label: 'Variance', value: `${overallVariancePct > 0 ? '+' : ''}${overallVariancePct}%`, sub: overallVariancePct > 0 ? 'Over budget' : 'Under budget', icon: overallVariancePct > 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />, theme: overallVariancePct > 0 ? 'amber' : 'emerald' },
-                      { label: 'Projected Year-End', value: `₹${forecastTrend[forecastTrend.length - 1].value.toLocaleString('en-IN')}`, sub: 'Forward revenue projection', icon: <TrendingUp size={16} />, theme: 'emerald' },
+                      { label: 'Variance', value: `${overallVariancePct > 0 ? '+' : ''}${overallVariancePct}%`, sub: overallVariancePct > 0 ? 'Over budget' : 'Under budget', icon: overallVariancePct > 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />, theme: overallVariancePct > 0 ? '#D4A373' : '#D4A373' },
+                      { label: 'Projected Year-End', value: `₹${forecastTrend[forecastTrend.length - 1].value.toLocaleString('en-IN')}`, sub: 'Forward revenue projection', icon: <TrendingUp size={16} />, theme: '#D4A373' },
                     ].map((kpi, i) => {
                       const t = themeMap[kpi.theme];
                       return (
@@ -1881,13 +1898,13 @@ export default function FinanceDashboard() {
                   </div>
 
                   <motion.div whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                    className="relative overflow-hidden bg-gradient-to-br from-white via-white to-emerald-50/40 rounded-[2rem] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_28px_-18px_rgba(5,150,105,0.2)] border border-zinc-200/60">
+                    className="relative overflow-hidden bg-gradient-to-br from-white via-white to-zinc-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
                     <div className="relative flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-md shadow-emerald-500/30"><TrendingUp size={14} className="text-white" /></div>
+                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#D4A373] to-[#D4A373] flex items-center justify-center shadow-md shadow-[#D4A373]/20"><TrendingUp size={14} className="text-white" /></div>
                         <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">6-Month Revenue Projection</h3>
                       </div>
-                      <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">Forecast</span>
+                      <span className="text-[9px] font-bold text-[#D4A373] uppercase tracking-widest bg-zinc-50 px-2.5 py-1 rounded-full border border-[#D4A373]/30">Forecast</span>
                     </div>
                     <div className="relative"><RevenueTrendLine data={forecastTrend} /></div>
                   </motion.div>
@@ -1903,7 +1920,7 @@ export default function FinanceDashboard() {
                           <div key={i}>
                             <div className="flex items-center justify-between mb-1.5">
                               <span className="text-xs font-bold text-zinc-700">{d.dept}</span>
-                              <span className={`text-[11px] font-black ${over ? 'text-rose-600' : 'text-emerald-600'}`}>{over ? '+' : ''}{variancePct}% vs budget</span>
+                              <span className={`text-[11px] font-black ${over ? 'text-rose-600' : 'text-[#D4A373]'}`}>{over ? '+' : ''}{variancePct}% vs budget</span>
                             </div>
                             <div className="flex flex-col gap-1">
                               <div className="flex items-center gap-2">
@@ -1916,7 +1933,7 @@ export default function FinanceDashboard() {
                               <div className="flex items-center gap-2">
                                 <span className="text-[9px] font-bold uppercase text-zinc-400 w-14 shrink-0">Actual</span>
                                 <div className="flex-1 h-2 rounded-full bg-zinc-100 overflow-hidden">
-                                  <motion.div initial={{ width: 0 }} animate={{ width: `${(d.actual / maxVal) * 100}%` }} transition={{ duration: 0.8, delay: i * 0.05 + 0.1 }} className={`h-full rounded-full ${over ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+                                  <motion.div initial={{ width: 0 }} animate={{ width: `${(d.actual / maxVal) * 100}%` }} transition={{ duration: 0.8, delay: i * 0.05 + 0.1 }} className={`h-full rounded-full ${over ? 'bg-rose-500' : 'bg-[#D4A373]'}`} />
                                 </div>
                                 <span className="text-[10px] font-bold text-zinc-900 w-24 text-right shrink-0">₹{d.actual.toLocaleString('en-IN')}</span>
                               </div>
@@ -1938,8 +1955,8 @@ export default function FinanceDashboard() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                     {[
                       { label: 'Total Payroll', value: `₹${totalGrossPayroll.toLocaleString('en-IN')}`, sub: `${totalHeadcount} staff across 6 departments`, icon: <Users size={16} />, theme: 'indigo' },
-                      { label: 'PF Liability', value: `₹${totalPfLiability.toLocaleString('en-IN')}`, sub: 'Employer + employee contribution', icon: <ShieldCheck size={16} />, theme: 'emerald' },
-                      { label: 'ESI Liability', value: `₹${totalEsiLiability.toLocaleString('en-IN')}`, sub: 'Due with this cycle', icon: <FileText size={16} />, theme: 'amber' },
+                      { label: 'PF Liability', value: `₹${totalPfLiability.toLocaleString('en-IN')}`, sub: 'Employer + employee contribution', icon: <ShieldCheck size={16} />, theme: '#D4A373' },
+                      { label: 'ESI Liability', value: `₹${totalEsiLiability.toLocaleString('en-IN')}`, sub: 'Due with this cycle', icon: <FileText size={16} />, theme: '#D4A373' },
                       { label: 'Avg Cost / Employee', value: `₹${avgCostPerEmployee.toLocaleString('en-IN')}`, sub: 'Gross, per month', icon: <UserCheck size={16} />, theme: 'sky' },
                     ].map((kpi, i) => {
                       const t = themeMap[kpi.theme];
@@ -1957,7 +1974,7 @@ export default function FinanceDashboard() {
                   </div>
 
                   <motion.div whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                    className="relative overflow-hidden bg-gradient-to-br from-white via-white to-indigo-50/40 rounded-[2rem] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_28px_-18px_rgba(99,102,241,0.2)] border border-zinc-200/60">
+                    className="relative overflow-hidden bg-gradient-to-br from-white via-white to-indigo-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
                     <div className="relative flex items-center gap-2 mb-5">
                       <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-md shadow-indigo-500/30"><Users size={14} className="text-white" /></div>
                       <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Labor Cost by Department</h3>
@@ -1990,7 +2007,7 @@ export default function FinanceDashboard() {
                               <td className="p-4 text-sm font-bold text-zinc-900 text-right">₹{d.gross.toLocaleString('en-IN')}</td>
                               <td className="p-4 text-sm text-zinc-600 text-right">₹{d.pf.toLocaleString('en-IN')}</td>
                               <td className="p-4 text-sm text-zinc-600 text-right">₹{d.esi.toLocaleString('en-IN')}</td>
-                              <td className="p-4 text-sm font-black text-emerald-600 text-right">₹{(d.gross - d.pf - d.esi).toLocaleString('en-IN')}</td>
+                              <td className="p-4 text-sm font-black text-[#D4A373] text-right">₹{(d.gross - d.pf - d.esi).toLocaleString('en-IN')}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -2001,7 +2018,7 @@ export default function FinanceDashboard() {
                             <td className="p-4 text-sm font-black text-zinc-900 text-right">₹{totalGrossPayroll.toLocaleString('en-IN')}</td>
                             <td className="p-4 text-sm font-black text-zinc-900 text-right">₹{totalPfLiability.toLocaleString('en-IN')}</td>
                             <td className="p-4 text-sm font-black text-zinc-900 text-right">₹{totalEsiLiability.toLocaleString('en-IN')}</td>
-                            <td className="p-4 text-sm font-black text-emerald-600 text-right">₹{(totalGrossPayroll - totalPfLiability - totalEsiLiability).toLocaleString('en-IN')}</td>
+                            <td className="p-4 text-sm font-black text-[#D4A373] text-right">₹{(totalGrossPayroll - totalPfLiability - totalEsiLiability).toLocaleString('en-IN')}</td>
                           </tr>
                         </tfoot>
                       </table>
@@ -2018,9 +2035,9 @@ export default function FinanceDashboard() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                     {[
-                      { label: 'Held in Escrow', value: `₹${totalHeldEscrow.toLocaleString('en-IN')}`, sub: 'Security deposits & advances', icon: <LockKeyhole size={16} />, theme: 'emerald' },
+                      { label: 'Held in Escrow', value: `₹${totalHeldEscrow.toLocaleString('en-IN')}`, sub: 'Security deposits & advances', icon: <LockKeyhole size={16} />, theme: '#D4A373' },
                       { label: 'Advance Bookings', value: `₹${totalAdvanceBookings.toLocaleString('en-IN')}`, sub: 'Held against future stays/events', icon: <CalendarClock size={16} />, theme: 'indigo' },
-                      { label: 'Refunds Pending', value: refundsPendingCount, sub: 'Security deposits to release', icon: <Undo2 size={16} />, theme: 'amber' },
+                      { label: 'Refunds Pending', value: refundsPendingCount, sub: 'Security deposits to release', icon: <Undo2 size={16} />, theme: '#D4A373' },
                       { label: 'Forfeited', value: `₹${totalForfeited.toLocaleString('en-IN')}`, sub: 'No-shows & cancellations', icon: <AlertTriangle size={16} />, theme: 'rose' },
                     ].map((kpi, i) => {
                       const t = { rose: { iconBg: 'bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-lg shadow-rose-500/30', glow: 'rgba(225,29,72,0.3)' }, ...themeMap }[kpi.theme];
@@ -2039,7 +2056,7 @@ export default function FinanceDashboard() {
 
                   <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
                     <div className="p-5 border-b border-zinc-150 flex flex-col sm:flex-row gap-3 sm:items-center justify-between bg-white/40">
-                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><LockKeyhole size={16} className="text-emerald-600" /> Deposits &amp; Advances Ledger</h3>
+                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><LockKeyhole size={16} className="text-[#D4A373]" /> Deposits &amp; Advances Ledger</h3>
                       <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                         <div className="relative w-full sm:w-56">
                           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
@@ -2078,11 +2095,12 @@ export default function FinanceDashboard() {
                               <td className="p-4 text-sm text-zinc-600">{d.date}</td>
                               <td className="p-4 text-sm font-bold text-zinc-900 text-right">₹{d.amount.toLocaleString('en-IN')}</td>
                               <td className="p-4 text-right">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${d.status === 'Held' ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                                    : d.status === 'Refunded' ? 'bg-sky-50 text-sky-600 border-sky-200'
-                                      : d.status === 'Forfeited' ? 'bg-rose-50 text-rose-600 border-rose-200'
-                                        : 'bg-indigo-50 text-indigo-600 border-indigo-200'
-                                  }`}>
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
+                                  d.status === 'Held' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                  : d.status === 'Refunded' ? 'bg-sky-50 text-sky-600 border-sky-200'
+                                  : d.status === 'Forfeited' ? 'bg-rose-50 text-rose-600 border-rose-200'
+                                  : 'bg-indigo-50 text-indigo-600 border-indigo-200'
+                                }`}>
                                   {d.status}
                                 </span>
                               </td>
@@ -2104,9 +2122,9 @@ export default function FinanceDashboard() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                     {[
                       { label: 'Entries Today', value: allAuditLog.filter(a => a.time.startsWith('Today')).length, sub: 'Posted, edited or approved', icon: <History size={16} />, theme: 'indigo' },
-                      { label: 'Pending Approvals', value: pendingApprovalsCount, sub: 'Awaiting review or escalated', icon: <Clock size={16} />, theme: 'amber' },
+                      { label: 'Pending Approvals', value: pendingApprovalsCount, sub: 'Awaiting review or escalated', icon: <Clock size={16} />, theme: '#D4A373' },
                       { label: 'High-Value Flagged', value: flaggedHighValueCount, sub: 'Escalated to auditor', icon: <ShieldAlert size={16} />, theme: 'rose' },
-                      { label: 'Active Approvers', value: new Set(allAuditLog.map(a => a.user)).size, sub: 'In the approval chain', icon: <UserCheck size={16} />, theme: 'emerald' },
+                      { label: 'Active Approvers', value: new Set(allAuditLog.map(a => a.user)).size, sub: 'In the approval chain', icon: <UserCheck size={16} />, theme: '#D4A373' },
                     ].map((kpi, i) => {
                       const t = { rose: { iconBg: 'bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-lg shadow-rose-500/30', glow: 'rgba(225,29,72,0.3)' }, ...themeMap }[kpi.theme];
                       return (
@@ -2140,8 +2158,9 @@ export default function FinanceDashboard() {
                       {auditLog.length === 0 && (<div className="p-8 text-center text-xs text-zinc-400">No audit entries match your filters.</div>)}
                       {auditLog.map((a, idx) => (
                         <div key={idx} className="p-5 flex items-start gap-4 hover:bg-zinc-50/60 transition-colors">
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${a.approval === 'Escalated' ? 'bg-rose-100 text-rose-600' : a.approval === 'Pending Review' ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'
-                            }`}>
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                            a.approval === 'Escalated' ? 'bg-rose-100 text-rose-600' : a.approval === 'Pending Review' ? 'bg-[#D4A373]/10 text-[#D4A373]' : 'bg-[#D4A373]/10 text-[#D4A373]'
+                          }`}>
                             {a.approval === 'Escalated' ? <ShieldAlert size={16} /> : a.approval === 'Pending Review' ? <Clock size={16} /> : <CheckCircle2 size={16} />}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -2152,10 +2171,11 @@ export default function FinanceDashboard() {
                             <p className="text-xs text-zinc-500 mt-1">{a.target}</p>
                             <p className="text-[10px] text-zinc-400 mt-1">{a.time}</p>
                           </div>
-                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border shrink-0 ${a.approval === 'Escalated' ? 'bg-rose-50 text-rose-600 border-rose-200'
-                              : a.approval === 'Pending Review' ? 'bg-amber-50 text-amber-600 border-amber-200'
-                                : 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                            }`}>{a.approval}</span>
+                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border shrink-0 ${
+                            a.approval === 'Escalated' ? 'bg-rose-50 text-rose-600 border-rose-200'
+                            : a.approval === 'Pending Review' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                            : 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                          }`}>{a.approval}</span>
                         </div>
                       ))}
                     </div>
@@ -2171,9 +2191,9 @@ export default function FinanceDashboard() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
                     {[
-                      { label: 'Total Bank Balance', value: `₹${totalBankBalance.toLocaleString('en-IN')}`, sub: `Across ${bankAccounts.length} accounts`, icon: <Landmark size={16} />, theme: 'emerald' },
+                      { label: 'Total Bank Balance', value: `₹${totalBankBalance.toLocaleString('en-IN')}`, sub: `Across ${bankAccounts.length} accounts`, icon: <Landmark size={16} />, theme: '#D4A373' },
                       { label: 'Accounts', value: bankAccounts.length, sub: 'Current, savings, escrow & payroll', icon: <Building2 size={16} />, theme: 'indigo' },
-                      { label: 'Pending Transfers', value: pendingTransfersCount, sub: 'Awaiting settlement', icon: <ArrowRightLeft size={16} />, theme: 'amber' },
+                      { label: 'Pending Transfers', value: pendingTransfersCount, sub: 'Awaiting settlement', icon: <ArrowRightLeft size={16} />, theme: '#D4A373' },
                     ].map((kpi, i) => {
                       const t = themeMap[kpi.theme];
                       return (
@@ -2210,8 +2230,8 @@ export default function FinanceDashboard() {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
                       <div className="p-5 border-b border-zinc-150 flex justify-between items-center bg-white/40">
-                        <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><ArrowRightLeft size={16} className="text-emerald-600" /> Recent Transfers</h3>
-                        <button onClick={() => setIsTransferModalOpen(true)} className="bg-zinc-900 text-white px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-emerald-600 transition-colors flex items-center gap-2">
+                        <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><ArrowRightLeft size={16} className="text-[#D4A373]" /> Recent Transfers</h3>
+                        <button onClick={() => setIsTransferModalOpen(true)} className="bg-zinc-900 text-white px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-[#D4A373] transition-colors flex items-center gap-2">
                           <Plus size={13} /> New Transfer
                         </button>
                       </div>
@@ -2224,7 +2244,7 @@ export default function FinanceDashboard() {
                             </div>
                             <div className="text-right shrink-0 ml-3">
                               <p className="text-sm font-black text-zinc-900">₹{t.amount.toLocaleString('en-IN')}</p>
-                              <span className={`text-[9px] font-bold uppercase tracking-wider ${t.status === 'Completed' ? 'text-emerald-600' : 'text-amber-600'}`}>{t.status}</span>
+                              <span className={`text-[9px] font-bold uppercase tracking-wider ${t.status === 'Completed' ? 'text-[#D4A373]' : 'text-[#D4A373]'}`}>{t.status}</span>
                             </div>
                           </div>
                         ))}
@@ -2263,7 +2283,7 @@ export default function FinanceDashboard() {
                         whileHover={{ y: -4 }}
                         className="fd-dealdeck-card rounded-[1.75rem] p-6 flex flex-col gap-4">
                         <div className="flex items-start justify-between">
-                          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/30">{r.icon}</div>
+                          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#D4A373] to-[#D4A373] text-white flex items-center justify-center shadow-md shadow-[#D4A373]/20">{r.icon}</div>
                           <span className="text-[10px] text-zinc-400 font-semibold">Last generated {r.lastGenerated}</span>
                         </div>
                         <div>
@@ -2274,7 +2294,7 @@ export default function FinanceDashboard() {
                           <button
                             onClick={() => handleGenerateReport(r.key)}
                             disabled={generatingReportKey === r.key}
-                            className="flex-1 bg-zinc-900 text-white px-4 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider hover:bg-emerald-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+                            className="flex-1 bg-zinc-900 text-white px-4 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider hover:bg-[#D4A373] transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
                           >
                             {generatingReportKey === r.key ? <Loader2 size={13} className="animate-spin" /> : <FileBarChart2 size={13} />}
                             {generatingReportKey === r.key ? 'Generating...' : 'Generate'}
@@ -2288,7 +2308,7 @@ export default function FinanceDashboard() {
 
                   <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
                     <div className="p-5 border-b border-zinc-150 flex justify-between items-center bg-white/40">
-                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><FileSpreadsheet size={16} className="text-emerald-600" /> Recently Generated</h3>
+                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><FileSpreadsheet size={16} className="text-[#D4A373]" /> Recently Generated</h3>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-left border-collapse">
@@ -2307,7 +2327,7 @@ export default function FinanceDashboard() {
                               <td className="p-4 text-sm text-zinc-600">{r.generatedOn}</td>
                               <td className="p-4"><span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full bg-zinc-100 text-zinc-600">{r.format}</span></td>
                               <td className="p-4 text-right">
-                                <button className="text-xs font-bold text-emerald-600 hover:text-emerald-700 inline-flex items-center gap-1"><Download size={12} /> Download</button>
+                                <button className="text-xs font-bold text-[#D4A373] hover:text-[#D4A373] inline-flex items-center gap-1"><Download size={12} /> Download</button>
                               </td>
                             </tr>
                           ))}
@@ -2337,7 +2357,7 @@ export default function FinanceDashboard() {
             >
               <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-xl bg-[#D4A373]/10 text-[#D4A373] flex items-center justify-center">
                     <Receipt size={20} />
                   </div>
                   <div>
@@ -2398,7 +2418,7 @@ export default function FinanceDashboard() {
 
                 <button
                   type="submit"
-                  className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 mt-4"
+                  className="w-full bg-gradient-to-r from-[#D4A373] to-[#D4A373] hover:from-[#B38355] hover:to-[#B38355] text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-lg shadow-[#D4A373]/20 flex items-center justify-center gap-2 mt-4"
                 >
                   <Receipt size={16} /> Post Entry to Ledger
                 </button>
@@ -2522,7 +2542,7 @@ export default function FinanceDashboard() {
             >
               <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-xl bg-[#D4A373]/10 text-[#D4A373] flex items-center justify-center">
                     <FileText size={20} />
                   </div>
                   <div>
@@ -2591,7 +2611,7 @@ export default function FinanceDashboard() {
                 </div>
                 <button
                   type="submit"
-                  className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 mt-4"
+                  className="w-full bg-gradient-to-r from-[#D4A373] to-[#D4A373] hover:from-[#B38355] hover:to-[#B38355] text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-lg shadow-[#D4A373]/20 flex items-center justify-center gap-2 mt-4"
                 >
                   <FileText size={16} /> Create Invoice
                 </button>

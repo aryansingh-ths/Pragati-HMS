@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, animate } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import {
-  Search, Plus, CalendarDays, Clock, MapPin, DoorOpen,
+import { Search, Plus, CalendarDays, Clock, MapPin, DoorOpen,
   Loader2, X, Phone, Mail, Users, KeySquare, ArrowRightLeft,
   CheckCircle2, LogIn, ChevronDown, History, AlertTriangle,
   Building2, User, CreditCard, CalendarCheck, BedDouble,
   RefreshCw, Filter, Sparkles, Wifi, TrendingUp, ShieldCheck,
-  Radio, Zap, Hotel, FileText
-} from 'lucide-react';
+  Radio, Zap, Hotel, FileText, LogOut } from 'lucide-react';
 
 const API_BASE = 'http://localhost:3000';
 
@@ -46,13 +44,6 @@ const FD_STYLES = `
   /* Soft, solid background — admin dashboard match */
   .fd-app-bg {
     background: #F8F1E3 !important;
-    background-attachment: fixed;
-    background-size: 140% 140%, 140% 140%, 140% 140%, auto;
-    animation: fd-mesh-shift 24s ease-in-out infinite;
-  }
-  @keyframes fd-mesh-shift {
-    0%, 100% { background-position: 0% 0%, 100% 0%, 50% 100%, 0 0; }
-    50% { background-position: 10% 8%, 90% 10%, 44% 92%, 0 0; }
   }
 
   .fd-dot-grid {
@@ -62,7 +53,6 @@ const FD_STYLES = `
     mask-image: linear-gradient(180deg, rgba(0,0,0,0.8), rgba(0,0,0,0.08) 65%, transparent 100%);
   }
 
-  .fd-orb { position: absolute; border-radius: 9999px; filter: blur(70px); pointer-events: none; }
 
   .fd-brand-mark {
     background: linear-gradient(135deg, #D4A373, #B3835B 55%, #D4A373);
@@ -82,9 +72,8 @@ const FD_STYLES = `
   .fd-live-dot { animation: fd-live-dot 2s cubic-bezier(0.4,0,0.6,1) infinite; }
 
   .fd-dealdeck-sidebar {
-    background: rgba(255,255,255,0.92);
-    backdrop-filter: blur(12px);
-    box-shadow: 14px 17px 40px 4px rgba(56, 189, 248, 0.10);
+    background: #FFFFFF;
+    box-shadow: 14px 17px 40px 4px rgba(112, 144, 176, 0.08);
     border: 1px solid rgba(226, 232, 240, 0.8);
   }
 
@@ -786,11 +775,8 @@ export default function FrontDeskDashboard() {
   // ─── Loading State ─────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="min-h-[calc(100vh-6rem)] flex flex-col items-center justify-center gap-5 fd-app-bg relative overflow-hidden">
+      <div className="min-h-[calc(100vh-6rem)] flex flex-col items-center justify-center gap-5 bg-[#F8F1E3] relative overflow-hidden">
         <style>{FD_STYLES}</style>
-        <div className="fd-orb w-72 h-72 bg-[#D4A373]/15 -top-10 -left-10" />
-        <div className="fd-orb w-72 h-72 bg-sky-300/30 bottom-0 right-0" />
-        <div className="fd-orb w-64 h-64 bg-amber-200/25 top-1/2 left-1/2" />
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
@@ -826,31 +812,8 @@ export default function FrontDeskDashboard() {
   const standardOccRate = occupiedStandard / totalStandard;
 
   return (
-    <div className="h-[calc(100vh-6rem)] relative fd-app-bg p-6 flex flex-col lg:flex-row gap-6 overflow-hidden">
+    <div className="h-[calc(100vh-6rem)] relative bg-[#F8F1E3] font-sans text-zinc-800 p-6 flex flex-col lg:flex-row gap-6 overflow-hidden">
       <style>{FD_STYLES}</style>
-
-      {/* Ambient decorative orbs — pure atmosphere, no interaction */}
-      <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden">
-        <motion.div
-          className="fd-orb w-[30rem] h-[30rem] bg-[#D4A373]/10"
-          style={{ top: '-8rem', left: '-6rem' }}
-          animate={{ x: [0, 46, 0], y: [0, 32, 0], scale: [1, 1.08, 1] }}
-          transition={{ duration: 17, repeat: Infinity, ease: 'easeInOut' }}
-        />
-        <motion.div
-          className="fd-orb w-[34rem] h-[34rem] bg-[#D4A373]/10"
-          style={{ top: '18%', right: '-10rem' }}
-          animate={{ x: [0, -38, 0], y: [0, 40, 0], scale: [1, 1.1, 1] }}
-          transition={{ duration: 21, repeat: Infinity, ease: 'easeInOut' }}
-        />
-        <motion.div
-          className="fd-orb w-[26rem] h-[26rem] bg-[#D4A373]/15"
-          style={{ bottom: '-4rem', left: '30%' }}
-          animate={{ x: [0, 34, 0], y: [0, -24, 0], scale: [1, 1.06, 1] }}
-          transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
-        />
-        <div className="absolute inset-0 fd-dot-grid" />
-      </div>
 
       {/* ═══════════════════════════════════════════════════════
           LEFT FLOATING SIDEBAR
@@ -859,27 +822,15 @@ export default function FrontDeskDashboard() {
         initial={{ opacity: 0, x: -30 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
-        className="w-full lg:w-76 xl:w-88 flex-shrink-0 h-full rounded-3xl overflow-y-auto fd-scrollbar p-6 flex flex-col gap-6 fd-dealdeck-sidebar z-30"
+        className="w-full lg:w-72 shrink-0 h-full rounded-[2rem] overflow-y-auto fd-scrollbar p-6 flex flex-col gap-6 fd-dealdeck-sidebar z-30"
       >
-        {/* Brand Header */}
         <div className="flex items-center gap-3">
-          <motion.div
-            whileHover={{ rotate: -10, scale: 1.1 }}
-            animate={{ y: [0, -3, 0] }}
-            transition={{ y: { duration: 3, repeat: Infinity, ease: 'easeInOut' }, rotate: { type: 'spring', stiffness: 400, damping: 12 }, scale: { type: 'spring', stiffness: 400, damping: 12 } }}
-            className="relative w-11 h-11 rounded-xl fd-brand-mark flex items-center justify-center shadow-xs bg-zinc-50 border border-zinc-100"
-          >
-            <Hotel size={20} className="text-[#D4A373]" />
-          </motion.div>
+          <div className="w-10 h-10 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center justify-center shadow-xs">
+            <Hotel className="text-[#D4A373]" size={20} />
+          </div>
           <div>
             <h1 className="font-serif font-black text-[25px] text-zinc-500 text-base leading-none">Front Desk</h1>
-            <span className="text-[9px] font-bold text-[#D4A373] uppercase tracking-widest mt-1 flex items-center gap-1">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="fd-live-dot absolute inline-flex h-full w-full rounded-full bg-[#D4A373]" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#D4A373]" />
-              </span>
-              HMS Reception
-            </span>
+            <span className="text-[9px] font-bold text-[#D4A373] uppercase tracking-widest mt-1 block">HMS Reception</span>
           </div>
         </div>
 
@@ -888,149 +839,108 @@ export default function FrontDeskDashboard() {
           {/* Section: Menu */}
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Menu</p>
-            <div className="relative flex flex-col gap-1">
-              <motion.button
-                whileHover={{ x: 3 }}
-                whileTap={{ scale: 0.97 }}
+            <div className="flex flex-col gap-1">
+              <button
                 onClick={() => { setViewMode('active'); setActiveFilter('all'); }}
-                className={`relative z-10 flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-colors duration-300 text-left overflow-hidden ${viewMode === 'active' && activeFilter === 'all' ? 'text-white' : 'text-zinc-500 hover:bg-amber-50 hover:text-[#D4A373]'
+                className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'active' && activeFilter === 'all'
+                  ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
                   }`}
               >
-                {viewMode === 'active' && activeFilter === 'all' && (
-                  <motion.span layoutId="fd-sidebar-pill" transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="absolute inset-0 bg-gradient-to-r from-[#D4A373] to-[#B3835B] shadow-md shadow-[#D4A373]/30 rounded-xl" />
-                )}
-                <span className="relative fd-icon-btn"><BedDouble size={15} /></span>
-                <span className="relative">All Active Stays</span>
-              </motion.button>
-              <motion.button
-                whileHover={{ x: 3 }}
-                whileTap={{ scale: 0.97 }}
+                <span className="flex items-center gap-3"><BedDouble size={16} /> All Active Stays</span>
+              </button>
+
+              <button
                 onClick={() => { setViewMode('active'); setActiveFilter('arrivals'); }}
-                className={`relative z-10 flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${viewMode === 'active' && activeFilter === 'arrivals' ? 'text-white' : 'text-zinc-500 hover:bg-amber-50 hover:text-[#D4A373]'
+                className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'active' && activeFilter === 'arrivals'
+                  ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
                   }`}
               >
-                {viewMode === 'active' && activeFilter === 'arrivals' && (
-                  <motion.span layoutId="fd-sidebar-pill" transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="absolute inset-0 bg-gradient-to-r from-[#D4A373] to-[#B3835B] shadow-md shadow-[#D4A373]/30 rounded-xl" />
-                )}
-                <span className="relative flex items-center gap-3"><span className="fd-icon-btn"><LogIn size={15} /></span> Arrivals Today</span>
-                <span className={`relative px-2 py-0.5 rounded-md text-[10px] transition-transform duration-300 ${viewMode === 'active' && activeFilter === 'arrivals' ? 'bg-white/25 text-white scale-110' : 'bg-amber-50 text-[#D4A373]'}`}>
+                <span className="flex items-center gap-3"><LogIn size={16} /> Arrivals Today</span>
+                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${viewMode === 'active' && activeFilter === 'arrivals' ? 'bg-zinc-900/10 text-zinc-900' : 'bg-zinc-100 text-zinc-500'}`}>
                   <CountUp value={arrivalsCount} />
                 </span>
-              </motion.button>
-              <motion.button
-                whileHover={{ x: 3 }}
-                whileTap={{ scale: 0.97 }}
+              </button>
+
+              <button
                 onClick={() => { setViewMode('active'); setActiveFilter('departures'); }}
-                className={`relative z-10 flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${viewMode === 'active' && activeFilter === 'departures' ? 'text-white' : 'text-zinc-500 hover:bg-amber-50 hover:text-[#D4A373]'
+                className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'active' && activeFilter === 'departures'
+                  ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
                   }`}
               >
-                {viewMode === 'active' && activeFilter === 'departures' && (
-                  <motion.span layoutId="fd-sidebar-pill" transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="absolute inset-0 bg-gradient-to-r from-[#D4A373] to-[#B3835B] shadow-md shadow-[#D4A373]/30 rounded-xl" />
-                )}
-                <span className="relative flex items-center gap-3"><span className="fd-icon-btn"><DoorOpen size={15} /></span> Departures Today</span>
-                <span className={`relative px-2 py-0.5 rounded-md text-[10px] transition-transform duration-300 ${viewMode === 'active' && activeFilter === 'departures' ? 'bg-white/25 text-white scale-110' : 'bg-amber-50 text-[#D4A373]'}`}>
+                <span className="flex items-center gap-3"><DoorOpen size={16} /> Departures Today</span>
+                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${viewMode === 'active' && activeFilter === 'departures' ? 'bg-zinc-900/10 text-zinc-900' : 'bg-zinc-100 text-zinc-500'}`}>
                   <CountUp value={departuresCount} />
                 </span>
-              </motion.button>
-              <motion.button
-                whileHover={{ x: 3 }}
-                whileTap={{ scale: 0.97 }}
+              </button>
+
+              <button
                 onClick={() => { setViewMode('active'); setActiveFilter('inhouse'); }}
-                className={`relative z-10 flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${viewMode === 'active' && activeFilter === 'inhouse' ? 'text-white' : 'text-zinc-500 hover:bg-amber-50 hover:text-[#D4A373]'
+                className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'active' && activeFilter === 'inhouse'
+                  ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
                   }`}
               >
-                {viewMode === 'active' && activeFilter === 'inhouse' && (
-                  <motion.span layoutId="fd-sidebar-pill" transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="absolute inset-0 bg-gradient-to-r from-[#D4A373] to-[#B3835B] shadow-md shadow-[#D4A373]/30 rounded-xl" />
-                )}
-                <span className="relative flex items-center gap-3"><span className="fd-icon-btn"><Users size={15} /></span> In-House Guests</span>
-                <span className={`relative px-2 py-0.5 rounded-md text-[10px] transition-transform duration-300 ${viewMode === 'active' && activeFilter === 'inhouse' ? 'bg-white/25 text-white scale-110' : 'bg-amber-50 text-[#D4A373]'}`}>
+                <span className="flex items-center gap-3"><Users size={16} /> In-House Guests</span>
+                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${viewMode === 'active' && activeFilter === 'inhouse' ? 'bg-zinc-900/10 text-zinc-900' : 'bg-zinc-100 text-zinc-500'}`}>
                   <CountUp value={inhouseCount} />
                 </span>
-              </motion.button>
+              </button>
             </div>
           </div>
 
           {/* Section: Pending & Status */}
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Alerts</p>
-            <div className="relative flex flex-col gap-1">
-              <motion.button
-                whileHover={{ x: 3 }}
-                whileTap={{ scale: 0.97 }}
+            <div className="flex flex-col gap-1">
+              <button
                 onClick={() => { setViewMode('active'); setActiveFilter('pending_checkin'); }}
-                className={`relative z-10 flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${viewMode === 'active' && activeFilter === 'pending_checkin' ? 'text-white' : 'text-zinc-500 hover:bg-amber-50 hover:text-[#D4A373]'
+                className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'active' && activeFilter === 'pending_checkin'
+                  ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
                   }`}
               >
-                {viewMode === 'active' && activeFilter === 'pending_checkin' && (
-                  <motion.span layoutId="fd-sidebar-pill" transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="absolute inset-0 bg-gradient-to-r from-[#D4A373] to-[#B3835B] shadow-md shadow-[#D4A373]/30 rounded-xl" />
-                )}
-                <span className="relative flex items-center gap-3"><span className="fd-icon-btn"><CalendarCheck size={15} /></span> Pending Check-ins</span>
-                <span className={`relative px-2 py-0.5 rounded-md text-[10px] transition-transform duration-300 ${viewMode === 'active' && activeFilter === 'pending_checkin' ? 'bg-white/25 text-white scale-110' : 'bg-amber-50 text-[#D4A373]'}`}>
+                <span className="flex items-center gap-3"><CalendarCheck size={16} /> Pending Check-ins</span>
+                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${viewMode === 'active' && activeFilter === 'pending_checkin' ? 'bg-zinc-900/10 text-zinc-900' : 'bg-zinc-100 text-zinc-500'}`}>
                   <CountUp value={pendingCheckinsCount} />
                 </span>
-              </motion.button>
-              <motion.button
-                whileHover={{ x: 3 }}
-                whileTap={{ scale: 0.97 }}
+              </button>
+              
+              <button
                 onClick={() => { setViewMode('active'); setActiveFilter('pending_checkout'); }}
-                className={`relative z-10 flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${viewMode === 'active' && activeFilter === 'pending_checkout' ? 'text-white' : 'text-zinc-500 hover:bg-amber-50 hover:text-[#D4A373]'
+                className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'active' && activeFilter === 'pending_checkout'
+                  ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
                   }`}
               >
-                {viewMode === 'active' && activeFilter === 'pending_checkout' && (
-                  <motion.span layoutId="fd-sidebar-pill" transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="absolute inset-0 bg-gradient-to-r from-[#D4A373] to-[#B3835B] shadow-md shadow-[#D4A373]/30 rounded-xl" />
-                )}
-                <span className="relative flex items-center gap-3">
-                  <motion.span
-                    animate={pendingCheckoutsCount > 0 ? { scale: [1, 1.25, 1] } : {}}
-                    transition={{ duration: 1.4, repeat: Infinity }}
-                    className="fd-icon-btn"
-                  >
-                    <AlertTriangle size={15} className={viewMode === 'active' && activeFilter === 'pending_checkout' ? 'text-white' : 'text-rose-500'} />
+                <span className="flex items-center gap-3">
+                  <motion.span animate={pendingCheckoutsCount > 0 ? { scale: [1, 1.25, 1] } : {}} transition={{ duration: 1.4, repeat: Infinity }}>
+                    <AlertTriangle size={16} className={viewMode === 'active' && activeFilter === 'pending_checkout' ? 'text-zinc-900' : 'text-rose-500'} />
                   </motion.span>
                   Pending Checkouts
                 </span>
-                <span className={`relative px-2 py-0.5 rounded-md text-[10px] transition-transform duration-300 ${viewMode === 'active' && activeFilter === 'pending_checkout' ? 'bg-white/25 text-white scale-110' : 'bg-amber-100 text-[#D4A373] font-black'}`}>
+                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${viewMode === 'active' && activeFilter === 'pending_checkout' ? 'bg-zinc-900/10 text-zinc-900' : 'bg-zinc-100 text-zinc-500'}`}>
                   <CountUp value={pendingCheckoutsCount} />
                 </span>
-              </motion.button>
+              </button>
             </div>
           </div>
         </div>
 
-          {/* Live pulse strip — decorative "system health" element */}
-          <div className="rounded-2xl border border-teal-100 bg-gradient-to-br from-teal-50 to-sky-50/60 p-4 relative overflow-hidden">
-            <div className="flex items-center gap-2 mb-2">
-              <Radio size={13} className="text-teal-600" />
-              <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Board Pulse</span>
-            </div>
-            <div className="flex items-end gap-1 h-8">
-              {[...Array(12)].map((_, i) => (
-                <motion.span
-                  key={i}
-                  className="flex-1 rounded-full bg-gradient-to-t from-teal-500 to-sky-400"
-                  animate={{ height: [`${20 + (i % 5) * 8}%`, `${40 + ((i + 3) % 5) * 12}%`, `${20 + (i % 5) * 8}%`] }}
-                  transition={{ duration: 1.6 + (i % 4) * 0.2, repeat: Infinity, ease: 'easeInOut', delay: i * 0.07 }}
-                />
-              ))}
-            </div>
-          </div>
-
-        {/* Section: History — pinned footer action, matches Admin & Housekeeping convention */}
+        {/* Section: History — pinned footer action, matches admin & Housekeeping convention */}
         <div className="pt-4 border-t border-zinc-100 shrink-0">
           <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">History &amp; Ledger</p>
-          <motion.button
-            whileHover={{ x: 3 }}
-            whileTap={{ scale: 0.97 }}
+          <button
             onClick={() => { setViewMode('history'); loadAllBookings(); }}
-            className={`relative z-10 w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-colors duration-300 text-left overflow-hidden ${viewMode === 'history' ? 'text-white' : 'text-zinc-500 hover:bg-amber-50 hover:text-amber-700'
+            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'history'
+              ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+              : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
               }`}
           >
-            {viewMode === 'history' && (
-              <motion.span layoutId="fd-sidebar-pill" transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="absolute inset-0 bg-gradient-to-r from-amber-500 to-orange-400 shadow-md shadow-amber-500/30 rounded-xl" />
-            )}
-            <span className="relative fd-icon-btn"><History size={15} /></span>
-            <span className="relative">Booking History Log</span>
-          </motion.button>
+            <History size={16} /> Booking History Log
+          </button>
         </div>
 
       </motion.div>
@@ -1114,24 +1024,28 @@ export default function FrontDeskDashboard() {
             {/* Profile Avatar Widget */}
             {(() => {
               const staffName = localStorage.getItem('hms_name') || 'Staff';
-              const staffRole = localStorage.getItem('hms_role') || 'FRONT_DESK';
-              const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'FD';
-              const designationMap = {
-                FRONT_DESK: 'Front Desk Agent', RECEPTION: 'Front Desk Agent',
-                HOUSEKEEPING: 'Housekeeper', ADMIN: 'Administrator',
-                FINANCE: 'Finance Officer', RESTAURANT: 'Restaurant Staff'
-              };
-              const designation = designationMap[staffRole] || 'Staff';
+              const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
+              const designation = 'Front Desk Agent';
               return (
-                <motion.div whileHover={{ y: -2 }} className="flex items-center gap-2 bg-white pl-2.5 pr-3 py-1.5 rounded-xl border border-zinc-200/60 shadow-xs hover:shadow-md transition-shadow duration-300">
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#D4A373] to-[#B3835B] text-white font-bold text-xs flex items-center justify-center shadow-xs">
+                <motion.button
+                  whileHover={{ y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => {
+                    localStorage.clear();
+                    window.location.href = '/login';
+                  }}
+                  className="group flex items-center gap-3 bg-white pl-3 pr-4 py-1.5 rounded-2xl border border-zinc-200/60 shadow-xs hover:shadow-md hover:border-rose-200 hover:bg-rose-50 transition-all duration-300 cursor-pointer"
+                  title="Sign Out"
+                >
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#D4A373] to-[#B3835B] group-hover:from-rose-500 group-hover:to-rose-600 text-white font-bold text-xs flex items-center justify-center shadow-xs transition-colors">
                     {initials}
                   </div>
-                  <div className="hidden sm:block text-left leading-none">
-                    <span className="text-xs font-bold text-zinc-900 block">{staffName}</span>
-                    <span className="text-[8px] font-semibold text-zinc-600 uppercase tracking-widest mt-0.5 block">{designation}</span>
+                  <div className="hidden sm:block text-left leading-none pr-1">
+                    <span className="text-xs font-bold text-zinc-900 group-hover:text-rose-600 transition-colors block">{staffName}</span>
+                    <span className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mt-0.5 block group-hover:text-rose-400 transition-colors">{designation}</span>
                   </div>
-                </motion.div>
+                  <LogOut size={16} className="text-zinc-400 group-hover:text-rose-500 transition-colors ml-1" />
+                </motion.button>
               );
             })()}
           </div>
