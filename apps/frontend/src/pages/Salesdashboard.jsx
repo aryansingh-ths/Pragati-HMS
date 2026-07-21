@@ -373,17 +373,20 @@ export default function SalesExecutiveDashboard() {
 
       {/* LEFT SIDEBAR */}
       <div className="w-full lg:w-72 shrink-0 rounded-[2rem] p-6 flex flex-col gap-6 sd-dealdeck-sidebar sticky top-[7.5rem] self-start z-30 lg:h-[calc(100vh-7.8rem)]">
-        <div className="flex items-center gap-3 px-2">
+        
+        {/* 1. Added shrink-0 and h-fit here to prevent the profile block from stretching vertically */}
+        <div className="flex items-center gap-3 px-2 shrink-0 h-fit">
           <div className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white shadow-md font-bold text-lg shrink-0">
-            {CURRENT_USER.initials}
+            S
           </div>
           <div>
-            <h1 className="font-serif font-black text-zinc-900 text-lg leading-none">{CURRENT_USER.name}</h1>
+            <h1 className="font-serif font-black text-zinc-900 text-lg leading-none">Sales</h1>
             <span className="text-[10px] font-bold text-violet-600 uppercase tracking-widest mt-1 block">Sales Executive</span>
           </div>
         </div>
 
-        <div className="flex flex-col gap-4 flex-1 overflow-y-auto pr-1">
+        {/* 2. Added min-h-0 and justify-start to enforce proper top-alignment and scrolling */}
+        <div className="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto pr-1 justify-start">
           {navGroups.map(group => (
             <div key={group.heading}>
               <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">{group.heading}</p>

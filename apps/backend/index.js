@@ -744,22 +744,116 @@ app.post('/api/housekeeping/rooms/:id/report-damage', verifyToken, requireRole([
   }
 });
 
-// 5. Finance & Revenue Reconciliation Logs
+// 5. Finance & Revenue Reconciliation Logs — real-time overview for the Finance Dashboard
 app.get('/api/finance/overview', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
   try {
-    const revenueRes = await pool.query("SELECT COALESCE(SUM(total_price), 0) as total FROM bookings WHERE created_at >= CURRENT_DATE");
+    // 1. Hotel revenue: today, yesterday (for trend), and month-to-date
+    const revenueRes = await pool.query(`
+      SELECT
+        COALESCE(SUM(total_price) FILTER (WHERE created_at::date = CURRENT_DATE), 0) AS today,
+        COALESCE(SUM(total_price) FILTER (WHERE created_at::date = CURRENT_DATE - INTERVAL '1 day'), 0) AS yesterday,
+        COALESCE(SUM(total_price) FILTER (WHERE created_at >= date_trunc('month', CURRENT_DATE)), 0) AS month_to_date
+      FROM bookings
+      WHERE status IN ('CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT')
+    `);
+
+    // 2. Travel desk revenue, month-to-date (rolled into overall hotel finance)
+    const travelRevenueRes = await pool.query(`
+      SELECT COALESCE(SUM(amount) FILTER (WHERE created_at >= date_trunc('month', CURRENT_DATE)), 0) AS month_to_date
+      FROM travel_bookings WHERE booking_status != 'Cancelled'
+    `);
+
+    // 3. Pending receivables — unpaid OTA commissions + pending/partial travel payments
+    const receivablesRes = await pool.query(`
+      SELECT
+        COALESCE((SELECT SUM(amount) FROM ledger_transactions WHERE status = 'PENDING_PAYMENT'), 0) AS ledger_pending,
+        COALESCE((SELECT COUNT(*) FROM ledger_transactions WHERE status = 'PENDING_PAYMENT'), 0) AS ledger_pending_count,
+        COALESCE((SELECT SUM(amount) FROM travel_bookings WHERE payment_status IN ('Pending','Partial')), 0) AS travel_pending,
+        COALESCE((SELECT COUNT(*) FROM travel_bookings WHERE payment_status IN ('Pending','Partial')), 0) AS travel_pending_count
+    `);
+
+    // 4. Today's logged expenses (housekeeping amenity restocking — real cash-outflow ledger)
+    const expensesRes = await pool.query(`
+      SELECT COALESCE(SUM(quantity * unit_cost), 0) AS today
+      FROM room_expenses WHERE created_at::date = CURRENT_DATE
+    `);
+
+    // 5. 7-day revenue trend, hotel bookings + travel bookings combined
+    const trendRes = await pool.query(`
+      SELECT to_char(d::date, 'Dy') AS label, d::date AS day,
+        COALESCE(SUM(b.total_price), 0) + COALESCE(SUM(tb.amount), 0) AS value
+      FROM generate_series(CURRENT_DATE - INTERVAL '6 days', CURRENT_DATE, INTERVAL '1 day') d
+      LEFT JOIN bookings b ON b.created_at::date = d::date AND b.status IN ('CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT')
+      LEFT JOIN travel_bookings tb ON tb.created_at::date = d::date AND tb.booking_status != 'Cancelled'
+      GROUP BY d
+      ORDER BY d;
+    `);
+
+    // 6. Revenue split by booking channel/source (last 30 days) — powers the donut chart
+    const channelRes = await pool.query(`
+      SELECT COALESCE(source, 'DIRECT') AS label, COALESCE(SUM(total_price), 0) AS value
+      FROM bookings
+      WHERE created_at >= CURRENT_DATE - INTERVAL '30 days' AND status IN ('CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT')
+      GROUP BY source
+      ORDER BY value DESC
+    `);
+
+    // 7. Recent transactions feed — merges hotel bookings and travel desk bookings
+    const recentRes = await pool.query(`
+      (SELECT b.id::text AS id, g.name AS guest, r.room_number AS room, b.total_price AS amount,
+              b.source AS method, b.status::text AS status, b.created_at
+       FROM bookings b
+       LEFT JOIN guests g ON g.id = b.guest_id
+       LEFT JOIN rooms r ON r.id = b.room_id
+       ORDER BY b.created_at DESC LIMIT 6)
+      UNION ALL
+      (SELECT tb.id::text AS id, tb.guest_name AS guest, tp.name AS room, tb.amount AS amount,
+              'Travel Desk' AS method, tb.payment_status AS status, tb.created_at
+       FROM travel_bookings tb
+       LEFT JOIN travel_packages tp ON tp.id = tb.package_id
+       ORDER BY tb.created_at DESC LIMIT 6)
+      ORDER BY created_at DESC LIMIT 8;
+    `);
+
+    const today = Number(revenueRes.rows[0].today);
+    const yesterday = Number(revenueRes.rows[0].yesterday);
+    const monthToDate = Number(revenueRes.rows[0].month_to_date) + Number(travelRevenueRes.rows[0].month_to_date);
+    const todayRevenueChangePct = yesterday > 0 ? Number((((today - yesterday) / yesterday) * 100).toFixed(1)) : null;
+
+    const ledgerPending = Number(receivablesRes.rows[0].ledger_pending);
+    const travelPending = Number(receivablesRes.rows[0].travel_pending);
+    const pendingReceivablesCount = Number(receivablesRes.rows[0].ledger_pending_count) + Number(receivablesRes.rows[0].travel_pending_count);
 
     res.json({
-      metrics: [
-        { label: "Today's Revenue", value: `₹${revenueRes.rows[0].total}`, trend: "+14.2%", isPositive: true },
-        { label: "Pending Receivables", value: "₹12,400", trend: "-1.1%", isPositive: false }
-      ],
-      transactions: [
-        { id: 'TXN-9901', guest: 'System Walk-in', room: '101', amount: '₹14,000', method: 'Digital Gateway', status: 'Settled', date: 'Today' }
-      ]
+      status: 'success',
+      data: {
+        todayRevenue: today,
+        todayRevenueChangePct,
+        monthToDateRevenue: monthToDate,
+        pendingReceivables: ledgerPending + travelPending,
+        pendingReceivablesCount,
+        estimatedGstMTD: Math.round(monthToDate * 0.18),
+        todayExpenses: Number(expensesRes.rows[0].today),
+        revenueTrend: trendRes.rows.map(r => ({
+          label: r.label,
+          value: Number(r.value),
+          isToday: r.day.toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10),
+        })),
+        channelSplit: channelRes.rows.map(r => ({ label: r.label, value: Number(r.value) })),
+        recentTransactions: recentRes.rows.map(r => ({
+          id: r.id,
+          guest: r.guest || 'Guest',
+          room: r.room || '—',
+          amount: Number(r.amount),
+          method: r.method,
+          status: r.status,
+          date: r.created_at,
+        })),
+      }
     });
   } catch (err) {
-    res.status(500).json({ error: 'Unable to stream general ledger array metrics.' });
+    console.error('Finance overview error:', err);
+    res.status(500).json({ error: 'Unable to load finance overview' });
   }
 });
 
@@ -1947,6 +2041,51 @@ app.get('/api/Admin/analytics', verifyToken, requireRole(['ADMIN']), async (req,
 });
 
 // ==========================================
+// DINING MODULE ENDPOINTS
+// ==========================================
+const requireDining = requireRole(['RESTAURANT', 'ADMIN']);
+
+// Fetch active Kitchen Order Tickets (KOTs)
+app.get('/api/dining/kots', verifyToken, requireDining, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM dining_kots ORDER BY created_at DESC');
+    res.json({ status: 'success', data: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch KOTs' });
+  }
+});
+
+// Create a new KOT
+app.post('/api/dining/kots', verifyToken, requireDining, async (req, res) => {
+  const { table, items, type } = req.body;
+  try {
+    const result = await pool.query(
+      'INSERT INTO dining_kots (table_number, items, type) VALUES ($1, $2, $3) RETURNING *',
+      [table, items, type || 'Dine-in']
+    );
+    res.status(201).json({ status: 'success', data: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create KOT' });
+  }
+});
+
+// ==========================================
+// SALES MODULE ENDPOINTS
+// ==========================================
+// Assuming you add a 'SALES' role to your ENUM similar to TRAVEL and RESTAURANT
+const requireSales = requireRole(['SALES', 'ADMIN']);
+
+// Fetch Pipeline Leads
+app.get('/api/sales/leads', verifyToken, requireSales, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM sales_leads ORDER BY created_at DESC');
+    res.json({ status: 'success', data: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch leads' });
+  }
+});
+
+// ==========================================
 // DATABASE AUTO-MIGRATION (runs on startup)
 // ==========================================
 async function runMigrations() {
@@ -1958,6 +2097,34 @@ async function runMigrations() {
     if (enumCheck.rows.length === 0) {
       await pool.query("ALTER TYPE room_status ADD VALUE IF NOT EXISTS 'INSPECTING'");
     }
+
+    // DINING MODULE TABLES
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS dining_kots (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    table_number VARCHAR(50) NOT NULL,
+    items TEXT NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'New',
+    type VARCHAR(50) NOT NULL DEFAULT 'Dine-in',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+// SALES MODULE TABLES
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS sales_leads (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company VARCHAR(255) NOT NULL,
+    deal_name VARCHAR(255) NOT NULL,
+    value DECIMAL(12, 2) NOT NULL DEFAULT 0,
+    stage VARCHAR(50) NOT NULL DEFAULT 'New',
+    source VARCHAR(100),
+    contact_name VARCHAR(255),
+    contact_email VARCHAR(255),
+    contact_phone VARCHAR(50),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+  );
+`);
 
     // 2. Create room_expenses table if not exists
     await pool.query(`

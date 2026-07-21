@@ -162,9 +162,8 @@ function RevenueTrendLine({ data = [] }) {
       <div className="flex justify-between mt-1 px-1">
         {data.map((t, i) => (
           <span key={i} onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)}
-            className={`text-[9px] font-black uppercase tracking-wide cursor-pointer transition-all duration-200 ${
-              hoverIdx === i ? 'text-emerald-600' : (t.isToday ? 'text-orange-500 animate-pulse font-extrabold' : 'text-zinc-400')
-            }`}
+            className={`text-[9px] font-black uppercase tracking-wide cursor-pointer transition-all duration-200 ${hoverIdx === i ? 'text-emerald-600' : (t.isToday ? 'text-orange-500 animate-pulse font-extrabold' : 'text-zinc-400')
+              }`}
           >
             {t.label}
           </span>
@@ -268,9 +267,8 @@ function ExpenseTrendLine({ data = [] }) {
       <div className="flex justify-between mt-1 px-1">
         {data.map((t, i) => (
           <span key={i} onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)}
-            className={`text-[9px] font-black uppercase tracking-wide cursor-pointer transition-all duration-200 ${
-              hoverIdx === i ? 'text-rose-600' : (t.isToday ? 'text-orange-500 animate-pulse font-extrabold' : 'text-zinc-400')
-            }`}
+            className={`text-[9px] font-black uppercase tracking-wide cursor-pointer transition-all duration-200 ${hoverIdx === i ? 'text-rose-600' : (t.isToday ? 'text-orange-500 animate-pulse font-extrabold' : 'text-zinc-400')
+              }`}
           >
             {t.label}
           </span>
@@ -832,11 +830,10 @@ export default function FinanceDashboard() {
                   <button
                     key={item.key}
                     onClick={() => setActiveTab(item.key)}
-                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${
-                      activeTab === item.key
+                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === item.key
                         ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/10'
                         : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
-                    }`}
+                      }`}
                   >
                     {item.icon} {item.label}
                   </button>
@@ -1090,9 +1087,8 @@ export default function FinanceDashboard() {
                               <td className="p-4 text-sm text-zinc-600">{txn.date}</td>
                               <td className="p-4 text-sm font-bold text-zinc-900 text-right">{txn.amount}</td>
                               <td className="p-4 text-right">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
-                                  txn.status === 'Settled' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-amber-50 text-amber-600 border-amber-200'
-                                }`}>
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${txn.status === 'Settled' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-amber-50 text-amber-600 border-amber-200'
+                                  }`}>
                                   {txn.status === 'Settled' ? <CheckCircle2 size={12} /> : <Clock size={12} />}
                                   {txn.status}
                                 </span>
@@ -1286,9 +1282,8 @@ export default function FinanceDashboard() {
                               <td className="p-4 text-sm text-zinc-600">{e.date}</td>
                               <td className="p-4 text-sm font-bold text-zinc-900 text-right">{e.amount}</td>
                               <td className="p-4 text-right">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
-                                  e.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-amber-50 text-amber-600 border-amber-200'
-                                }`}>
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${e.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-amber-50 text-amber-600 border-amber-200'
+                                  }`}>
                                   {e.status === 'Approved' ? <CheckCircle2 size={12} /> : <Clock size={12} />}
                                   {e.status}
                                 </span>
@@ -1364,9 +1359,8 @@ export default function FinanceDashboard() {
                               <td className="p-4 text-xs font-mono text-zinc-500">{r.matchedWith || '—'}</td>
                               <td className="p-4 text-sm font-bold text-zinc-900 text-right">{r.amount}</td>
                               <td className="p-4 text-right">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
-                                  r.status === 'Matched' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-amber-50 text-amber-600 border-amber-200'
-                                }`}>
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${r.status === 'Matched' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-amber-50 text-amber-600 border-amber-200'
+                                  }`}>
                                   {r.status === 'Matched' ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
                                   {r.status}
                                 </span>
@@ -1554,13 +1548,12 @@ export default function FinanceDashboard() {
                               <td className="p-4 text-sm text-zinc-600">{inv.dueDate}</td>
                               <td className={`p-4 text-sm font-bold text-right ${inv.amount < 0 ? 'text-rose-500' : 'text-zinc-900'}`}>{inv.amount < 0 ? '-' : ''}₹{Math.abs(inv.amount).toLocaleString('en-IN')}</td>
                               <td className="p-4 text-right">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
-                                  inv.status === 'Paid' ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                                  : inv.status === 'Partial' ? 'bg-amber-50 text-amber-600 border-amber-200'
-                                  : inv.status === 'Overdue' ? 'bg-rose-50 text-rose-600 border-rose-200'
-                                  : inv.status === 'Issued' ? 'bg-indigo-50 text-indigo-600 border-indigo-200'
-                                  : 'bg-zinc-100 text-zinc-500 border-zinc-200'
-                                }`}>
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${inv.status === 'Paid' ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                                    : inv.status === 'Partial' ? 'bg-amber-50 text-amber-600 border-amber-200'
+                                      : inv.status === 'Overdue' ? 'bg-rose-50 text-rose-600 border-rose-200'
+                                        : inv.status === 'Issued' ? 'bg-indigo-50 text-indigo-600 border-indigo-200'
+                                          : 'bg-zinc-100 text-zinc-500 border-zinc-200'
+                                  }`}>
                                   {inv.status === 'Paid' ? <CheckCircle2 size={12} /> : inv.status === 'Overdue' ? <AlertTriangle size={12} /> : <Clock size={12} />}
                                   {inv.status}
                                 </span>
@@ -1678,9 +1671,8 @@ export default function FinanceDashboard() {
                               <td className="p-4 text-sm text-zinc-600">{b.dueDate}</td>
                               <td className="p-4 text-sm font-bold text-zinc-900 text-right">₹{b.amount.toLocaleString('en-IN')}</td>
                               <td className="p-4 text-right">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
-                                  b.status === 'Paid' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : b.status === 'Overdue' ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-amber-50 text-amber-600 border-amber-200'
-                                }`}>
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${b.status === 'Paid' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : b.status === 'Overdue' ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-amber-50 text-amber-600 border-amber-200'
+                                  }`}>
                                   {b.status === 'Paid' ? <CheckCircle2 size={12} /> : b.status === 'Overdue' ? <AlertTriangle size={12} /> : <Clock size={12} />}
                                   {b.status}
                                 </span>
@@ -1707,9 +1699,8 @@ export default function FinanceDashboard() {
                       { key: 'cashflow', label: 'Cash Flow', icon: <ArrowRightLeft size={13} /> },
                     ].map(v => (
                       <button key={v.key} onClick={() => setStatementView(v.key)}
-                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                          statementView === v.key ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20' : 'text-zinc-500 hover:bg-zinc-50'
-                        }`}>
+                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${statementView === v.key ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20' : 'text-zinc-500 hover:bg-zinc-50'
+                          }`}>
                         {v.icon} {v.label}
                       </button>
                     ))}
@@ -2087,12 +2078,11 @@ export default function FinanceDashboard() {
                               <td className="p-4 text-sm text-zinc-600">{d.date}</td>
                               <td className="p-4 text-sm font-bold text-zinc-900 text-right">₹{d.amount.toLocaleString('en-IN')}</td>
                               <td className="p-4 text-right">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
-                                  d.status === 'Held' ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                                  : d.status === 'Refunded' ? 'bg-sky-50 text-sky-600 border-sky-200'
-                                  : d.status === 'Forfeited' ? 'bg-rose-50 text-rose-600 border-rose-200'
-                                  : 'bg-indigo-50 text-indigo-600 border-indigo-200'
-                                }`}>
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${d.status === 'Held' ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                                    : d.status === 'Refunded' ? 'bg-sky-50 text-sky-600 border-sky-200'
+                                      : d.status === 'Forfeited' ? 'bg-rose-50 text-rose-600 border-rose-200'
+                                        : 'bg-indigo-50 text-indigo-600 border-indigo-200'
+                                  }`}>
                                   {d.status}
                                 </span>
                               </td>
@@ -2150,9 +2140,8 @@ export default function FinanceDashboard() {
                       {auditLog.length === 0 && (<div className="p-8 text-center text-xs text-zinc-400">No audit entries match your filters.</div>)}
                       {auditLog.map((a, idx) => (
                         <div key={idx} className="p-5 flex items-start gap-4 hover:bg-zinc-50/60 transition-colors">
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                            a.approval === 'Escalated' ? 'bg-rose-100 text-rose-600' : a.approval === 'Pending Review' ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'
-                          }`}>
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${a.approval === 'Escalated' ? 'bg-rose-100 text-rose-600' : a.approval === 'Pending Review' ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'
+                            }`}>
                             {a.approval === 'Escalated' ? <ShieldAlert size={16} /> : a.approval === 'Pending Review' ? <Clock size={16} /> : <CheckCircle2 size={16} />}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -2163,11 +2152,10 @@ export default function FinanceDashboard() {
                             <p className="text-xs text-zinc-500 mt-1">{a.target}</p>
                             <p className="text-[10px] text-zinc-400 mt-1">{a.time}</p>
                           </div>
-                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border shrink-0 ${
-                            a.approval === 'Escalated' ? 'bg-rose-50 text-rose-600 border-rose-200'
-                            : a.approval === 'Pending Review' ? 'bg-amber-50 text-amber-600 border-amber-200'
-                            : 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                          }`}>{a.approval}</span>
+                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border shrink-0 ${a.approval === 'Escalated' ? 'bg-rose-50 text-rose-600 border-rose-200'
+                              : a.approval === 'Pending Review' ? 'bg-amber-50 text-amber-600 border-amber-200'
+                                : 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                            }`}>{a.approval}</span>
                         </div>
                       ))}
                     </div>

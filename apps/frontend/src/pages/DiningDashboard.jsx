@@ -11,6 +11,7 @@ import {
 // =============================================
 // Helper Components
 // =============================================
+
 function DonutChart({ data, size = 170, centerLabel = 'Orders' }) {
   const total = data.reduce((sum, d) => sum + d.value, 0);
   if (total === 0) return <div className="flex items-center justify-center text-zinc-400 text-sm" style={{ width: size, height: size }}>No Data</div>;
