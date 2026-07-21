@@ -403,7 +403,7 @@ export default function TravelDashboard() {
       {/* ═══════════════════════════════════════════════════════
           LEFT FLOATING SIDEBAR
           ═══════════════════════════════════════════════════════ */}
-      <div className="w-full lg:w-72 shrink-0 rounded-[2rem] p-6 flex flex-col gap-6 fd-dealdeck-sidebar sticky top-[7.5rem] self-start z-30 lg:h-[calc(100vh-7.8rem)]">
+      <div className="w-full lg:w-72 shrink-0 rounded-[2rem] p-6 flex flex-col gap-6 fd-dealdeck-sidebar lg:fixed lg:top-30 lg:left-6 z-30 lg:h-[calc(100vh-7.8rem)]">
         <div className="flex items-center gap-3 px-2">
           <div className="w-10 h-10 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center justify-center shadow-xs shrink-0">
             <Plane size={19} className="text-[#D4A373]" />
@@ -414,7 +414,7 @@ export default function TravelDashboard() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-4 flex-1 overflow-y-auto fd-sidebar-scroll pr-1">
+        <div className="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto fd-sidebar-scroll pr-1 justify-start">
           {navGroups.map(group => (
             <div key={group.heading}>
               <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">{group.heading}</p>
@@ -458,7 +458,7 @@ export default function TravelDashboard() {
       {/* ═══════════════════════════════════════════════════════
           MAIN WORKSPACE CANVAS
           ═══════════════════════════════════════════════════════ */}
-      <div className="flex-1 flex flex-col gap-6 overflow-hidden min-w-0">
+      <div className="flex-1 flex flex-col gap-6 overflow-hidden min-w-0 lg:ml-[21rem]">
 
         {/* HEADER RIBBON */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

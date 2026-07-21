@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Target, TrendingUp, Briefcase, Handshake, Calendar, Search, Plus, X, Loader2,
+import {
+  Target, TrendingUp, Briefcase, Handshake, Calendar, Search, Plus, X, Loader2,
   AlertTriangle, CheckCircle2, Clock, XCircle, Send, FileText, DollarSign,
   ArrowUpRight, Star, ChevronRight, PieChart, Trophy, CalendarClock, Eye,
   PhoneCall, Mail, CheckSquare, ListTodo, Flame, Activity, ShieldCheck, Globe,
-  User, Building2, MapPin, BarChart3, ArrowRight, Percent, TrendingDown, LogOut } from 'lucide-react';
+  User, Building2, MapPin, BarChart3, ArrowRight, Percent, TrendingDown, LogOut
+} from 'lucide-react';
 
 // =============================================
 // SVG DONUT CHART
@@ -98,7 +100,6 @@ function BarRankChart({ data = [], currency = true }) {
 // SVG AREA GRAPH: TARGET VS REVENUE
 // =============================================
 function TargetVsRevenueChart({ period }) {
-  // Mock trend data for different periods
   const trendData = {
     Daily: [
       { label: 'Mon', target: 20, revenue: 15 },
@@ -132,17 +133,16 @@ function TargetVsRevenueChart({ period }) {
   };
 
   const data = trendData[period];
-  const maxVal = Math.max(...data.map(d => Math.max(d.target, d.revenue))) * 1.15; // 15% padding top
-  
+  const maxVal = Math.max(...data.map(d => Math.max(d.target, d.revenue))) * 1.15;
+
   const width = 600;
   const height = 180;
   const paddingX = 30;
   const paddingY = 20;
-  
+
   const getX = (index) => paddingX + (index / (data.length - 1)) * (width - paddingX * 2);
   const getY = (value) => height - paddingY - (value / maxVal) * (height - paddingY * 2);
 
-  // Generate SVG Paths
   const targetPath = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)},${getY(d.target)}`).join(' ');
   const revenuePath = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)},${getY(d.revenue)}`).join(' ');
   const revenueArea = `${revenuePath} L ${getX(data.length - 1)},${height - paddingY} L ${getX(0)},${height - paddingY} Z`;
@@ -157,11 +157,10 @@ function TargetVsRevenueChart({ period }) {
           <div className="w-3 border-t-2 border-[#D4A373]"></div> Revenue
         </div>
       </div>
-      
+
       <div className="w-full overflow-x-auto sd-scrollbar">
         <svg viewBox={`0 0 ${width} ${height}`} className="w-full min-w-[400px] h-auto drop-shadow-sm">
           <defs>
-            {/* Gradient for Revenue Area */}
             <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.3" />
               <stop offset="80%" stopColor="#7c3aed" stopOpacity="0.02" />
@@ -169,7 +168,6 @@ function TargetVsRevenueChart({ period }) {
             </linearGradient>
           </defs>
 
-          {/* Grid lines (Y-axis) */}
           {[0, 0.5, 1].map(ratio => {
             const y = height - paddingY - (ratio * (height - paddingY * 2));
             return (
@@ -177,57 +175,15 @@ function TargetVsRevenueChart({ period }) {
             );
           })}
 
-          {/* Revenue Area (Filled) */}
-          <motion.path
-            d={revenueArea}
-            fill="url(#revenueGradient)"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
-          />
+          <motion.path d={revenueArea} fill="url(#revenueGradient)" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: "easeOut" }} />
+          <motion.path d={targetPath} fill="none" stroke="#a1a1aa" strokeWidth="2" strokeDasharray="5 5" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1, ease: "easeInOut" }} />
+          <motion.path d={revenuePath} fill="none" stroke="#7c3aed" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1, ease: "easeInOut" }} />
 
-          {/* Target Line (Dashed) */}
-          <motion.path
-            d={targetPath}
-            fill="none"
-            stroke="#a1a1aa"
-            strokeWidth="2"
-            strokeDasharray="5 5"
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: 1 }}
-            transition={{ duration: 1, ease: "easeInOut" }}
-          />
-
-          {/* Revenue Line (Solid) */}
-          <motion.path
-            d={revenuePath}
-            fill="none"
-            stroke="#7c3aed"
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: 1 }}
-            transition={{ duration: 1, ease: "easeInOut" }}
-          />
-
-          {/* Data Points & X-Axis Labels */}
           {data.map((d, i) => (
             <g key={i}>
-              {/* Target Dots */}
-              <motion.circle 
-                cx={getX(i)} cy={getY(d.target)} r="3" fill="#fff" stroke="#a1a1aa" strokeWidth="1.5"
-                initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.8 + i * 0.05 }}
-              />
-              {/* Revenue Dots */}
-              <motion.circle 
-                cx={getX(i)} cy={getY(d.revenue)} r="4" fill="#fff" stroke="#7c3aed" strokeWidth="2"
-                initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.8 + i * 0.05 }}
-              />
-              {/* X-Axis Labels */}
-              <text x={getX(i)} y={height - 4} textAnchor="middle" fill="#71717a" fontSize="10" fontWeight="600">
-                {d.label}
-              </text>
+              <motion.circle cx={getX(i)} cy={getY(d.target)} r="3" fill="#fff" stroke="#a1a1aa" strokeWidth="1.5" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.8 + i * 0.05 }} />
+              <motion.circle cx={getX(i)} cy={getY(d.revenue)} r="4" fill="#fff" stroke="#7c3aed" strokeWidth="2" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.8 + i * 0.05 }} />
+              <text x={getX(i)} y={height - 4} textAnchor="middle" fill="#71717a" fontSize="10" fontWeight="600">{d.label}</text>
             </g>
           ))}
         </svg>
@@ -242,81 +198,158 @@ function TargetVsRevenueChart({ period }) {
 export default function SalesExecutiveDashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
-  const [isLoading, setIsLoading] = useState(false);
-  const [timePeriod, setTimePeriod] = useState('Monthly'); 
+  const [isLoading, setIsLoading] = useState(true);
+  const [timePeriod, setTimePeriod] = useState('Monthly');
+  
+  // Database Connected States
+  const [myLeads, setMyLeads] = useState([]);
+  const [myAccounts, setMyAccounts] = useState([]);
+  const [ongoingTasks, setOngoingTasks] = useState([]);
+  const [assignedTasks, setAssignedTasks] = useState([]);
+  const [bookingModes, setBookingModes] = useState([]);
+  const [otaData, setOtaData] = useState([]);
+  const [leadSearch, setLeadSearch] = useState('');
 
   const CURRENT_USER = { initials: 'AS', name: 'Aditi Sharma', target: 1200000, achieved: 980000, baseIncentiveRate: 0.025 };
+  const STAGES = ['New', 'Contacted', 'Proposal Sent', 'Negotiation', 'Won', 'Lost'];
+
+  const fetchData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { 'Authorization': `Bearer ${token}` };
+
+      // Fetch all dashboard data concurrently
+      const [leadsRes, accountsRes, tasksRes, otaRes, modesRes] = await Promise.all([
+        fetch('http://localhost:3000/api/sales/leads', { headers }),
+        fetch('http://localhost:3000/api/sales/accounts', { headers }),
+        fetch('http://localhost:3000/api/sales/tasks', { headers }),
+        fetch('http://localhost:3000/api/sales/ota', { headers }),
+        fetch('http://localhost:3000/api/sales/booking-modes', { headers })
+      ]);
+
+      if (leadsRes.ok) {
+        const data = await leadsRes.json();
+        setMyLeads(data.data.map(lead => ({
+          id: lead.id, company: lead.company, deal: lead.deal_name,
+          value: parseFloat(lead.value), stage: lead.stage, source: lead.source,
+          contactName: lead.contact_name, contactEmail: lead.contact_email, contactPhone: lead.contact_phone
+        })));
+      }
+
+      if (accountsRes.ok) {
+        const data = await accountsRes.json();
+        setMyAccounts(data.data.map(acc => ({
+          id: acc.id, name: acc.name, industry: acc.industry,
+          rate: parseFloat(acc.rate), ytdRevenue: parseFloat(acc.ytd_revenue), status: acc.status
+        })));
+      }
+
+      if (tasksRes.ok) {
+        const data = await tasksRes.json();
+        const tasks = data.data;
+        setOngoingTasks(tasks.filter(t => !t.assigner || t.assigner === 'Self').map(t => ({
+          id: t.id, title: t.title, type: t.type, status: t.status, 
+          client: t.client, time: new Date(t.deadline).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+        })));
+        setAssignedTasks(tasks.filter(t => t.assigner && t.assigner !== 'Self').map(t => ({
+          id: t.id, title: t.title, assigner: t.assigner, priority: t.priority,
+          deadline: new Date(t.deadline).toLocaleDateString(), completed: t.status === 'Completed'
+        })));
+      }
+
+      if (otaRes.ok) {
+        const data = await otaRes.json();
+        setOtaData(data.data.map(ota => ({
+          name: ota.name, color: ota.color, bookings: ota.bookings, roomNights: ota.room_nights,
+          grossRevenue: parseFloat(ota.gross_revenue), commissionRate: parseFloat(ota.commission_rate), 
+          cancelRate: parseFloat(ota.cancel_rate), status: ota.status
+        })));
+      }
+
+      if (modesRes.ok) {
+        const data = await modesRes.json();
+        const modeMeta = {
+          'Hotel Website': { color: '#7c3aed', icon: <Globe size={14} /> },
+          'Walk In Enquiry': { color: '#0ea5e9', icon: <User size={14} /> },
+          'Call Enquiry': { color: '#f59e0b', icon: <PhoneCall size={14} /> },
+          'Different Websites': { color: '#10b981', icon: <Target size={14} /> },
+        };
+        
+        setBookingModes(data.data.map(mode => ({
+          label: mode.label,
+          value: parseFloat(mode.value),
+          color: modeMeta[mode.label]?.color || '#94a3b8',
+          icon: modeMeta[mode.label]?.icon || <Activity size={14} />
+        })));
+      }
+    } catch (error) {
+      console.error('Failed to sync dashboard data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const refresh = () => {
     setIsLoading(true);
-    setTimeout(() => setIsLoading(false), 700);
+    fetchData();
   };
 
-  // --- MY Pipeline ---
-  const STAGES = ['New', 'Contacted', 'Proposal Sent', 'Negotiation', 'Won', 'Lost'];
-  const [myLeads, setMyLeads] = useState([
-    { id: 'LD-401', company: 'Meridian Corporate Travel', deal: 'Retainer Renewal', value: 380000, stage: 'New', source: 'Call Enquiry', contactName: 'Kavita Rao', contactEmail: 'kavita@meridian.com', contactPhone: '+91 98765 43210' },
-    { id: 'LD-406', company: 'Zenith Events Pvt Ltd', deal: 'Annual Partner Conference', value: 650000, stage: 'Proposal Sent', source: 'Hotel Website', contactName: 'Rahul Mehta', contactEmail: 'rahul@zenithevents.in', contactPhone: '+91 91234 56789' },
-    { id: 'LD-408', company: 'Sundar Wedding Planners', deal: 'Destination Wedding', value: 1200000, stage: 'Negotiation', source: 'Walk In Enquiry', contactName: 'Sundar Kannan', contactEmail: 'sundar@weddings.com', contactPhone: '+91 99887 76655' },
-    { id: 'LD-415', company: 'Tech Mahindra', deal: 'Q3 Leadership Offsite', value: 450000, stage: 'Contacted', source: 'Different Websites', contactName: 'Ramesh Patel', contactEmail: 'r.patel@techm.com', contactPhone: '+91 98711 22334' },
-  ]);
-  const [leadSearch, setLeadSearch] = useState('');
   const filteredLeads = myLeads.filter(l => (l.company + l.deal + l.contactName).toLowerCase().includes(leadSearch.toLowerCase()));
 
-  // --- MY Accounts ---
-  const [myAccounts, setMyAccounts] = useState([
-    { id: 'ACC-101', name: 'Infosys BPM Ltd', industry: 'IT / BPM', rate: 6200, ytdRevenue: 2850000, status: 'Active' },
-    { id: 'ACC-110', name: 'TechNova', industry: 'IT Services', rate: 6000, ytdRevenue: 1200000, status: 'Active' },
-  ]);
+  const moveToAccounts = async (lead) => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
 
-  const moveToAccounts = (lead) => {
-    setMyAccounts([{ id: `ACC-${Math.floor(Math.random() * 1000)}`, name: lead.company, industry: 'General', rate: 5000, ytdRevenue: 0, status: 'Onboarding' }, ...myAccounts]);
-    setMyLeads(myLeads.map(l => l.id === lead.id ? { ...l, stage: 'Contacted' } : l));
-    alert(`${lead.company} moved to My Accounts!`);
+      // 1. Move lead to 'Contacted' stage
+      await fetch(`http://localhost:3000/api/sales/leads/${lead.id}/stage`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ stage: 'Contacted' })
+      });
+
+      // 2. Add as a new Account
+      const accResponse = await fetch(`http://localhost:3000/api/sales/accounts`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          name: lead.company,
+          industry: 'General',
+          rate: 5000,
+          ytd_revenue: 0,
+          status: 'Onboarding'
+        })
+      });
+
+      if (accResponse.ok) {
+        refresh(); // Sync the fresh data back from the DB
+        alert(`${lead.company} moved to My Accounts!`);
+      }
+    } catch (error) {
+      console.error('Failed to convert lead to account:', error);
+      alert('Error updating database.');
+    }
   };
 
-  // --- MY Tasks ---
-  const [ongoingTasks, setOngoingTasks] = useState([
-    { id: 'T-1', title: 'Follow up on Meridian Renewal', type: 'Call', time: '10:30 AM', status: 'In Progress', client: 'Meridian Travel' },
-    { id: 'T-2', title: 'Send Proposal to Tech Mahindra', type: 'Email', time: '12:00 PM', status: 'Pending', client: 'Tech Mahindra' },
-  ]);
-  
-  const [assignedTasks, setAssignedTasks] = useState([
-    { id: 'AT-1', title: 'Call 10 lost leads from Q1', assigner: 'Team Lead (Karan)', deadline: 'Today, 5:00 PM', priority: 'High', completed: false },
-    { id: 'AT-2', title: 'Update CRM fields for all Won deals', assigner: 'Admin', deadline: 'Tomorrow', priority: 'Medium', completed: false },
-  ]);
-
-  // --- Booking Modes ---
-  const bookingModes = [
-    { label: 'Hotel Website', value: 380000, color: '#7c3aed', icon: <Globe size={14}/> },
-    { label: 'Walk In Enquiry', value: 210000, color: '#0ea5e9', icon: <User size={14}/> },
-    { label: 'Call Enquiry', value: 420000, color: '#f59e0b', icon: <PhoneCall size={14}/> },
-    { label: 'Different Websites', value: 150000, color: '#10b981', icon: <Target size={14}/> },
-  ];
-
-  // --- Detailed OTA Data ---
-  const otaData = [
-    { name: 'MakeMyTrip', color: '#f59e0b', bookings: 45, roomNights: 120, grossRevenue: 350000, commissionRate: 18, cancelRate: 12, status: 'Active' },
-    { name: 'Booking.com', color: '#0ea5e9', bookings: 32, roomNights: 85, grossRevenue: 280000, commissionRate: 15, cancelRate: 8, status: 'Active' },
-    { name: 'Agoda', color: '#ec4899', bookings: 20, roomNights: 50, grossRevenue: 150000, commissionRate: 12, cancelRate: 15, status: 'Active' },
-    { name: 'Expedia', color: '#7c3aed', bookings: 12, roomNights: 30, grossRevenue: 95000, commissionRate: 20, cancelRate: 5, status: 'Reviewing' },
-  ];
-
+  // --- Dynamic Metrics Processing ---
   const totalOtaGross = otaData.reduce((acc, curr) => acc + curr.grossRevenue, 0);
   const totalOtaCommission = otaData.reduce((acc, curr) => acc + (curr.grossRevenue * (curr.commissionRate / 100)), 0);
   const totalOtaNet = totalOtaGross - totalOtaCommission;
-  const avgCancelRate = (otaData.reduce((acc, curr) => acc + curr.cancelRate, 0) / otaData.length).toFixed(1);
+  const avgCancelRate = otaData.length ? (otaData.reduce((acc, curr) => acc + curr.cancelRate, 0) / otaData.length).toFixed(1) : '0.0';
 
   const otaBookingShare = otaData.map(ota => ({ label: ota.name, value: ota.bookings, color: ota.color }));
   const otaNetRevenueRank = otaData.map(ota => ({ label: ota.name, value: ota.grossRevenue - (ota.grossRevenue * (ota.commissionRate / 100)), color: ota.color }));
 
-  // --- Metrics ---
   const myPipelineValue = myLeads.filter(l => l.stage !== 'Won' && l.stage !== 'Lost').reduce((s, l) => s + l.value, 0);
   const activeDealsCount = myLeads.filter(l => l.stage !== 'Won' && l.stage !== 'Lost').length;
   const pendingTasksCount = ongoingTasks.filter(t => t.status !== 'Completed').length + assignedTasks.filter(t => !t.completed).length;
 
   const stageColors = { 'New': '#94a3b8', 'Contacted': '#0ea5e9', 'Proposal Sent': '#f59e0b', 'Negotiation': '#8b5cf6', 'Won': '#10b981', 'Lost': '#f43f5e' };
-  
+
   const themeMap = {
     '#D4A373': { iconBg: 'bg-[#D4A373] text-zinc-900', glow: 'rgba(212,163,115,0.35)' },
     violet: { iconBg: 'bg-gradient-to-br from-[#D4A373] to-[#D4A373] text-white', glow: 'rgba(124,58,237,0.35)' },
@@ -368,7 +401,7 @@ export default function SalesExecutiveDashboard() {
       `}</style>
 
       {/* LEFT SIDEBAR */}
-      <div className="w-full lg:w-72 shrink-0 rounded-[2rem] p-6 flex flex-col gap-6 sd-dealdeck-sidebar sticky top-[7.5rem] self-start z-30 lg:h-[calc(100vh-7.8rem)]">
+      <div className="w-full lg:w-72 shrink-0 rounded-[2rem] p-6 flex flex-col gap-6 sd-dealdeck-sidebar lg:fixed lg:top-[7.5rem] lg:left-6 z-30 lg:h-[calc(100vh-7.8rem)]">
         <div className="flex items-center gap-3 px-2">
           <div className="w-10 h-10 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center justify-center shadow-xs shrink-0">
             <TrendingUp size={19} className="text-[#D4A373]" />
@@ -379,7 +412,6 @@ export default function SalesExecutiveDashboard() {
           </div>
         </div>
 
-        {/* 2. Added min-h-0 and justify-start to enforce proper top-alignment and scrolling */}
         <div className="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto pr-1 justify-start">
           {navGroups.map(group => (
             <div key={group.heading}>
@@ -389,11 +421,10 @@ export default function SalesExecutiveDashboard() {
                   <button
                     key={item.key}
                     onClick={() => setActiveTab(item.key)}
-                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${
-                      activeTab === item.key
+                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === item.key
                         ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
                         : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
-                    }`}
+                      }`}
                   >
                     {item.icon} {item.label}
                   </button>
@@ -405,7 +436,7 @@ export default function SalesExecutiveDashboard() {
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 lg:ml-[21rem]">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
             <h2 className="text-2xl font-serif font-black text-zinc-900 capitalize">
@@ -420,7 +451,6 @@ export default function SalesExecutiveDashboard() {
             <button className="bg-zinc-900 text-white px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#D4A373] transition-colors flex items-center gap-2 shadow-sm">
               <Plus size={14} /> Add Lead
             </button>
-            {/* Profile Avatar Widget */}
             {(() => {
               const staffName = localStorage.getItem('hms_name') || 'Staff';
               const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
@@ -465,8 +495,8 @@ export default function SalesExecutiveDashboard() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                     {[
                       { label: 'Target', value: `₹${(CURRENT_USER.target / 100000).toFixed(1)}L`, sub: 'Monthly Goal', icon: <Target size={16} />, theme: '#D4A373' },
-                      { label: 'Revenue Generated', value: `₹${(CURRENT_USER.achieved / 100000).toFixed(1)}L`, sub: `${Math.round((CURRENT_USER.achieved/CURRENT_USER.target)*100)}% of Target`, icon: <TrendingUp size={16} />, theme: '#D4A373' },
-                      { label: 'Deals In Pipeline', value: activeDealsCount, sub: `₹${(myPipelineValue/100000).toFixed(1)}L Total Value`, icon: <Briefcase size={16} />, theme: '#D4A373' },
+                      { label: 'Revenue Generated', value: `₹${(CURRENT_USER.achieved / 100000).toFixed(1)}L`, sub: `${Math.round((CURRENT_USER.achieved / CURRENT_USER.target) * 100)}% of Target`, icon: <TrendingUp size={16} />, theme: '#D4A373' },
+                      { label: 'Deals In Pipeline', value: activeDealsCount, sub: `₹${(myPipelineValue / 100000).toFixed(1)}L Total Value`, icon: <Briefcase size={16} />, theme: '#D4A373' },
                       { label: 'Pending Tasks', value: pendingTasksCount, sub: 'Ongoing & Assigned', icon: <CheckSquare size={16} />, theme: 'rose' },
                     ].map((kpi, i) => {
                       const t = themeMap[kpi.theme];
@@ -485,7 +515,6 @@ export default function SalesExecutiveDashboard() {
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* AREA GRAPH CONTAINER */}
                     <motion.div whileHover={{ y: -6 }} className="lg:col-span-2 relative overflow-hidden bg-white rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
                         <div className="flex items-center gap-2">
@@ -497,16 +526,15 @@ export default function SalesExecutiveDashboard() {
                             <button
                               key={period}
                               onClick={() => setTimePeriod(period)}
-                              className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${
-                                timePeriod === period ? 'bg-white text-[#D4A373] shadow-sm' : 'text-zinc-500 hover:text-zinc-700'
-                              }`}
+                              className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${timePeriod === period ? 'bg-white text-[#D4A373] shadow-sm' : 'text-zinc-500 hover:text-zinc-700'
+                                }`}
                             >
                               {period}
                             </button>
                           ))}
                         </div>
                       </div>
-                      
+
                       <TargetVsRevenueChart period={timePeriod} />
                     </motion.div>
 
@@ -534,6 +562,7 @@ export default function SalesExecutiveDashboard() {
                         <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><ShieldCheck size={16} className="text-rose-500" /> Assigned by Admin/Lead</h3>
                       </div>
                       <div className="flex flex-col gap-3 flex-1">
+                        {assignedTasks.length === 0 && <div className="text-center text-zinc-400 text-xs py-4">No tasks currently assigned.</div>}
                         {assignedTasks.map((task) => (
                           <div key={task.id} className="bg-rose-50/50 border border-rose-100 rounded-xl p-4">
                             <div className="flex justify-between items-start mb-2">
@@ -542,7 +571,7 @@ export default function SalesExecutiveDashboard() {
                             </div>
                             <div className="flex items-center gap-4 mt-3">
                               <span className="text-[10px] font-semibold text-zinc-500 bg-white px-2 py-1 rounded border border-zinc-200">By: {task.assigner}</span>
-                              <span className="text-[10px] text-zinc-500 flex items-center gap-1"><Clock size={12}/> Due: {task.deadline}</span>
+                              <span className="text-[10px] text-zinc-500 flex items-center gap-1"><Clock size={12} /> Due: {task.deadline}</span>
                             </div>
                             <button className="mt-4 w-full bg-white border border-zinc-200 text-zinc-700 hover:bg-rose-600 hover:text-white hover:border-rose-600 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors">
                               Mark as Done
@@ -555,23 +584,24 @@ export default function SalesExecutiveDashboard() {
                     <div className="sd-dealdeck-card rounded-[2rem] overflow-hidden p-6 flex flex-col">
                       <div className="flex items-center justify-between mb-6">
                         <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><Activity size={16} className="text-[#D4A373]" /> Ongoing Tasks Status</h3>
-                        <button className="text-[11px] font-bold text-[#D4A373] bg-zinc-50 px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/10 transition flex items-center gap-1"><Plus size={12}/> New Task</button>
+                        <button className="text-[11px] font-bold text-[#D4A373] bg-zinc-50 px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/10 transition flex items-center gap-1"><Plus size={12} /> New Task</button>
                       </div>
                       <div className="flex flex-col gap-3 flex-1">
+                        {ongoingTasks.length === 0 && <div className="text-center text-zinc-400 text-xs py-4">No active ongoing tasks.</div>}
                         {ongoingTasks.map((task) => (
                           <div key={task.id} className="bg-white border border-zinc-200 rounded-xl p-4 shadow-sm flex flex-col">
                             <p className="text-sm font-bold text-zinc-900 mb-2">{task.title}</p>
                             <div className="flex flex-wrap items-center gap-2 mb-4">
                               <span className="text-[10px] font-semibold text-zinc-600 bg-zinc-100 px-2 py-1 rounded">{task.type}</span>
                               <span className="text-[10px] font-semibold text-zinc-600 bg-zinc-100 px-2 py-1 rounded">{task.client}</span>
-                              <span className="text-[10px] text-zinc-400 flex items-center gap-1 ml-auto"><Clock size={12}/> {task.time}</span>
+                              <span className="text-[10px] text-zinc-400 flex items-center gap-1 ml-auto"><Clock size={12} /> {task.time}</span>
                             </div>
                             <div className="flex items-center justify-between mt-auto pt-3 border-t border-zinc-100">
                               <span className="text-[10px] font-bold uppercase text-zinc-400">Status</span>
-                              <select 
-                                value={task.status} 
+                              <select
+                                value={task.status}
                                 onChange={(e) => {
-                                  setOngoingTasks(ongoingTasks.map(t => t.id === task.id ? {...t, status: e.target.value} : t));
+                                  setOngoingTasks(ongoingTasks.map(t => t.id === task.id ? { ...t, status: e.target.value } : t));
                                 }}
                                 className="text-xs font-bold text-[#D4A373] bg-zinc-50 border-none rounded py-1 px-2 cursor-pointer outline-none focus:ring-2 focus:ring-violet-200"
                               >
@@ -608,7 +638,7 @@ export default function SalesExecutiveDashboard() {
                               <span className="text-[10px] font-bold text-zinc-400 bg-zinc-100 px-1.5 py-0.5 rounded-full">{stageLeads.length}</span>
                             </div>
                           </div>
-                          
+
                           <div className="flex flex-col gap-3 min-h-[100px]">
                             {stageLeads.map((lead, i) => (
                               <motion.div key={lead.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
@@ -619,8 +649,8 @@ export default function SalesExecutiveDashboard() {
                                   <div className="flex items-start justify-between mb-1">
                                     <p className="text-sm font-bold text-zinc-900 leading-snug truncate">{lead.company}</p>
                                   </div>
-                                  <p className="text-[11px] text-zinc-500 font-semibold mb-3">{lead.deal} • <span className="text-[#D4A373] font-black">₹{(lead.value/1000).toFixed(0)}k</span></p>
-                                  
+                                  <p className="text-[11px] text-zinc-500 font-semibold mb-3">{lead.deal} • <span className="text-[#D4A373] font-black">₹{(lead.value / 1000).toFixed(0)}k</span></p>
+
                                   <div className="bg-zinc-50 p-2.5 rounded-lg mb-4 space-y-2">
                                     <div className="flex items-center gap-2 text-[10px] text-zinc-600 font-medium">
                                       <User size={12} className="text-zinc-400" /> {lead.contactName}
@@ -636,7 +666,7 @@ export default function SalesExecutiveDashboard() {
                                   <div className="flex items-center gap-2 mt-auto border-t border-zinc-100 pt-3">
                                     <span className="text-[9px] font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded uppercase truncate">{lead.source}</span>
                                     {stage !== 'Won' && stage !== 'Lost' && (
-                                      <button 
+                                      <button
                                         onClick={() => moveToAccounts(lead)}
                                         className="ml-auto flex items-center gap-1 text-[10px] font-bold text-white bg-zinc-900 hover:bg-[#D4A373] px-3 py-1.5 rounded-md transition-colors"
                                       >
@@ -664,8 +694,9 @@ export default function SalesExecutiveDashboard() {
                   <div className="sd-dealdeck-card rounded-[2rem] overflow-hidden p-6">
                     <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider mb-6"><Briefcase size={16} className="text-[#D4A373]" /> Accounts Managed By Me</h3>
                     <p className="text-xs text-zinc-500 mb-6">Leads you start working on heavily can be moved here for long-term management.</p>
-                    
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {myAccounts.length === 0 && <div className="text-center text-zinc-400 text-xs py-4 col-span-full">No active accounts.</div>}
                       {myAccounts.map(acc => (
                         <div key={acc.id} className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-sm hover:border-[#D4A373]/30 transition-colors">
                           <div className="flex justify-between items-start mb-3">
@@ -681,7 +712,7 @@ export default function SalesExecutiveDashboard() {
                             </div>
                             <div className="text-right">
                               <p className="text-[9px] uppercase font-bold text-zinc-400">YTD Rev</p>
-                              <p className="text-xs font-black text-[#D4A373]">₹{(acc.ytdRevenue/100000).toFixed(1)}L</p>
+                              <p className="text-xs font-black text-[#D4A373]">₹{(acc.ytdRevenue / 100000).toFixed(1)}L</p>
                             </div>
                           </div>
                         </div>
@@ -700,15 +731,16 @@ export default function SalesExecutiveDashboard() {
                         <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#D4A373] to-[#D4A373] flex items-center justify-center shadow-md"><Activity size={14} className="text-white" /></div>
                         <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Lead Generation Sources</h3>
                       </div>
-                      
+
                       <div className="flex flex-col sm:flex-row items-center justify-around gap-6">
                         <DonutChart data={bookingModes} centerLabel="Revenue" />
                         <div className="grid grid-cols-1 gap-y-3 w-full sm:w-auto">
+                          {bookingModes.length === 0 && <div className="text-zinc-400 text-xs">No booking sources found.</div>}
                           {bookingModes.map((d, i) => (
                             <motion.div key={i} initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.08 }} className="flex items-center gap-3">
                               <span className="w-6 h-6 rounded flex items-center justify-center shrink-0 text-white shadow-sm" style={{ backgroundColor: d.color }}>{d.icon}</span>
                               <span className="text-xs text-zinc-600 font-bold truncate">{d.label}</span>
-                              <span className="text-xs font-black text-zinc-900 ml-auto pl-4">₹{(d.value/1000).toFixed(0)}k</span>
+                              <span className="text-xs font-black text-zinc-900 ml-auto pl-4">₹{(d.value / 1000).toFixed(0)}k</span>
                             </motion.div>
                           ))}
                         </div>
@@ -716,12 +748,12 @@ export default function SalesExecutiveDashboard() {
                     </motion.div>
 
                     <motion.div whileHover={{ y: -6 }} className="relative overflow-hidden bg-white rounded-[2rem] p-6 shadow-sm border border-zinc-200/60 flex flex-col justify-center">
-                       <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider mb-4 border-b border-zinc-100 pb-2">Insights</h3>
-                       <ul className="space-y-4 text-xs text-zinc-600 leading-relaxed">
-                         <li><span className="font-bold text-[#D4A373]">Call Enquiry</span> is your highest grossing source, contributing to majority of direct conversions.</li>
-                         <li><span className="font-bold text-[#D4A373]">Hotel Website</span> leads show a 30% higher closing probability compared to third-party.</li>
-                         <li><span className="font-bold text-[#D4A373]">Walk In Enquiry</span> numbers have doubled since last week. Ensure front-desk handoffs are seamless.</li>
-                       </ul>
+                      <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider mb-4 border-b border-zinc-100 pb-2">Insights</h3>
+                      <ul className="space-y-4 text-xs text-zinc-600 leading-relaxed">
+                        <li><span className="font-bold text-[#D4A373]">Call Enquiry</span> is your highest grossing source, contributing to majority of direct conversions.</li>
+                        <li><span className="font-bold text-[#D4A373]">Hotel Website</span> leads show a 30% higher closing probability compared to third-party.</li>
+                        <li><span className="font-bold text-[#D4A373]">Walk In Enquiry</span> numbers have doubled since last week. Ensure front-desk handoffs are seamless.</li>
+                      </ul>
                     </motion.div>
                   </div>
                 </motion.div>
@@ -730,7 +762,7 @@ export default function SalesExecutiveDashboard() {
               {/* TAB: OTA PERFORMANCE */}
               {activeTab === 'ota' && (
                 <motion.div key="ota" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
-                  
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                     {[
                       { label: 'Total Gross Revenue', value: `₹${(totalOtaGross / 100000).toFixed(2)}L`, sub: 'All OTA Channels', icon: <Globe size={16} />, theme: 'sky' },
@@ -759,10 +791,11 @@ export default function SalesExecutiveDashboard() {
                         <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center shadow-md"><PieChart size={14} className="text-white" /></div>
                         <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">OTA Booking Share</h3>
                       </div>
-                      
+
                       <div className="flex flex-col sm:flex-row items-center justify-around gap-6">
                         <DonutChart data={otaBookingShare} centerLabel="Bookings" />
                         <div className="grid grid-cols-1 gap-y-3 w-full sm:w-auto">
+                          {otaBookingShare.length === 0 && <div className="text-zinc-400 text-xs">No OTA data.</div>}
                           {otaBookingShare.map((d, i) => (
                             <motion.div key={i} initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.08 }} className="flex items-center gap-3">
                               <span className="w-3 h-3 rounded-full flex items-center justify-center shrink-0 shadow-sm" style={{ backgroundColor: d.color }} />
@@ -802,6 +835,7 @@ export default function SalesExecutiveDashboard() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-100">
+                          {otaData.length === 0 && <tr><td colSpan={7} className="text-center py-4 text-xs text-zinc-400">No OTA ledger data available.</td></tr>}
                           {otaData.map((ota, index) => {
                             const adr = ota.roomNights > 0 ? Math.round(ota.grossRevenue / ota.roomNights) : 0;
                             const netRev = ota.grossRevenue - (ota.grossRevenue * (ota.commissionRate / 100));
