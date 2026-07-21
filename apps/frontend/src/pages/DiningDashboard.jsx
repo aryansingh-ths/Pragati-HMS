@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
-import {
-  Utensils, Coffee, Clock, CheckCircle2, ChefHat, Receipt,
+import { Utensils, Coffee, Clock, CheckCircle2, ChefHat, Receipt,
   Calendar, Users, BellRing, Building2, Search, ArrowUpRight,
   TrendingUp, PieChart, LayoutGrid, X, Loader2, Plus, Flame, MapPin, 
-  RefreshCw // <-- Added the missing import here
-} from 'lucide-react';
+  RefreshCw, LogOut } from 'lucide-react';
 
 // =============================================
 // Helper Components
@@ -72,13 +70,13 @@ function OrderTrendLine({ data = [] }) {
       </svg>
       <AnimatePresence>
         {active && (
-          <motion.div initial={{ opacity: 0, y: 6, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 6, scale: 0.95 }} className="absolute pointer-events-none px-2.5 py-1.5 rounded-lg bg-zinc-900 text-white text-[10px] font-bold shadow-lg shadow-amber-500/20 whitespace-nowrap" style={{ left: `${(active.x / width) * 100}%`, top: `${(active.y / height) * 100}%`, transform: 'translate(-50%, -140%)' }}>
+          <motion.div initial={{ opacity: 0, y: 6, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 6, scale: 0.95 }} className="absolute pointer-events-none px-2.5 py-1.5 rounded-lg bg-zinc-900 text-white text-[10px] font-bold shadow-lg shadow-[#D4A373]/20 whitespace-nowrap" style={{ left: `${(active.x / width) * 100}%`, top: `${(active.y / height) * 100}%`, transform: 'translate(-50%, -140%)' }}>
             {active.label}: <span className="text-amber-300">{active.value} Orders</span>
           </motion.div>
         )}
       </AnimatePresence>
       <div className="flex justify-between mt-1 px-1">
-        {data.map((t, i) => (<span key={i} onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)} className={`text-[9px] font-black uppercase tracking-wide cursor-pointer transition-all duration-200 ${hoverIdx === i ? 'text-amber-600' : (t.isToday ? 'text-rose-500 animate-pulse font-extrabold' : 'text-zinc-400')}`}>{t.label}</span>))}
+        {data.map((t, i) => (<span key={i} onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)} className={`text-[9px] font-black uppercase tracking-wide cursor-pointer transition-all duration-200 ${hoverIdx === i ? 'text-[#D4A373]' : (t.isToday ? 'text-rose-500 animate-pulse font-extrabold' : 'text-zinc-400')}`}>{t.label}</span>))}
       </div>
     </div>
   );
@@ -107,16 +105,17 @@ export default function DiningDashboard() {
 
   // --- MOCK DATA FOR F&B OPERATIONS ---
   const themeMap = {
-    amber: { iconBg: 'bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-lg shadow-amber-500/30', glow: 'rgba(245,158,11,0.35)', ring: '#d97706' },
+    '#D4A373': { iconBg: 'bg-[#D4A373] text-zinc-900', glow: 'rgba(212,163,115,0.35)' },
+    amber: { iconBg: 'bg-gradient-to-br from-[#D4A373] to-[#D4A373] text-white shadow-lg shadow-[#D4A373]/20', glow: 'rgba(245,158,11,0.35)', ring: '#d97706' },
     rose: { iconBg: 'bg-gradient-to-br from-rose-400 to-pink-600 text-white shadow-lg shadow-rose-500/30', glow: 'rgba(244,63,94,0.35)', ring: '#e11d48' },
-    emerald: { iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30', glow: 'rgba(16,185,129,0.35)', ring: '#059669' },
+    emerald: { iconBg: 'bg-gradient-to-br from-[#D4A373] to-[#D4A373] text-white shadow-lg shadow-[#D4A373]/20', glow: 'rgba(16,185,129,0.35)', ring: '#059669' },
     indigo: { iconBg: 'bg-gradient-to-br from-indigo-500 to-blue-600 text-white shadow-lg shadow-indigo-500/30', glow: 'rgba(99,102,241,0.35)', ring: '#4f46e5' },
   };
 
   const metrics = [
-    { label: "Today's Revenue", value: "₹42,500", sub: "Rooms & Walk-ins", icon: <Receipt size={16} />, theme: 'emerald' },
+    { label: "Today's Revenue", value: "₹42,500", sub: "Rooms & Walk-ins", icon: <Receipt size={16} />, theme: '#D4A373' },
     { label: "Active KOTs", value: "14", sub: "Orders preparing in kitchen", icon: <Flame size={16} />, theme: 'rose' },
-    { label: "Avg Prep Time", value: "18m", sub: "-2m compared to yesterday", icon: <Clock size={16} />, theme: 'amber' },
+    { label: "Avg Prep Time", value: "18m", sub: "-2m compared to yesterday", icon: <Clock size={16} />, theme: '#D4A373' },
     { label: "Tables Occupied", value: "8/15", sub: "54% current seating capacity", icon: <Users size={16} />, theme: 'indigo' },
   ];
 
@@ -178,34 +177,26 @@ export default function DiningDashboard() {
         .dd-scrollbar::-webkit-scrollbar-thumb { background: rgba(161, 161, 170, 0.45); border-radius: 999px; }
         
         .dd-app-bg {
-          background:
-            radial-gradient(1000px 520px at 8% -10%, rgba(245,158,11,0.12) 0%, transparent 55%),
-            radial-gradient(900px 500px at 105% 8%, rgba(244,63,94,0.12) 0%, transparent 55%),
-            radial-gradient(760px 500px at 45% 115%, rgba(16,185,129,0.08) 0%, transparent 60%),
-            linear-gradient(180deg, #fffbeb 0%, #ffedd5 45%, #fef2f2 100%) !important;
-          background-attachment: fixed;
-          background-size: 140% 140%, 140% 140%, 140% 140%, auto;
-          animation: dd-mesh-shift 24s ease-in-out infinite;
+          background: #F8F1E3 !important;
         }
-        @keyframes dd-mesh-shift { 0%, 100% { background-position: 0% 0%, 100% 0%, 50% 100%, 0 0; } 50% { background-position: 10% 8%, 90% 10%, 44% 92%, 0 0; } }
 
         .dd-sidebar { background: #FFFFFF; box-shadow: 14px 17px 40px 4px rgba(112, 144, 176, 0.08); border: 1px solid rgba(226, 232, 240, 0.8); }
         .dd-card { background: #FFFFFF; border: 1px solid rgba(226, 232, 240, 0.8); box-shadow: 0px 18px 40px 0px rgba(112, 144, 176, 0.08); transition: all 0.3s ease; }
         .dd-glass-backdrop { background: rgba(24, 24, 27, 0.4); backdrop-filter: blur(10px); }
         .dd-glass-modal { background: rgba(255, 255, 255, 0.98); border: 1px solid rgba(226, 232, 240, 0.8); box-shadow: 0 30px 70px -12px rgba(245,158,11, 0.25); backdrop-filter: blur(24px); }
-        .dd-input { width: 100%; padding: 0.75rem 1.1rem; background: #FFF7ED; border: 1px solid #FED7AA; border-radius: 1rem; font-size: 0.875rem; font-weight: 500; outline: none; transition: border 0.3s; }
-        .dd-input:focus { border-color: #F59E0B; }
+        .dd-input { width: 100%; padding: 0.75rem 1.1rem; background: #F4F7FE; border: 1px solid #E2E8F0; border-radius: 1rem; font-size: 0.875rem; font-weight: 500; outline: none; transition: border 0.3s; }
+        .dd-input:focus { border-color: #D4A373; }
       `}</style>
 
       {/* SIDEBAR */}
       <div className="w-full lg:w-72 shrink-0 rounded-[2rem] p-6 flex flex-col gap-6 dd-sidebar sticky top-[7.5rem] self-start z-30 lg:h-[calc(100vh-7.8rem)]">
         <div className="flex items-center gap-3 px-2">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white shadow-md shadow-amber-500/30 shrink-0">
-            <Coffee size={19} />
+          <div className="w-10 h-10 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center justify-center shadow-xs shrink-0">
+            <Coffee size={19} className="text-[#D4A373]" />
           </div>
           <div>
             <h1 className="font-serif font-black text-[23px] text-zinc-600 text-base leading-none">Restaurant</h1>
-            <span className="text-[9px] font-bold text-amber-600 uppercase tracking-widest mt-1 block">F&B Operations</span>
+            <span className="text-[9px] font-bold text-[#D4A373] uppercase tracking-widest mt-1 block">F&B Operations</span>
           </div>
         </div>
 
@@ -215,7 +206,7 @@ export default function DiningDashboard() {
               <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">{group.heading}</p>
               <div className="flex flex-col gap-1">
                 {group.items.map(item => (
-                  <button key={item.key} onClick={() => setActiveTab(item.key)} className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === item.key ? 'bg-amber-500 text-white shadow-md shadow-amber-500/10' : 'text-zinc-500 hover:bg-orange-50 hover:text-zinc-900'}`}>
+                  <button key={item.key} onClick={() => setActiveTab(item.key)} className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === item.key ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'}`}>
                     {item.icon} {item.label}
                   </button>
                 ))}
@@ -226,7 +217,7 @@ export default function DiningDashboard() {
           {isAdmin && (
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Command Center</p>
-              <button onClick={() => navigate('/dashboard/manager')} className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-500 hover:bg-orange-50 hover:text-amber-600 transition-all text-left">
+              <button onClick={() => navigate('/dashboard/manager')} className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-500 hover:bg-zinc-50 hover:text-[#D4A373] transition-all text-left">
                 <span className="flex items-center gap-3"><Building2 size={15} /> Back to Admin</span><ArrowUpRight size={14} className="opacity-50" />
               </button>
             </div>
@@ -245,13 +236,33 @@ export default function DiningDashboard() {
           </div>
           <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
             <button onClick={refresh} className="p-2.5 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-500 transition-all"><RefreshCw size={15} className={isLoading ? 'animate-spin' : ''}/></button>
-            <div className="hidden md:flex items-center gap-2 bg-white pl-2.5 pr-3 py-1.5 rounded-xl border border-zinc-200 shadow-xs">
-              <div className="w-7 h-7 rounded-full bg-amber-500 text-white font-bold text-xs flex items-center justify-center shadow-xs">D</div>
-              <div className="text-left leading-none">
-                <span className="text-xs font-bold text-zinc-900 block">F&B Manager</span>
-                <span className="text-[8px] font-semibold text-zinc-500 uppercase tracking-widest mt-0.5 block">Restaurant</span>
-              </div>
-            </div>
+            {/* Profile Avatar Widget */}
+            {(() => {
+              const staffName = localStorage.getItem('hms_name') || 'Staff';
+              const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
+              const designation = 'Restaurant Manager';
+              return (
+                <motion.button
+                  whileHover={{ y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => {
+                    localStorage.clear();
+                    window.location.href = '/login';
+                  }}
+                  className="group flex items-center gap-3 bg-white pl-3 pr-4 py-1.5 rounded-2xl border border-zinc-200/60 shadow-xs hover:shadow-md hover:border-rose-200 hover:bg-rose-50 transition-all duration-300 cursor-pointer"
+                  title="Sign Out"
+                >
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-rose-500 to-red-600 group-hover:from-rose-500 group-hover:to-rose-600 text-white font-bold text-xs flex items-center justify-center shadow-xs transition-colors">
+                    {initials}
+                  </div>
+                  <div className="hidden sm:block text-left leading-none pr-1">
+                    <span className="text-xs font-bold text-zinc-900 group-hover:text-rose-600 transition-colors block">{staffName}</span>
+                    <span className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mt-0.5 block group-hover:text-rose-400 transition-colors">{designation}</span>
+                  </div>
+                  <LogOut size={16} className="text-zinc-400 group-hover:text-rose-500 transition-colors ml-1" />
+                </motion.button>
+              );
+            })()}
           </div>
         </div>
 
@@ -280,7 +291,7 @@ export default function DiningDashboard() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div className="bg-white rounded-[2rem] p-6 border border-zinc-200/60 shadow-sm relative overflow-hidden">
                     <div className="absolute -bottom-16 -right-10 w-56 h-56 rounded-full bg-amber-200/20 blur-3xl pointer-events-none" />
-                    <h3 className="font-black text-sm uppercase mb-4 flex items-center gap-2 text-zinc-800"><TrendingUp size={16} className="text-amber-500"/> Order Volume Trend</h3>
+                    <h3 className="font-black text-sm uppercase mb-4 flex items-center gap-2 text-zinc-800"><TrendingUp size={16} className="text-[#D4A373]"/> Order Volume Trend</h3>
                     <OrderTrendLine data={orderTrend} />
                   </div>
                   <div className="bg-white rounded-[2rem] p-6 border border-zinc-200/60 shadow-sm relative overflow-hidden">
@@ -307,8 +318,8 @@ export default function DiningDashboard() {
             {activeTab === 'kots' && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 h-[calc(100vh-14rem)] flex flex-col">
                 <div className="flex justify-between items-center bg-white p-4 rounded-[1.5rem] border border-zinc-200/60 shrink-0">
-                  <div className="flex items-center gap-2 text-sm font-bold uppercase text-zinc-800"><ChefHat size={16} className="text-amber-500"/> Live Kitchen Display</div>
-                  <button onClick={() => setIsKOTModalOpen(true)} className="bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase hover:bg-amber-600 transition-colors flex items-center gap-1"><Plus size={14}/> Punch Order</button>
+                  <div className="flex items-center gap-2 text-sm font-bold uppercase text-zinc-800"><ChefHat size={16} className="text-[#D4A373]"/> Live Kitchen Display</div>
+                  <button onClick={() => setIsKOTModalOpen(true)} className="bg-[#D4A373] text-white px-4 py-2 rounded-xl text-xs font-bold uppercase hover:bg-[#D4A373] transition-colors flex items-center gap-1"><Plus size={14}/> Punch Order</button>
                 </div>
                 
                 <div className="flex-1 flex gap-4 overflow-x-auto dd-scrollbar pb-2">
@@ -350,18 +361,18 @@ export default function DiningDashboard() {
                 <div className="bg-white p-5 rounded-[1.5rem] border border-zinc-200/60 flex flex-wrap gap-4 justify-between items-center">
                   <div className="flex items-center gap-2 text-sm font-bold uppercase text-zinc-800"><MapPin size={16} className="text-indigo-500"/> Floor Plan Status</div>
                   <div className="flex gap-4 text-xs font-bold text-zinc-500">
-                    <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-emerald-100 border border-emerald-400"/> Available</span>
+                    <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-[#D4A373]/10 border border-[#D4A373]/30"/> Available</span>
                     <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-rose-100 border border-rose-400"/> Occupied</span>
-                    <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-amber-100 border border-amber-400"/> Dirty</span>
+                    <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-[#D4A373]/10 border border-[#D4A373]/30"/> Dirty</span>
                     <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-sky-100 border border-sky-400"/> Reserved</span>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                   {tables.map(t => {
                     const styles = {
-                      Available: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+                      Available: 'bg-zinc-50 border-[#D4A373]/30 text-[#D4A373]',
                       Occupied: 'bg-rose-50 border-rose-200 text-rose-700',
-                      Dirty: 'bg-amber-50 border-amber-200 text-amber-700',
+                      Dirty: 'bg-zinc-50 border-[#D4A373]/30 text-[#D4A373]',
                       Reserved: 'bg-sky-50 border-sky-200 text-sky-700'
                     }[t.status];
                     return (
@@ -381,7 +392,7 @@ export default function DiningDashboard() {
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                 <div className="dd-card rounded-[2rem] overflow-hidden">
                   <div className="p-5 border-b border-zinc-150 flex justify-between items-center bg-white/40">
-                    <h3 className="font-bold flex gap-2 text-sm uppercase"><Utensils size={16} className="text-amber-600" /> Top Performing Items</h3>
+                    <h3 className="font-bold flex gap-2 text-sm uppercase"><Utensils size={16} className="text-[#D4A373]" /> Top Performing Items</h3>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
@@ -392,8 +403,8 @@ export default function DiningDashboard() {
                             <td className="p-4 text-sm font-bold text-zinc-900">{m.item}</td>
                             <td className="p-4"><span className="text-[10px] font-bold uppercase px-2 py-1 rounded-full bg-zinc-100 text-zinc-600">{m.category}</span></td>
                             <td className="p-4 text-sm font-bold text-zinc-600 text-center">{m.orders}</td>
-                            <td className="p-4 text-sm font-bold text-emerald-600 text-right">₹{m.revenue.toLocaleString('en-IN')}</td>
-                            <td className="p-4 text-right"><span className={`px-2 py-1 rounded-full text-[9px] font-bold uppercase border ${m.status === 'Low Stock' ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>{m.status}</span></td>
+                            <td className="p-4 text-sm font-bold text-[#D4A373] text-right">₹{m.revenue.toLocaleString('en-IN')}</td>
+                            <td className="p-4 text-right"><span className={`px-2 py-1 rounded-full text-[9px] font-bold uppercase border ${m.status === 'Low Stock' ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'}`}>{m.status}</span></td>
                           </tr>
                         ))}
                       </tbody>
@@ -406,7 +417,7 @@ export default function DiningDashboard() {
             {/* FALLBACK FOR UNIMPLEMENTED TABS */}
             {activeTab === 'billing' && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="dd-card rounded-[2rem] p-8 text-center text-zinc-500">
-                <Receipt size={32} className="mx-auto mb-3 text-amber-500 opacity-50" />
+                <Receipt size={32} className="mx-auto mb-3 text-[#D4A373] opacity-50" />
                 <h3 className="font-bold text-lg text-zinc-900 mb-2">Billing Module</h3>
                 <p className="text-sm">Connects directly to the main Finance ledger. (See Finance Dashboard)</p>
               </motion.div>
@@ -425,7 +436,7 @@ export default function DiningDashboard() {
               <form onSubmit={handleAddKOT} className="space-y-4">
                 <div><label className="block text-[10px] font-bold uppercase text-zinc-400 mb-1">Table / Room</label><input required placeholder="e.g. Table 5 or Room 102" value={kotForm.table} onChange={e => setKotForm({ ...kotForm, table: e.target.value })} className="dd-input" /></div>
                 <div><label className="block text-[10px] font-bold uppercase text-zinc-400 mb-1">Order Items</label><textarea required rows={4} placeholder="e.g. 2x Butter Chicken, 1x Naan" value={kotForm.items} onChange={e => setKotForm({ ...kotForm, items: e.target.value })} className="dd-input resize-none" /></div>
-                <button type="submit" className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 rounded-xl uppercase tracking-wider text-xs transition-colors">Send to Kitchen</button>
+                <button type="submit" className="w-full bg-[#D4A373] hover:bg-[#D4A373] text-white font-bold py-3 rounded-xl uppercase tracking-wider text-xs transition-colors">Send to Kitchen</button>
               </form>
             </motion.div>
           </motion.div>

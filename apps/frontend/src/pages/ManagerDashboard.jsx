@@ -1,13 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import {
-  Activity, Users, Lock, Unlock, Sparkles, DollarSign,
+import { Activity, Users, Lock, Unlock, Sparkles, DollarSign,
   Sliders, Wrench, Loader2, Plus, Trash2, X, ChevronDown, ChevronUp, Edit,
   TrendingUp, AlertTriangle, Clock, BedDouble, Zap, ArrowUpRight, ArrowDownRight,
   UserCheck, UserX, ShieldAlert, Hammer, Eye, CircleDot, RefreshCw, CheckCircle,
-  LogIn, DoorOpen, Maximize2, Search
-} from 'lucide-react';
+  LogIn, DoorOpen, Maximize2, Search, LogOut } from 'lucide-react';
 
 // SVG DONUT CHART COMPONENT (Pure SVG, no deps)
 function DonutChart({ data, size = 180 }) {
@@ -497,7 +495,7 @@ export default function ManagerDashboard() {
   const [salaryForm, setSalaryForm] = useState({ base_salary_monthly: 0, daily_deduction: 0 });
 
   const fetchWithAuth = useCallback(async (url, options = {}) => {
-    const token = localStorage.getItem('hms_token');
+    const token = sessionStorage.getItem('hms_token');
     if (!token) { navigate('/login'); return null; }
     try {
       const res = await fetch(url, {
@@ -1154,18 +1152,29 @@ export default function ManagerDashboard() {
 
             {/* Profile Avatar Widget */}
             {(() => {
-              const adminName = localStorage.getItem('hms_name') || 'Admin';
-              const initials = adminName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'AD';
+              const staffName = localStorage.getItem('hms_name') || 'Staff';
+              const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
+              const designation = 'Administrator';
               return (
-                <div className="flex items-center gap-2 bg-white pl-2.5 pr-3 py-1.5 rounded-xl border border-zinc-200/60 shadow-xs">
-                  <div className="w-7 h-7 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center shadow-xs">
+                <motion.button
+                  whileHover={{ y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => {
+                    localStorage.clear();
+                    window.location.href = '/login';
+                  }}
+                  className="group flex items-center gap-3 bg-white pl-3 pr-4 py-1.5 rounded-2xl border border-zinc-200/60 shadow-xs hover:shadow-md hover:border-rose-200 hover:bg-rose-50 transition-all duration-300 cursor-pointer"
+                  title="Sign Out"
+                >
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-600 to-indigo-700 group-hover:from-rose-500 group-hover:to-rose-600 text-white font-bold text-xs flex items-center justify-center shadow-xs transition-colors">
                     {initials}
                   </div>
-                  <div className="hidden sm:block text-left leading-none">
-                    <span className="text-xs font-bold text-zinc-900 block">{adminName}</span>
-                    <span className="text-[8px] font-semibold text-zinc-600 uppercase tracking-widest mt-0.5 block">Administrator</span>
+                  <div className="hidden sm:block text-left leading-none pr-1">
+                    <span className="text-xs font-bold text-zinc-900 group-hover:text-rose-600 transition-colors block">{staffName}</span>
+                    <span className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mt-0.5 block group-hover:text-rose-400 transition-colors">{designation}</span>
                   </div>
-                </div>
+                  <LogOut size={16} className="text-zinc-400 group-hover:text-rose-500 transition-colors ml-1" />
+                </motion.button>
               );
             })()}
           </div>
@@ -2265,6 +2274,9 @@ export default function ManagerDashboard() {
                               <option value="FRONT_DESK">Front Desk / Reception</option>
                               <option value="HOUSEKEEPING">Housekeeping Staff</option>
                               <option value="FINANCE">Finance Dept</option>
+                              <option value="RESTAURANT">Dining / Restaurant</option>
+                              <option value="SALES">Sales Dept</option>
+                              <option value="TRAVEL">Travel Desk</option>
                             </select>
                           </div>
                           <div className="flex-1">
@@ -3860,7 +3872,10 @@ export default function ManagerDashboard() {
                       { key: 'FRONT_DESK', label: 'Front Desk' },
                       { key: 'HOUSEKEEPING', label: 'Housekeeping' },
                       { key: 'ADMIN', label: 'Admin' },
-                      { key: 'FINANCE', label: 'Finance' }
+                      { key: 'FINANCE', label: 'Finance' },
+                      { key: 'RESTAURANT', label: 'Dining' },
+                      { key: 'SALES', label: 'Sales' },
+                      { key: 'TRAVEL', label: 'Travel' }
                     ].map(tab => (
                       <motion.button
                         key={tab.key}
@@ -4005,7 +4020,10 @@ export default function ManagerDashboard() {
                                 RECEPTION: 'from-sky-400 to-blue-500',
                                 HOUSEKEEPING: 'from-amber-400 to-orange-500',
                                 ADMIN: 'from-indigo-400 to-violet-500',
-                                FINANCE: 'from-emerald-400 to-teal-500'
+                                FINANCE: 'from-emerald-400 to-teal-500',
+                                RESTAURANT: 'from-rose-400 to-red-500',
+                                SALES: 'from-fuchsia-400 to-purple-500',
+                                TRAVEL: 'from-cyan-400 to-sky-500'
                               }[shift.role] || 'from-zinc-400 to-zinc-500';
                               const durationMins = shift.duration_minutes || 0;
                               const durationHrs = Math.floor(durationMins / 60);
@@ -4200,7 +4218,7 @@ export default function ManagerDashboard() {
                               <motion.div
                                 whileHover={{ scale: 1.08, rotate: -6 }}
                                 transition={{ type: 'spring', stiffness: 400, damping: 15 }}
-                                className={`w-14 h-14 shrink-0 rounded-2xl bg-gradient-to-br ${{ FRONT_DESK: 'from-sky-400 to-blue-500', HOUSEKEEPING: 'from-amber-400 to-orange-500', ADMIN: 'from-indigo-400 to-violet-500', FINANCE: 'from-emerald-400 to-teal-500' }[selectedStaff.role] || 'from-zinc-400 to-zinc-500'
+                                className={`w-14 h-14 shrink-0 rounded-2xl bg-gradient-to-br ${{ FRONT_DESK: 'from-sky-400 to-blue-500', HOUSEKEEPING: 'from-amber-400 to-orange-500', ADMIN: 'from-indigo-400 to-violet-500', FINANCE: 'from-emerald-400 to-teal-500', RESTAURANT: 'from-rose-400 to-red-500', SALES: 'from-fuchsia-400 to-purple-500', TRAVEL: 'from-cyan-400 to-sky-500' }[selectedStaff.role] || 'from-zinc-400 to-zinc-500'
                                   } flex items-center justify-center text-white text-lg font-black shadow-md hr-ring-indigo`}>
                                 {(selectedStaff.name || '').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)}
                               </motion.div>
@@ -4536,6 +4554,9 @@ export default function ManagerDashboard() {
                                     <option value="FRONT_DESK">FRONT_DESK (Front Desk)</option>
                                     <option value="HOUSEKEEPING">HOUSEKEEPING (Cleaning)</option>
                                     <option value="FINANCE">FINANCE</option>
+                                    <option value="RESTAURANT">RESTAURANT (Dining)</option>
+                                    <option value="SALES">SALES</option>
+                                    <option value="TRAVEL">TRAVEL</option>
                                     <option value="ADMIN">ADMIN (Manager)</option>
                                   </select>
                                 </div>

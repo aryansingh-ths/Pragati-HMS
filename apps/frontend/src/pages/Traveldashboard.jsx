@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useId, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import {
-  Plane, MapPin, Users, Wallet, Clock, CheckCircle2, AlertTriangle, RefreshCw,
+import { Plane, MapPin, Users, Wallet, Clock, CheckCircle2, AlertTriangle, RefreshCw,
   Download, Plus, X, Loader2, Search, Filter, TrendingUp, Building2, ArrowUpRight,
-  ShieldCheck, PieChart, Compass, CalendarClock, Phone, Mail, Star, Ban, CreditCard
-} from 'lucide-react';
+  ShieldCheck, PieChart, Compass, CalendarClock, Phone, Mail, Star, Ban, CreditCard, LogOut } from 'lucide-react';
 
 const API_BASE = 'http://localhost:3000';
 const getToken = () => sessionStorage.getItem('hms_token');
@@ -123,7 +121,7 @@ function TrendLine({ data = [], from = '#fb923c', to = '#c2410c', areaColor = '#
       <div className="flex justify-between mt-1 px-1">
         {data.map((t, i) => (
           <span key={i} onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)}
-            className={`text-[9px] font-black uppercase tracking-wide cursor-pointer transition-all duration-200 ${hoverIdx === i ? 'text-orange-600' : 'text-zinc-400'}`}>
+            className={`text-[9px] font-black uppercase tracking-wide cursor-pointer transition-all duration-200 ${hoverIdx === i ? 'text-[#D4A373]' : 'text-zinc-400'}`}>
             {t.label}
           </span>
         ))}
@@ -358,15 +356,16 @@ export default function TravelDashboard() {
   ];
 
   const themeMap = {
-    orange: { iconBg: 'bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30', glow: 'rgba(249,115,22,0.3)' },
+    '#D4A373': { iconBg: 'bg-[#D4A373] text-zinc-900', glow: 'rgba(212,163,115,0.35)' },
+    orange: { iconBg: 'bg-gradient-to-br from-[#D4A373] to-[#D4A373] text-white shadow-lg shadow-[#D4A373]/20', glow: 'rgba(249,115,22,0.3)' },
     sky: { iconBg: 'bg-gradient-to-br from-sky-500 to-blue-500 text-white shadow-lg shadow-sky-500/30', glow: 'rgba(14,165,233,0.3)' },
-    emerald: { iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30', glow: 'rgba(16,185,129,0.3)' },
+    emerald: { iconBg: 'bg-gradient-to-br from-[#D4A373] to-[#D4A373] text-white shadow-lg shadow-[#D4A373]/20', glow: 'rgba(16,185,129,0.3)' },
     rose: { iconBg: 'bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-lg shadow-rose-500/30', glow: 'rgba(225,29,72,0.3)' },
   };
 
   const overviewKpis = kpis ? [
-    { label: 'Total Bookings', value: kpis.total_bookings, sub: 'Active + completed', icon: <CalendarClock size={16} />, theme: 'orange' },
-    { label: 'Revenue This Month', value: inr(kpis.revenue_this_month), sub: 'From confirmed packages', icon: <Wallet size={16} />, theme: 'emerald' },
+    { label: 'Total Bookings', value: kpis.total_bookings, sub: 'Active + completed', icon: <CalendarClock size={16} />, theme: '#D4A373' },
+    { label: 'Revenue This Month', value: inr(kpis.revenue_this_month), sub: 'From confirmed packages', icon: <Wallet size={16} />, theme: '#D4A373' },
     { label: 'Upcoming Departures', value: kpis.upcoming_departures, sub: 'Confirmed & scheduled', icon: <Plane size={16} />, theme: 'sky' },
     { label: 'Pending Payments', value: inr(kpis.pending_payments_value), sub: `${kpis.pending_payments_count} booking${kpis.pending_payments_count === '1' ? '' : 's'} awaiting balance`, icon: <Clock size={16} />, theme: 'rose' },
   ] : [];
@@ -389,18 +388,7 @@ export default function TravelDashboard() {
         .fd-sidebar-scroll:hover::-webkit-scrollbar-thumb:hover { background: rgba(113, 113, 122, 0.65); }
 
         .fd-app-bg {
-          background:
-            radial-gradient(1000px 520px at 8% -10%, rgba(251,146,60,0.16) 0%, transparent 55%),
-            radial-gradient(900px 500px at 105% 8%, rgba(56,189,248,0.16) 0%, transparent 55%),
-            radial-gradient(760px 500px at 45% 115%, rgba(251,191,36,0.14) 0%, transparent 60%),
-            linear-gradient(180deg, #fff7ed 0%, #f0f9ff 45%, #fffbeb 100%) !important;
-          background-attachment: fixed;
-          background-size: 140% 140%, 140% 140%, 140% 140%, auto;
-          animation: fd-mesh-shift 24s ease-in-out infinite;
-        }
-        @keyframes fd-mesh-shift {
-          0%, 100% { background-position: 0% 0%, 100% 0%, 50% 100%, 0 0; }
-          50% { background-position: 10% 8%, 90% 10%, 44% 92%, 0 0; }
+          background: #F8F1E3 !important;
         }
 
         .fd-dealdeck-sidebar { background: #FFFFFF; box-shadow: 14px 17px 40px 4px rgba(112, 144, 176, 0.08); border: 1px solid rgba(226, 232, 240, 0.8); }
@@ -417,12 +405,12 @@ export default function TravelDashboard() {
           ═══════════════════════════════════════════════════════ */}
       <div className="w-full lg:w-72 shrink-0 rounded-[2rem] p-6 flex flex-col gap-6 fd-dealdeck-sidebar sticky top-[7.5rem] self-start z-30 lg:h-[calc(100vh-7.8rem)]">
         <div className="flex items-center gap-3 px-2">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white shadow-md shadow-orange-500/30 shrink-0">
-            <Plane size={19} />
+          <div className="w-10 h-10 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center justify-center shadow-xs shrink-0">
+            <Plane size={19} className="text-[#D4A373]" />
           </div>
           <div>
             <h1 className="font-serif font-black text-[25px] text-zinc-500 text-base leading-none">Travel Desk</h1>
-            <span className="text-[9px] font-bold text-orange-600 uppercase tracking-widest mt-1 block">Packages &amp; Purchases</span>
+            <span className="text-[9px] font-bold text-[#D4A373] uppercase tracking-widest mt-1 block">Packages &amp; Purchases</span>
           </div>
         </div>
 
@@ -436,7 +424,7 @@ export default function TravelDashboard() {
                     key={item.key}
                     onClick={() => setActiveTab(item.key)}
                     className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${
-                      activeTab === item.key ? 'bg-orange-600 text-white shadow-md shadow-orange-600/10' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
+                      activeTab === item.key ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
                     }`}
                   >
                     {item.icon} {item.label}
@@ -450,7 +438,7 @@ export default function TravelDashboard() {
             <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Command Center</p>
             <button
               onClick={() => navigate('/dashboard/manager')}
-              className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-500 hover:bg-zinc-50 hover:text-orange-600 transition-all text-left"
+              className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-500 hover:bg-zinc-50 hover:text-[#D4A373] transition-all text-left"
             >
               <span className="flex items-center gap-3"><Building2 size={15} /> Back to Admin</span>
               <ArrowUpRight size={14} className="opacity-50" />
@@ -458,8 +446,8 @@ export default function TravelDashboard() {
           </div>
         </div>
 
-        <div className="rounded-2xl bg-gradient-to-br from-orange-50 to-white border border-orange-100 p-4 flex items-start gap-3">
-          <ShieldCheck size={18} className="text-orange-600 shrink-0 mt-0.5" />
+        <div className="rounded-2xl bg-gradient-to-br from-zinc-50 to-white border border-zinc-100 p-4 flex items-start gap-3">
+          <ShieldCheck size={18} className="text-[#D4A373] shrink-0 mt-0.5" />
           <div>
             <p className="text-[11px] font-bold text-zinc-900 leading-tight">Season pacing on track</p>
             <p className="text-[10px] text-zinc-500 mt-0.5">No overdue payment escalations today.</p>
@@ -489,10 +477,10 @@ export default function TravelDashboard() {
           </div>
 
           <div className="flex items-center gap-3 self-end sm:self-center">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-orange-50 border border-orange-100 text-orange-700">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-50 border border-[#D4A373]/30 text-[#D4A373]">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75 animate-ping" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-orange-500" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#D4A373]" />
               </span>
               <span className="text-[9px] font-bold uppercase tracking-wider">Desk Live</span>
             </div>
@@ -501,17 +489,37 @@ export default function TravelDashboard() {
               <RefreshCw size={15} />
             </button>
 
-            <button className="bg-zinc-900 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-orange-600 transition-colors flex items-center gap-2 shadow-sm">
+            <button className="bg-zinc-900 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#D4A373] transition-colors flex items-center gap-2 shadow-sm">
               <Download size={14} /> Export
             </button>
 
-            <div className="hidden md:flex items-center gap-2 bg-white pl-2.5 pr-3 py-1.5 rounded-xl border border-zinc-200/60 shadow-xs">
-              <div className="w-7 h-7 rounded-full bg-orange-600 text-white font-bold text-xs flex items-center justify-center shadow-xs">T</div>
-              <div className="text-left leading-none">
-                <span className="text-xs font-bold text-zinc-900 block">Travel Desk Manager</span>
-                <span className="text-[8px] font-semibold text-zinc-600 uppercase tracking-widest mt-0.5 block">Packages</span>
-              </div>
-            </div>
+            {/* Profile Avatar Widget */}
+            {(() => {
+              const staffName = localStorage.getItem('hms_name') || 'Staff';
+              const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
+              const designation = 'Travel Desk Manager';
+              return (
+                <motion.button
+                  whileHover={{ y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => {
+                    localStorage.clear();
+                    window.location.href = '/login';
+                  }}
+                  className="group flex items-center gap-3 bg-white pl-3 pr-4 py-1.5 rounded-2xl border border-zinc-200/60 shadow-xs hover:shadow-md hover:border-rose-200 hover:bg-rose-50 transition-all duration-300 cursor-pointer"
+                  title="Sign Out"
+                >
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500 to-sky-600 group-hover:from-rose-500 group-hover:to-rose-600 text-white font-bold text-xs flex items-center justify-center shadow-xs transition-colors">
+                    {initials}
+                  </div>
+                  <div className="hidden sm:block text-left leading-none pr-1">
+                    <span className="text-xs font-bold text-zinc-900 group-hover:text-rose-600 transition-colors block">{staffName}</span>
+                    <span className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mt-0.5 block group-hover:text-rose-400 transition-colors">{designation}</span>
+                  </div>
+                  <LogOut size={16} className="text-zinc-400 group-hover:text-rose-500 transition-colors ml-1" />
+                </motion.button>
+              );
+            })()}
           </div>
         </div>
 
@@ -560,20 +568,20 @@ export default function TravelDashboard() {
 
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <motion.div whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                          className="relative overflow-hidden bg-gradient-to-br from-white via-white to-orange-50/40 rounded-[2rem] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_28px_-18px_rgba(249,115,22,0.22)] border border-zinc-200/60">
+                          className="relative overflow-hidden bg-gradient-to-br from-white via-white to-zinc-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
                           <div className="absolute -bottom-16 -right-10 w-56 h-56 rounded-full bg-orange-200/20 blur-3xl pointer-events-none" />
                           <div className="relative flex items-center justify-between mb-4">
                             <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-md shadow-orange-500/30"><TrendingUp size={14} className="text-white" /></div>
+                              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#D4A373] to-[#D4A373] flex items-center justify-center shadow-md shadow-[#D4A373]/20"><TrendingUp size={14} className="text-white" /></div>
                               <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">7-Day Booking Revenue</h3>
                             </div>
-                            <span className="text-[9px] font-bold text-orange-600 uppercase tracking-widest bg-orange-50 px-2.5 py-1 rounded-full border border-orange-100">Live</span>
+                            <span className="text-[9px] font-bold text-[#D4A373] uppercase tracking-widest bg-zinc-50 px-2.5 py-1 rounded-full border border-[#D4A373]/30">Live</span>
                           </div>
                           <TrendLine data={trend} />
                         </motion.div>
 
                         <motion.div whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                          className="relative overflow-hidden bg-gradient-to-br from-white via-white to-sky-50/40 rounded-[2rem] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_28px_-18px_rgba(14,165,233,0.22)] border border-zinc-200/60">
+                          className="relative overflow-hidden bg-gradient-to-br from-white via-white to-sky-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
                           <div className="absolute -top-14 -right-14 w-40 h-40 rounded-full bg-sky-300/20 blur-3xl pointer-events-none" />
                           <div className="relative flex items-center gap-2 mb-4">
                             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-sky-500 to-blue-500 flex items-center justify-center shadow-md shadow-sky-500/30"><PieChart size={14} className="text-white" /></div>
@@ -596,8 +604,8 @@ export default function TravelDashboard() {
 
                       <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
                         <div className="p-5 border-b border-zinc-150 flex justify-between items-center bg-white/40">
-                          <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><CalendarClock size={16} className="text-orange-600" /> Recent Bookings</h3>
-                          <button onClick={() => setActiveTab('bookings')} className="text-xs font-semibold text-orange-600 hover:text-orange-700 flex items-center gap-1">
+                          <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><CalendarClock size={16} className="text-[#D4A373]" /> Recent Bookings</h3>
+                          <button onClick={() => setActiveTab('bookings')} className="text-xs font-semibold text-[#D4A373] hover:text-[#D4A373] flex items-center gap-1">
                             View All <ArrowUpRight size={12} />
                           </button>
                         </div>
@@ -622,7 +630,7 @@ export default function TravelDashboard() {
                                   <td className="p-4 text-sm font-bold text-zinc-900 text-right">{inr(b.amount)}</td>
                                   <td className="p-4 text-right">
                                     <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
-                                      b.booking_status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                                      b.booking_status === 'Completed' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
                                       : b.booking_status === 'Cancelled' ? 'bg-rose-50 text-rose-600 border-rose-200'
                                       : 'bg-sky-50 text-sky-600 border-sky-200'
                                     }`}>
@@ -648,7 +656,7 @@ export default function TravelDashboard() {
                 <motion.div key="packages" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
 
                   <div className="flex justify-end">
-                    <button onClick={() => setIsPackageModalOpen(true)} className="bg-zinc-900 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-orange-600 transition-colors flex items-center gap-2">
+                    <button onClick={() => setIsPackageModalOpen(true)} className="bg-zinc-900 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#D4A373] transition-colors flex items-center gap-2">
                       <Plus size={14} /> Add Package
                     </button>
                   </div>
@@ -660,7 +668,7 @@ export default function TravelDashboard() {
                   ) : (
                     <>
                       <div className="fd-dealdeck-card rounded-[2rem] p-6">
-                        <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider mb-5"><Compass size={16} className="text-orange-600" /> Revenue by Package</h3>
+                        <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider mb-5"><Compass size={16} className="text-[#D4A373]" /> Revenue by Package</h3>
                         <BarRankChart data={packages.map((p, i) => ({ label: p.name, value: Number(p.revenue), color: PACKAGE_PALETTE[i % PACKAGE_PALETTE.length] }))} />
                       </div>
 
@@ -675,7 +683,7 @@ export default function TravelDashboard() {
                               <div className="w-11 h-11 rounded-xl flex items-center justify-center text-white shadow-md" style={{ background: PACKAGE_PALETTE[i % PACKAGE_PALETTE.length], boxShadow: `0 10px 20px -8px ${PACKAGE_PALETTE[i % PACKAGE_PALETTE.length]}88` }}>
                                 <Plane size={19} />
                               </div>
-                              <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-full border ${p.is_active ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-zinc-100 text-zinc-500 border-zinc-200'}`}>
+                              <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-full border ${p.is_active ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30' : 'bg-zinc-100 text-zinc-500 border-zinc-200'}`}>
                                 {p.is_active ? 'Active' : 'Inactive'}
                               </span>
                             </div>
@@ -696,7 +704,7 @@ export default function TravelDashboard() {
                                 <p className="text-lg font-black text-zinc-900">{inr(p.price)}</p>
                                 <p className="text-[10px] text-zinc-400">{p.bookings_count} bookings · {inr(p.revenue)} revenue</p>
                               </div>
-                              <button onClick={() => handleTogglePackage(p.id)} className="text-[11px] font-bold text-zinc-500 hover:text-orange-600 px-3 py-1.5 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors">
+                              <button onClick={() => handleTogglePackage(p.id)} className="text-[11px] font-bold text-zinc-500 hover:text-[#D4A373] px-3 py-1.5 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors">
                                 {p.is_active ? 'Deactivate' : 'Activate'}
                               </button>
                             </div>
@@ -716,7 +724,7 @@ export default function TravelDashboard() {
 
                   <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
                     <div className="p-5 border-b border-zinc-150 flex flex-col lg:flex-row gap-3 lg:items-center justify-between bg-white/40">
-                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><CalendarClock size={16} className="text-orange-600" /> Purchases</h3>
+                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><CalendarClock size={16} className="text-[#D4A373]" /> Purchases</h3>
                       <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
                         <div className="relative w-full sm:w-56">
                           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
@@ -728,7 +736,7 @@ export default function TravelDashboard() {
                           <option value="Completed">Completed</option>
                           <option value="Cancelled">Cancelled</option>
                         </select>
-                        <button onClick={() => setIsBookingModalOpen(true)} className="bg-zinc-900 text-white px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-orange-600 transition-colors flex items-center justify-center gap-2 shrink-0">
+                        <button onClick={() => setIsBookingModalOpen(true)} className="bg-zinc-900 text-white px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-[#D4A373] transition-colors flex items-center justify-center gap-2 shrink-0">
                           <Plus size={13} /> New Booking
                         </button>
                       </div>
@@ -767,15 +775,15 @@ export default function TravelDashboard() {
                                 <td className="p-4 text-sm font-bold text-zinc-900 text-right">{inr(b.amount)}</td>
                                 <td className="p-4 text-right">
                                   <span className={`px-2 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
-                                    b.payment_status === 'Paid' ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                                    : b.payment_status === 'Partial' ? 'bg-amber-50 text-amber-600 border-amber-200'
+                                    b.payment_status === 'Paid' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                    : b.payment_status === 'Partial' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
                                     : b.payment_status === 'Refunded' ? 'bg-zinc-100 text-zinc-500 border-zinc-200'
                                     : 'bg-rose-50 text-rose-600 border-rose-200'
                                   }`}>{b.payment_status}</span>
                                 </td>
                                 <td className="p-4 text-right">
                                   <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
-                                    b.booking_status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                                    b.booking_status === 'Completed' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
                                     : b.booking_status === 'Cancelled' ? 'bg-rose-50 text-rose-600 border-rose-200'
                                     : 'bg-sky-50 text-sky-600 border-sky-200'
                                   }`}>
@@ -786,7 +794,7 @@ export default function TravelDashboard() {
                                 <td className="p-4 text-right">
                                   <div className="flex items-center justify-end gap-1.5">
                                     {b.payment_status !== 'Paid' && b.booking_status !== 'Cancelled' && (
-                                      <button onClick={() => handleUpdateBookingStatus(b.id, { payment_status: 'Paid' })} className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700">Mark Paid</button>
+                                      <button onClick={() => handleUpdateBookingStatus(b.id, { payment_status: 'Paid' })} className="text-[10px] font-bold text-[#D4A373] hover:text-[#D4A373]">Mark Paid</button>
                                     )}
                                     {b.booking_status === 'Confirmed' && (
                                       <button onClick={() => handleUpdateBookingStatus(b.id, { booking_status: 'Cancelled' })} className="text-[10px] font-bold text-rose-500 hover:text-rose-600">Cancel</button>
@@ -811,7 +819,7 @@ export default function TravelDashboard() {
 
                   <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
                     <div className="p-5 border-b border-zinc-150 bg-white/40">
-                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><Users size={16} className="text-orange-600" /> Customer Purchase History</h3>
+                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><Users size={16} className="text-[#D4A373]" /> Customer Purchase History</h3>
                     </div>
 
                     {!customersLoaded ? (
@@ -836,7 +844,7 @@ export default function TravelDashboard() {
                               <tr key={idx} className="hover:bg-zinc-50/60 transition-colors">
                                 <td className="p-4 text-sm font-bold text-zinc-900 flex items-center gap-2">
                                   {c.guest_name}
-                                  {Number(c.total_spent) > 100000 && <Star size={12} className="text-amber-500 fill-amber-500" />}
+                                  {Number(c.total_spent) > 100000 && <Star size={12} className="text-[#D4A373] fill-[#D4A373]" />}
                                 </td>
                                 <td className="p-4 text-xs text-zinc-500">
                                   <span className="flex items-center gap-1"><Mail size={11} /> {c.guest_email || '—'}</span>
@@ -868,7 +876,7 @@ export default function TravelDashboard() {
               className="w-full max-w-md fd-glass-modal rounded-3xl p-7 overflow-y-auto max-h-[90vh]">
               <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center"><Plane size={20} /></div>
+                  <div className="w-10 h-10 rounded-xl bg-[#D4A373]/10 text-[#D4A373] flex items-center justify-center"><Plane size={20} /></div>
                   <div>
                     <h2 className="text-lg font-serif font-bold text-zinc-900">Add Travel Package</h2>
                     <p className="text-xs text-zinc-500">List a new package for sale</p>
@@ -912,7 +920,7 @@ export default function TravelDashboard() {
                     <input type="number" placeholder="4" value={packageForm.max_travelers} onChange={e => setPackageForm({ ...packageForm, max_travelers: e.target.value })} className="fd-input bg-white" />
                   </div>
                 </div>
-                <button type="submit" className="w-full bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 mt-4">
+                <button type="submit" className="w-full bg-gradient-to-r from-[#D4A373] to-[#D4A373] hover:from-[#B38355] hover:to-[#B38355] text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-lg shadow-[#D4A373]/20 flex items-center justify-center gap-2 mt-4">
                   <Plane size={16} /> Add Package
                 </button>
               </form>
@@ -930,7 +938,7 @@ export default function TravelDashboard() {
               className="w-full max-w-md fd-glass-modal rounded-3xl p-7 overflow-y-auto max-h-[90vh]">
               <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center"><CalendarClock size={20} /></div>
+                  <div className="w-10 h-10 rounded-xl bg-[#D4A373]/10 text-[#D4A373] flex items-center justify-center"><CalendarClock size={20} /></div>
                   <div>
                     <h2 className="text-lg font-serif font-bold text-zinc-900">New Booking</h2>
                     <p className="text-xs text-zinc-500">Record a package purchase</p>
@@ -978,7 +986,7 @@ export default function TravelDashboard() {
                     <option value="Paid">Paid</option>
                   </select>
                 </div>
-                <button type="submit" className="w-full bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 mt-4">
+                <button type="submit" className="w-full bg-gradient-to-r from-[#D4A373] to-[#D4A373] hover:from-[#B38355] hover:to-[#B38355] text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-lg shadow-[#D4A373]/20 flex items-center justify-center gap-2 mt-4">
                   <CreditCard size={16} /> Record Booking
                 </button>
               </form>

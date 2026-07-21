@@ -1,13 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, animate } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import {
-  Sparkles, ClipboardCheck, AlertTriangle, CheckCircle2,
+import { Sparkles, ClipboardCheck, AlertTriangle, CheckCircle2,
   BedDouble, ArrowRight, Loader2, X, RefreshCw,
   Droplets, Eye, Wrench, ShieldCheck, PackageOpen,
   Plus, Minus, Send, AlertCircle, Building2, TrendingUp, Clock,
-  Radio, Zap, SprayCan
-} from 'lucide-react';
+  Radio, Zap, SprayCan, LogOut } from 'lucide-react';
 
 const API_BASE = 'http://localhost:3000';
 
@@ -58,9 +56,8 @@ const FD_STYLES = `
   .fd-live-dot { animation: fd-live-dot 2s cubic-bezier(0.4,0,0.6,1) infinite; }
 
   .fd-dealdeck-sidebar {
-    background: rgba(255,255,255,0.92);
-    backdrop-filter: blur(12px);
-    box-shadow: 14px 17px 40px 4px rgba(56, 189, 248, 0.10);
+    background: #FFFFFF;
+    box-shadow: 14px 17px 40px 4px rgba(112, 144, 176, 0.08);
     border: 1px solid rgba(226, 232, 240, 0.8);
   }
 
@@ -678,91 +675,68 @@ export default function HousekeepingDashboard() {
       >
         {/* Brand Header */}
         <div className="flex items-center gap-3">
-          <motion.div
-            whileHover={{ rotate: -10, scale: 1.1 }}
-            animate={{ y: [0, -3, 0] }}
-            transition={{ y: { duration: 3, repeat: Infinity, ease: 'easeInOut' }, rotate: { type: 'spring', stiffness: 400, damping: 12 }, scale: { type: 'spring', stiffness: 400, damping: 12 } }}
-            className="relative w-11 h-11 rounded-xl fd-brand-mark flex items-center justify-center shadow-xs bg-zinc-50 border border-zinc-100"
-          >
-            <SprayCan size={20} className="text-[#D4A373]" />
-          </motion.div>
+          <div className="w-10 h-10 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center justify-center shadow-xs">
+            <SprayCan className="text-[#D4A373]" size={20} />
+          </div>
           <div>
             <h1 className="font-serif font-black text-[25px] text-zinc-500 text-base leading-none">Housekeeping</h1>
-            <span className="text-[9px] font-bold text-[#D4A373] uppercase tracking-widest mt-1 flex items-center gap-1">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="fd-live-dot absolute inline-flex h-full w-full rounded-full bg-[#D4A373]" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#D4A373]" />
-              </span>
-              Staff Operations
-            </span>
+            <span className="text-[9px] font-bold text-[#D4A373] uppercase tracking-widest mt-1 block">Staff Operations</span>
           </div>
         </div>
 
         {/* Navigation Categories */}
-        <div className="flex flex-col gap-6 flex-1 overflow-y-auto fd-sidebar-scroll pr-1">
+        <div className="flex flex-col gap-4 flex-1 overflow-y-auto fd-sidebar-scroll pr-1">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Workflow Filters</p>
             <div className="flex flex-col gap-1">
-              <motion.button
-                whileHover={{ x: 3 }}
-                whileTap={{ scale: 0.97 }}
+              <button
                 onClick={() => setActiveFilter('all')}
-                className={`relative z-10 flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${activeFilter === 'all' ? 'text-white' : 'text-zinc-500 hover:bg-amber-50 hover:text-[#D4A373]'
+                className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeFilter === 'all'
+                  ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
                   }`}
               >
-                {activeFilter === 'all' && (
-                  <motion.span layoutId="fd-sidebar-pill" transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="absolute inset-0 bg-gradient-to-r from-[#D4A373] to-[#B3835B] shadow-md shadow-[#D4A373]/30 rounded-xl" />
-                )}
-                <span className="relative flex items-center gap-3"><span className="fd-icon-btn"><Building2 size={15} /></span> All Active Rooms</span>
-              </motion.button>
+                <span className="flex items-center gap-3"><Building2 size={16} /> All Active Rooms</span>
+              </button>
 
-              <motion.button
-                whileHover={{ x: 3 }}
-                whileTap={{ scale: 0.97 }}
+              <button
                 onClick={() => setActiveFilter('dirty')}
-                className={`relative z-10 flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${activeFilter === 'dirty' ? 'text-white' : 'text-zinc-500 hover:bg-amber-50 hover:text-[#D4A373]'
+                className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeFilter === 'dirty'
+                  ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
                   }`}
               >
-                {activeFilter === 'dirty' && (
-                  <motion.span layoutId="fd-sidebar-pill" transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="absolute inset-0 bg-gradient-to-r from-[#D4A373] to-[#B3835B] shadow-md shadow-[#D4A373]/30 rounded-xl" />
-                )}
-                <span className="relative flex items-center gap-3"><span className="fd-icon-btn"><Droplets size={15} /></span> Needs Cleaning</span>
-                <span className={`relative px-2 py-0.5 rounded-md text-[10px] transition-transform duration-300 ${activeFilter === 'dirty' ? 'bg-white/25 text-white scale-110' : 'bg-amber-50 text-[#D4A373] font-bold'}`}>
+                <span className="flex items-center gap-3"><Droplets size={16} /> Needs Cleaning</span>
+                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${activeFilter === 'dirty' ? 'bg-zinc-900/10 text-zinc-900' : 'bg-zinc-100 text-zinc-500'}`}>
                   <CountUp value={stats.dirty} />
                 </span>
-              </motion.button>
+              </button>
 
-              <motion.button
-                whileHover={{ x: 3 }}
-                whileTap={{ scale: 0.97 }}
+              <button
                 onClick={() => setActiveFilter('cleaning')}
-                className={`relative z-10 flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${activeFilter === 'cleaning' ? 'text-white' : 'text-zinc-500 hover:bg-amber-50 hover:text-[#D4A373]'
+                className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeFilter === 'cleaning'
+                  ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
                   }`}
               >
-                {activeFilter === 'cleaning' && (
-                  <motion.span layoutId="fd-sidebar-pill" transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="absolute inset-0 bg-gradient-to-r from-[#D4A373] to-[#B3835B] shadow-md shadow-[#D4A373]/30 rounded-xl" />
-                )}
-                <span className="relative flex items-center gap-3"><span className="fd-icon-btn"><Sparkles size={15} /></span> In Progress</span>
-                <span className={`relative px-2 py-0.5 rounded-md text-[10px] transition-transform duration-300 ${activeFilter === 'cleaning' ? 'bg-white/25 text-white scale-110' : 'bg-amber-50 text-[#D4A373] font-bold'}`}>
+                <span className="flex items-center gap-3"><Sparkles size={16} /> In Progress</span>
+                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${activeFilter === 'cleaning' ? 'bg-zinc-900/10 text-zinc-900' : 'bg-zinc-100 text-zinc-500'}`}>
                   <CountUp value={stats.cleaning} />
                 </span>
-              </motion.button>
+              </button>
 
-              <motion.button
-                whileHover={{ x: 3 }}
-                whileTap={{ scale: 0.97 }}
+              <button
                 onClick={() => setActiveFilter('inspecting')}
-                className={`relative z-10 flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-colors duration-300 overflow-hidden ${activeFilter === 'inspecting' ? 'text-white' : 'text-zinc-500 hover:bg-amber-50 hover:text-[#D4A373]'
+                className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeFilter === 'inspecting'
+                  ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
                   }`}
               >
-                {activeFilter === 'inspecting' && (
-                  <motion.span layoutId="fd-sidebar-pill" transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="absolute inset-0 bg-gradient-to-r from-[#D4A373] to-[#B3835B] shadow-md shadow-[#D4A373]/30 rounded-xl" />
-                )}
-                <span className="relative flex items-center gap-3"><span className="fd-icon-btn"><Eye size={15} /></span> Awaiting Inspection</span>
-                <span className={`relative px-2 py-0.5 rounded-md text-[10px] transition-transform duration-300 ${activeFilter === 'inspecting' ? 'bg-white/25 text-white scale-110' : 'bg-amber-50 text-[#D4A373] font-bold'}`}>
+                <span className="flex items-center gap-3"><Eye size={16} /> Awaiting Inspection</span>
+                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${activeFilter === 'inspecting' ? 'bg-zinc-900/10 text-zinc-900' : 'bg-zinc-100 text-zinc-500'}`}>
                   <CountUp value={stats.inspecting} />
                 </span>
-              </motion.button>
+              </button>
             </div>
           </div>
         </div>
@@ -808,24 +782,28 @@ export default function HousekeepingDashboard() {
             {/* Profile Avatar Widget */}
             {(() => {
               const staffName = localStorage.getItem('hms_name') || 'Staff';
-              const staffRole = localStorage.getItem('hms_role') || 'HOUSEKEEPING';
-              const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'HK';
-              const designationMap = {
-                FRONT_DESK: 'Front Desk Agent', RECEPTION: 'Front Desk Agent',
-                HOUSEKEEPING: 'Housekeeper', ADMIN: 'Administrator',
-                FINANCE: 'Finance Officer', RESTAURANT: 'Restaurant Staff'
-              };
-              const designation = designationMap[staffRole] || 'Staff';
+              const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
+              const designation = 'Head Housekeeper';
               return (
-                <motion.div whileHover={{ y: -2 }} className="flex items-center gap-2 bg-white pl-2.5 pr-3 py-1.5 rounded-xl border border-zinc-200/60 shadow-xs hover:shadow-md transition-shadow duration-300">
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white font-bold text-xs flex items-center justify-center shadow-xs">
+                <motion.button
+                  whileHover={{ y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => {
+                    localStorage.clear();
+                    window.location.href = '/login';
+                  }}
+                  className="group flex items-center gap-3 bg-white pl-3 pr-4 py-1.5 rounded-2xl border border-zinc-200/60 shadow-xs hover:shadow-md hover:border-rose-200 hover:bg-rose-50 transition-all duration-300 cursor-pointer"
+                  title="Sign Out"
+                >
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 group-hover:from-rose-500 group-hover:to-rose-600 text-white font-bold text-xs flex items-center justify-center shadow-xs transition-colors">
                     {initials}
                   </div>
-                  <div className="hidden sm:block text-left leading-none">
-                    <span className="text-xs font-bold text-zinc-900 block">{staffName}</span>
-                    <span className="text-[8px] font-semibold text-zinc-600 uppercase tracking-widest mt-0.5 block">{designation}</span>
+                  <div className="hidden sm:block text-left leading-none pr-1">
+                    <span className="text-xs font-bold text-zinc-900 group-hover:text-rose-600 transition-colors block">{staffName}</span>
+                    <span className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mt-0.5 block group-hover:text-rose-400 transition-colors">{designation}</span>
                   </div>
-                </motion.div>
+                  <LogOut size={16} className="text-zinc-400 group-hover:text-rose-500 transition-colors ml-1" />
+                </motion.button>
               );
             })()}
           </div>
