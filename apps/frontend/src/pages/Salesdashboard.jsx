@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import {
-  Target, TrendingUp, Briefcase, Handshake, Calendar, Search, Plus, X, Loader2,
+import { Target, TrendingUp, Briefcase, Handshake, Calendar, Search, Plus, X, Loader2,
   AlertTriangle, CheckCircle2, Clock, XCircle, Send, FileText, DollarSign,
   ArrowUpRight, Star, ChevronRight, PieChart, Trophy, CalendarClock, Eye,
   PhoneCall, Mail, CheckSquare, ListTodo, Flame, Activity, ShieldCheck, Globe,
-  User, Building2, MapPin, BarChart3, ArrowRight, Percent, TrendingDown
-} from 'lucide-react';
+  User, Building2, MapPin, BarChart3, ArrowRight, Percent, TrendingDown, LogOut } from 'lucide-react';
 
 // =============================================
 // SVG DONUT CHART
@@ -155,8 +153,8 @@ function TargetVsRevenueChart({ period }) {
         <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-500 uppercase">
           <div className="w-3 border-t-2 border-dashed border-zinc-400"></div> Target
         </div>
-        <div className="flex items-center gap-1.5 text-[10px] font-bold text-violet-600 uppercase">
-          <div className="w-3 border-t-2 border-violet-600"></div> Revenue
+        <div className="flex items-center gap-1.5 text-[10px] font-bold text-[#D4A373] uppercase">
+          <div className="w-3 border-t-2 border-[#D4A373]"></div> Revenue
         </div>
       </div>
       
@@ -320,9 +318,10 @@ export default function SalesExecutiveDashboard() {
   const stageColors = { 'New': '#94a3b8', 'Contacted': '#0ea5e9', 'Proposal Sent': '#f59e0b', 'Negotiation': '#8b5cf6', 'Won': '#10b981', 'Lost': '#f43f5e' };
   
   const themeMap = {
-    violet: { iconBg: 'bg-gradient-to-br from-violet-500 to-purple-600 text-white', glow: 'rgba(124,58,237,0.35)' },
-    amber: { iconBg: 'bg-gradient-to-br from-amber-400 to-orange-500 text-white', glow: 'rgba(245,158,11,0.35)' },
-    emerald: { iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-500 text-white', glow: 'rgba(16,185,129,0.35)' },
+    '#D4A373': { iconBg: 'bg-[#D4A373] text-zinc-900', glow: 'rgba(212,163,115,0.35)' },
+    violet: { iconBg: 'bg-gradient-to-br from-[#D4A373] to-[#D4A373] text-white', glow: 'rgba(124,58,237,0.35)' },
+    amber: { iconBg: 'bg-gradient-to-br from-[#D4A373] to-[#D4A373] text-white', glow: 'rgba(245,158,11,0.35)' },
+    emerald: { iconBg: 'bg-gradient-to-br from-[#D4A373] to-[#D4A373] text-white', glow: 'rgba(16,185,129,0.35)' },
     sky: { iconBg: 'bg-gradient-to-br from-sky-500 to-blue-500 text-white', glow: 'rgba(14,165,233,0.35)' },
     rose: { iconBg: 'bg-gradient-to-br from-rose-500 to-pink-600 text-white', glow: 'rgba(225,29,72,0.3)' },
   };
@@ -361,10 +360,7 @@ export default function SalesExecutiveDashboard() {
         .sd-scrollbar::-webkit-scrollbar-thumb { background: rgba(161, 161, 170, 0.45); border-radius: 999px; }
 
         .sd-app-bg {
-          background: radial-gradient(1000px 520px at 8% -10%, rgba(124,58,237,0.14) 0%, transparent 55%),
-                      radial-gradient(900px 500px at 105% 8%, rgba(168,85,247,0.14) 0%, transparent 55%),
-                      linear-gradient(180deg, #faf5ff 0%, #f5f3ff 45%, #f0f9ff 100%) !important;
-          background-attachment: fixed;
+          background: #F8F1E3 !important;
         }
         .sd-dealdeck-sidebar { background: #FFFFFF; box-shadow: 14px 17px 40px 4px rgba(112, 144, 176, 0.08); border: 1px solid rgba(226, 232, 240, 0.8); }
         .sd-dealdeck-card { background: #FFFFFF; border: 1px solid rgba(226, 232, 240, 0.8); box-shadow: 0px 18px 40px 0px rgba(112, 144, 176, 0.08); }
@@ -374,12 +370,12 @@ export default function SalesExecutiveDashboard() {
       {/* LEFT SIDEBAR */}
       <div className="w-full lg:w-72 shrink-0 rounded-[2rem] p-6 flex flex-col gap-6 sd-dealdeck-sidebar sticky top-[7.5rem] self-start z-30 lg:h-[calc(100vh-7.8rem)]">
         <div className="flex items-center gap-3 px-2">
-          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white shadow-md font-bold text-lg shrink-0">
-            {CURRENT_USER.initials}
+          <div className="w-10 h-10 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center justify-center shadow-xs shrink-0">
+            <TrendingUp size={19} className="text-[#D4A373]" />
           </div>
           <div>
-            <h1 className="font-serif font-black text-zinc-900 text-lg leading-none">{CURRENT_USER.name}</h1>
-            <span className="text-[10px] font-bold text-violet-600 uppercase tracking-widest mt-1 block">Sales Executive</span>
+            <h1 className="font-serif font-black text-[23px] text-zinc-600 text-base leading-none">Sales</h1>
+            <span className="text-[9px] font-bold text-[#D4A373] uppercase tracking-widest mt-1 block">Sales Operations</span>
           </div>
         </div>
 
@@ -394,7 +390,7 @@ export default function SalesExecutiveDashboard() {
                     onClick={() => setActiveTab(item.key)}
                     className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${
                       activeTab === item.key
-                        ? 'bg-violet-600 text-white shadow-md shadow-violet-600/20'
+                        ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
                         : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
                     }`}
                   >
@@ -417,12 +413,39 @@ export default function SalesExecutiveDashboard() {
             <p className="text-xs text-zinc-500 mt-1">Manage your active deals, daily tasks, and track your quota.</p>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={refresh} className="p-2.5 rounded-xl bg-white border border-zinc-200/60 text-zinc-500 hover:text-violet-600 transition-all shadow-xs">
+            <button onClick={refresh} className="p-2.5 rounded-xl bg-white border border-zinc-200/60 text-zinc-500 hover:text-[#D4A373] transition-all shadow-xs">
               <Loader2 size={16} className={isLoading ? 'animate-spin' : ''} />
             </button>
-            <button className="bg-zinc-900 text-white px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-violet-600 transition-colors flex items-center gap-2 shadow-sm">
+            <button className="bg-zinc-900 text-white px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#D4A373] transition-colors flex items-center gap-2 shadow-sm">
               <Plus size={14} /> Add Lead
             </button>
+            {/* Profile Avatar Widget */}
+            {(() => {
+              const staffName = localStorage.getItem('hms_name') || 'Staff';
+              const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
+              const designation = 'Sales Manager';
+              return (
+                <motion.button
+                  whileHover={{ y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => {
+                    localStorage.clear();
+                    window.location.href = '/login';
+                  }}
+                  className="group flex items-center gap-3 bg-white pl-3 pr-4 py-1.5 rounded-2xl border border-zinc-200/60 shadow-xs hover:shadow-md hover:border-rose-200 hover:bg-rose-50 transition-all duration-300 cursor-pointer"
+                  title="Sign Out"
+                >
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-fuchsia-500 to-purple-600 group-hover:from-rose-500 group-hover:to-rose-600 text-white font-bold text-xs flex items-center justify-center shadow-xs transition-colors">
+                    {initials}
+                  </div>
+                  <div className="hidden sm:block text-left leading-none pr-1">
+                    <span className="text-xs font-bold text-zinc-900 group-hover:text-rose-600 transition-colors block">{staffName}</span>
+                    <span className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mt-0.5 block group-hover:text-rose-400 transition-colors">{designation}</span>
+                  </div>
+                  <LogOut size={16} className="text-zinc-400 group-hover:text-rose-500 transition-colors ml-1" />
+                </motion.button>
+              );
+            })()}
           </div>
         </div>
 
@@ -440,9 +463,9 @@ export default function SalesExecutiveDashboard() {
                 <motion.div key="overview" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                     {[
-                      { label: 'Target', value: `₹${(CURRENT_USER.target / 100000).toFixed(1)}L`, sub: 'Monthly Goal', icon: <Target size={16} />, theme: 'amber' },
-                      { label: 'Revenue Generated', value: `₹${(CURRENT_USER.achieved / 100000).toFixed(1)}L`, sub: `${Math.round((CURRENT_USER.achieved/CURRENT_USER.target)*100)}% of Target`, icon: <TrendingUp size={16} />, theme: 'emerald' },
-                      { label: 'Deals In Pipeline', value: activeDealsCount, sub: `₹${(myPipelineValue/100000).toFixed(1)}L Total Value`, icon: <Briefcase size={16} />, theme: 'violet' },
+                      { label: 'Target', value: `₹${(CURRENT_USER.target / 100000).toFixed(1)}L`, sub: 'Monthly Goal', icon: <Target size={16} />, theme: '#D4A373' },
+                      { label: 'Revenue Generated', value: `₹${(CURRENT_USER.achieved / 100000).toFixed(1)}L`, sub: `${Math.round((CURRENT_USER.achieved/CURRENT_USER.target)*100)}% of Target`, icon: <TrendingUp size={16} />, theme: '#D4A373' },
+                      { label: 'Deals In Pipeline', value: activeDealsCount, sub: `₹${(myPipelineValue/100000).toFixed(1)}L Total Value`, icon: <Briefcase size={16} />, theme: '#D4A373' },
                       { label: 'Pending Tasks', value: pendingTasksCount, sub: 'Ongoing & Assigned', icon: <CheckSquare size={16} />, theme: 'rose' },
                     ].map((kpi, i) => {
                       const t = themeMap[kpi.theme];
@@ -465,7 +488,7 @@ export default function SalesExecutiveDashboard() {
                     <motion.div whileHover={{ y: -6 }} className="lg:col-span-2 relative overflow-hidden bg-white rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-md"><BarChart3 size={14} className="text-white" /></div>
+                          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#D4A373] to-[#D4A373] flex items-center justify-center shadow-md"><BarChart3 size={14} className="text-white" /></div>
                           <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Target vs Revenue Trend</h3>
                         </div>
                         <div className="flex bg-zinc-100 p-1 rounded-xl">
@@ -474,7 +497,7 @@ export default function SalesExecutiveDashboard() {
                               key={period}
                               onClick={() => setTimePeriod(period)}
                               className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${
-                                timePeriod === period ? 'bg-white text-violet-700 shadow-sm' : 'text-zinc-500 hover:text-zinc-700'
+                                timePeriod === period ? 'bg-white text-[#D4A373] shadow-sm' : 'text-zinc-500 hover:text-zinc-700'
                               }`}
                             >
                               {period}
@@ -486,13 +509,13 @@ export default function SalesExecutiveDashboard() {
                       <TargetVsRevenueChart period={timePeriod} />
                     </motion.div>
 
-                    <motion.div whileHover={{ y: -6 }} className="relative overflow-hidden bg-gradient-to-br from-amber-50 to-orange-50 rounded-[2rem] p-6 shadow-sm border border-amber-100 flex flex-col justify-center text-center">
-                      <Trophy size={40} className="mx-auto text-amber-500 mb-4" />
-                      <h3 className="text-sm font-black text-amber-900 uppercase tracking-wider mb-2">Incentive Status</h3>
-                      <p className="text-2xl font-black text-amber-600 mb-2">₹{(CURRENT_USER.achieved * CURRENT_USER.baseIncentiveRate).toLocaleString('en-IN')}</p>
-                      <p className="text-xs text-amber-700 font-medium">Earned so far this month.</p>
+                    <motion.div whileHover={{ y: -6 }} className="relative overflow-hidden bg-gradient-to-br from-zinc-50 to-zinc-50 rounded-[2rem] p-6 shadow-sm border border-[#D4A373]/30 flex flex-col justify-center text-center">
+                      <Trophy size={40} className="mx-auto text-[#D4A373] mb-4" />
+                      <h3 className="text-sm font-black text-[#D4A373] uppercase tracking-wider mb-2">Incentive Status</h3>
+                      <p className="text-2xl font-black text-[#D4A373] mb-2">₹{(CURRENT_USER.achieved * CURRENT_USER.baseIncentiveRate).toLocaleString('en-IN')}</p>
+                      <p className="text-xs text-[#D4A373] font-medium">Earned so far this month.</p>
                       <div className="mt-6">
-                        <button onClick={() => setActiveTab('pipeline')} className="w-full bg-amber-500 hover:bg-amber-600 text-white py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-colors shadow-sm">
+                        <button onClick={() => setActiveTab('pipeline')} className="w-full bg-[#D4A373] hover:bg-[#D4A373] text-white py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-colors shadow-sm">
                           View Deals to Close
                         </button>
                       </div>
@@ -530,8 +553,8 @@ export default function SalesExecutiveDashboard() {
 
                     <div className="sd-dealdeck-card rounded-[2rem] overflow-hidden p-6 flex flex-col">
                       <div className="flex items-center justify-between mb-6">
-                        <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><Activity size={16} className="text-violet-600" /> Ongoing Tasks Status</h3>
-                        <button className="text-[11px] font-bold text-violet-600 bg-violet-50 px-3 py-1.5 rounded-lg hover:bg-violet-100 transition flex items-center gap-1"><Plus size={12}/> New Task</button>
+                        <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><Activity size={16} className="text-[#D4A373]" /> Ongoing Tasks Status</h3>
+                        <button className="text-[11px] font-bold text-[#D4A373] bg-zinc-50 px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/10 transition flex items-center gap-1"><Plus size={12}/> New Task</button>
                       </div>
                       <div className="flex flex-col gap-3 flex-1">
                         {ongoingTasks.map((task) => (
@@ -549,7 +572,7 @@ export default function SalesExecutiveDashboard() {
                                 onChange={(e) => {
                                   setOngoingTasks(ongoingTasks.map(t => t.id === task.id ? {...t, status: e.target.value} : t));
                                 }}
-                                className="text-xs font-bold text-violet-700 bg-violet-50 border-none rounded py-1 px-2 cursor-pointer outline-none focus:ring-2 focus:ring-violet-200"
+                                className="text-xs font-bold text-[#D4A373] bg-zinc-50 border-none rounded py-1 px-2 cursor-pointer outline-none focus:ring-2 focus:ring-violet-200"
                               >
                                 <option value="Pending">Pending</option>
                                 <option value="In Progress">In Progress</option>
@@ -595,7 +618,7 @@ export default function SalesExecutiveDashboard() {
                                   <div className="flex items-start justify-between mb-1">
                                     <p className="text-sm font-bold text-zinc-900 leading-snug truncate">{lead.company}</p>
                                   </div>
-                                  <p className="text-[11px] text-zinc-500 font-semibold mb-3">{lead.deal} • <span className="text-violet-600 font-black">₹{(lead.value/1000).toFixed(0)}k</span></p>
+                                  <p className="text-[11px] text-zinc-500 font-semibold mb-3">{lead.deal} • <span className="text-[#D4A373] font-black">₹{(lead.value/1000).toFixed(0)}k</span></p>
                                   
                                   <div className="bg-zinc-50 p-2.5 rounded-lg mb-4 space-y-2">
                                     <div className="flex items-center gap-2 text-[10px] text-zinc-600 font-medium">
@@ -614,7 +637,7 @@ export default function SalesExecutiveDashboard() {
                                     {stage !== 'Won' && stage !== 'Lost' && (
                                       <button 
                                         onClick={() => moveToAccounts(lead)}
-                                        className="ml-auto flex items-center gap-1 text-[10px] font-bold text-white bg-zinc-900 hover:bg-violet-600 px-3 py-1.5 rounded-md transition-colors"
+                                        className="ml-auto flex items-center gap-1 text-[10px] font-bold text-white bg-zinc-900 hover:bg-[#D4A373] px-3 py-1.5 rounded-md transition-colors"
                                       >
                                         Move to Accounts <ArrowRight size={10} />
                                       </button>
@@ -638,15 +661,15 @@ export default function SalesExecutiveDashboard() {
               {activeTab === 'accounts' && (
                 <motion.div key="accounts" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
                   <div className="sd-dealdeck-card rounded-[2rem] overflow-hidden p-6">
-                    <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider mb-6"><Briefcase size={16} className="text-violet-600" /> Accounts Managed By Me</h3>
+                    <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider mb-6"><Briefcase size={16} className="text-[#D4A373]" /> Accounts Managed By Me</h3>
                     <p className="text-xs text-zinc-500 mb-6">Leads you start working on heavily can be moved here for long-term management.</p>
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       {myAccounts.map(acc => (
-                        <div key={acc.id} className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-sm hover:border-violet-300 transition-colors">
+                        <div key={acc.id} className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-sm hover:border-[#D4A373]/30 transition-colors">
                           <div className="flex justify-between items-start mb-3">
-                            <div className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center"><Building2 size={20} /></div>
-                            <span className={`px-2 py-1 text-[9px] font-black uppercase tracking-wider rounded ${acc.status === 'Active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{acc.status}</span>
+                            <div className="w-10 h-10 rounded-xl bg-zinc-50 text-[#D4A373] flex items-center justify-center"><Building2 size={20} /></div>
+                            <span className={`px-2 py-1 text-[9px] font-black uppercase tracking-wider rounded ${acc.status === 'Active' ? 'bg-[#D4A373]/10 text-[#D4A373]' : 'bg-[#D4A373]/10 text-[#D4A373]'}`}>{acc.status}</span>
                           </div>
                           <h4 className="text-base font-bold text-zinc-900 truncate">{acc.name}</h4>
                           <p className="text-xs text-zinc-500 mb-4">{acc.industry}</p>
@@ -657,7 +680,7 @@ export default function SalesExecutiveDashboard() {
                             </div>
                             <div className="text-right">
                               <p className="text-[9px] uppercase font-bold text-zinc-400">YTD Rev</p>
-                              <p className="text-xs font-black text-violet-700">₹{(acc.ytdRevenue/100000).toFixed(1)}L</p>
+                              <p className="text-xs font-black text-[#D4A373]">₹{(acc.ytdRevenue/100000).toFixed(1)}L</p>
                             </div>
                           </div>
                         </div>
@@ -671,9 +694,9 @@ export default function SalesExecutiveDashboard() {
               {activeTab === 'modes' && (
                 <motion.div key="modes" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <motion.div whileHover={{ y: -6 }} className="relative overflow-hidden bg-gradient-to-br from-white via-white to-violet-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
+                    <motion.div whileHover={{ y: -6 }} className="relative overflow-hidden bg-gradient-to-br from-white via-white to-zinc-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
                       <div className="relative flex items-center gap-2 mb-6">
-                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-md"><Activity size={14} className="text-white" /></div>
+                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#D4A373] to-[#D4A373] flex items-center justify-center shadow-md"><Activity size={14} className="text-white" /></div>
                         <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Lead Generation Sources</h3>
                       </div>
                       
@@ -694,9 +717,9 @@ export default function SalesExecutiveDashboard() {
                     <motion.div whileHover={{ y: -6 }} className="relative overflow-hidden bg-white rounded-[2rem] p-6 shadow-sm border border-zinc-200/60 flex flex-col justify-center">
                        <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider mb-4 border-b border-zinc-100 pb-2">Insights</h3>
                        <ul className="space-y-4 text-xs text-zinc-600 leading-relaxed">
-                         <li><span className="font-bold text-emerald-600">Call Enquiry</span> is your highest grossing source, contributing to majority of direct conversions.</li>
-                         <li><span className="font-bold text-violet-600">Hotel Website</span> leads show a 30% higher closing probability compared to third-party.</li>
-                         <li><span className="font-bold text-amber-600">Walk In Enquiry</span> numbers have doubled since last week. Ensure front-desk handoffs are seamless.</li>
+                         <li><span className="font-bold text-[#D4A373]">Call Enquiry</span> is your highest grossing source, contributing to majority of direct conversions.</li>
+                         <li><span className="font-bold text-[#D4A373]">Hotel Website</span> leads show a 30% higher closing probability compared to third-party.</li>
+                         <li><span className="font-bold text-[#D4A373]">Walk In Enquiry</span> numbers have doubled since last week. Ensure front-desk handoffs are seamless.</li>
                        </ul>
                     </motion.div>
                   </div>
@@ -711,8 +734,8 @@ export default function SalesExecutiveDashboard() {
                     {[
                       { label: 'Total Gross Revenue', value: `₹${(totalOtaGross / 100000).toFixed(2)}L`, sub: 'All OTA Channels', icon: <Globe size={16} />, theme: 'sky' },
                       { label: 'Commission Paid', value: `₹${(totalOtaCommission / 100000).toFixed(2)}L`, sub: 'Direct Expense', icon: <Percent size={16} />, theme: 'rose' },
-                      { label: 'Net Revenue', value: `₹${(totalOtaNet / 100000).toFixed(2)}L`, sub: 'After Commissions', icon: <DollarSign size={16} />, theme: 'emerald' },
-                      { label: 'Avg Cancel Rate', value: `${avgCancelRate}%`, sub: 'Across platforms', icon: <TrendingDown size={16} />, theme: 'amber' },
+                      { label: 'Net Revenue', value: `₹${(totalOtaNet / 100000).toFixed(2)}L`, sub: 'After Commissions', icon: <DollarSign size={16} />, theme: '#D4A373' },
+                      { label: 'Avg Cancel Rate', value: `${avgCancelRate}%`, sub: 'Across platforms', icon: <TrendingDown size={16} />, theme: '#D4A373' },
                     ].map((kpi, i) => {
                       const t = themeMap[kpi.theme];
                       return (
@@ -752,7 +775,7 @@ export default function SalesExecutiveDashboard() {
 
                     <motion.div whileHover={{ y: -6 }} className="relative overflow-hidden bg-white rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
                       <div className="relative flex items-center gap-2 mb-6">
-                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md"><TrendingUp size={14} className="text-white" /></div>
+                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#D4A373] to-[#D4A373] flex items-center justify-center shadow-md"><TrendingUp size={14} className="text-white" /></div>
                         <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Net Revenue by Platform</h3>
                       </div>
                       <BarRankChart data={otaNetRevenueRank} />
@@ -793,11 +816,11 @@ export default function SalesExecutiveDashboard() {
                                 <td className="p-4 text-sm text-zinc-600 text-right">₹{adr.toLocaleString('en-IN')}</td>
                                 <td className="p-4 text-sm font-black text-zinc-900 text-right">₹{ota.grossRevenue.toLocaleString('en-IN')}</td>
                                 <td className="p-4 text-center">
-                                  <span className={`px-2 py-1 rounded text-[10px] font-bold ${ota.commissionRate >= 18 ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                                  <span className={`px-2 py-1 rounded text-[10px] font-bold ${ota.commissionRate >= 18 ? 'bg-rose-100 text-rose-700' : 'bg-[#D4A373]/10 text-[#D4A373]'}`}>
                                     {ota.commissionRate}%
                                   </span>
                                 </td>
-                                <td className="p-4 text-sm font-black text-emerald-600 text-right">₹{netRev.toLocaleString('en-IN')}</td>
+                                <td className="p-4 text-sm font-black text-[#D4A373] text-right">₹{netRev.toLocaleString('en-IN')}</td>
                                 <td className="p-4 text-center">
                                   <span className={`text-[11px] font-bold ${ota.cancelRate > 10 ? 'text-rose-500' : 'text-zinc-500'}`}>
                                     {ota.cancelRate}%
