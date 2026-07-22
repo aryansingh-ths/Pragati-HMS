@@ -7,7 +7,7 @@ import {
   ArrowUpRight, Star, ChevronRight, PieChart, Trophy, CalendarClock, Eye,
   PhoneCall, Mail, CheckSquare, ListTodo, Flame, Activity, ShieldCheck, Globe,
   User, Building2, MapPin, BarChart3, ArrowRight, Percent, TrendingDown, LogOut,
-  RefreshCw
+  RefreshCw, Zap
 } from 'lucide-react';
 
 // =============================================
@@ -258,7 +258,7 @@ export default function SalesExecutiveDashboard() {
 
   const fetchData = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('hms_token');
       const headers = { 'Authorization': `Bearer ${token}` };
 
       // Fetch all dashboard data concurrently
@@ -345,7 +345,7 @@ export default function SalesExecutiveDashboard() {
     e.preventDefault();
     setIsSubmittingLead(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('hms_token');
       const res = await fetch('http://localhost:3000/api/sales/leads', {
         method: 'POST',
         headers: {
@@ -378,7 +378,7 @@ export default function SalesExecutiveDashboard() {
 
   const moveToAccounts = async (lead) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('hms_token');
       const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
 
       // 1. Move lead to 'Contacted' stage

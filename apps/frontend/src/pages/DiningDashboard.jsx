@@ -203,7 +203,7 @@ export default function DiningDashboard() {
 
   const fetchData = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('hms_token');
       const headers = { 'Authorization': `Bearer ${token}` };
 
       const [kotsRes, tablesRes, menuRes, overviewRes] = await Promise.all([
@@ -260,7 +260,7 @@ export default function DiningDashboard() {
     if (!kotForm.table || !kotForm.items) return;
 
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('hms_token');
       const res = await fetch('http://localhost:3000/api/dining/kots', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },

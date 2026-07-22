@@ -1937,6 +1937,24 @@ async function runMigrations() {
       ['dinning@techhansa.com', hash, 'F&B Admin']
     );
   }
+
+  // Add SALES to the ENUM if it's missing
+  const enumSalesCheck = await pool.query(
+    "SELECT 1 FROM pg_enum WHERE enumlabel = 'SALES' AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'user_role')"
+  );
+  if (enumSalesCheck.rows.length === 0) {
+    await pool.query("ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'SALES'");
+  }
+
+  // Auto-create the requested Sales user credentials
+  const salesUserCheck = await pool.query("SELECT * FROM users WHERE email = 'sales@techhansa.com'");
+  if (salesUserCheck.rows.length === 0) {
+    const hash = await bcrypt.hash('password123', 10);
+    await pool.query(
+      "INSERT INTO users (email, password_hash, name, role) VALUES ($1, $2, $3, 'SALES')",
+      ['sales@techhansa.com', hash, 'Sales Executive']
+    );
+  }
 }
 
 const server = app.listen(PORT, async () => {
