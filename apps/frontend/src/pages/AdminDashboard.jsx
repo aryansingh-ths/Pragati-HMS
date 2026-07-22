@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Activity, Users, Lock, Unlock, Sparkles, DollarSign,
+import {
+  Activity, Users, Lock, Unlock, Sparkles, DollarSign,
   Sliders, Wrench, Loader2, Plus, Trash2, X, ChevronDown, ChevronUp, Edit,
   TrendingUp, AlertTriangle, Clock, BedDouble, Zap, ArrowUpRight, ArrowDownRight,
   UserCheck, UserX, ShieldAlert, Hammer, Eye, CircleDot, RefreshCw, CheckCircle,
-  LogIn, DoorOpen, Maximize2, Search, LogOut } from 'lucide-react';
+  LogIn, DoorOpen, Maximize2, Search, LogOut
+} from 'lucide-react';
 
 // SVG DONUT CHART COMPONENT (Pure SVG, no deps)
 function DonutChart({ data, size = 180 }) {
@@ -1152,7 +1154,7 @@ export default function AdminDashboard() {
 
             {/* Profile Avatar Widget */}
             {(() => {
-              const staffName = localStorage.getItem('hms_name') || 'Staff';
+              const staffName = sessionStorage.getItem('hms_name') || 'Staff';
               const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
               const designation = 'Administrator';
               return (
@@ -3871,7 +3873,7 @@ export default function AdminDashboard() {
                       { key: 'ALL', label: 'All Staff' },
                       { key: 'FRONT_DESK', label: 'Front Desk' },
                       { key: 'HOUSEKEEPING', label: 'Housekeeping' },
-                      { key: 'ADMIN', label: 'Admin' },
+                      { key: 'Admin', label: 'Admin' },
                       { key: 'FINANCE', label: 'Finance' },
                       { key: 'RESTAURANT', label: 'Dining' },
                       { key: 'SALES', label: 'Sales' },
@@ -4019,7 +4021,7 @@ export default function AdminDashboard() {
                                 FRONT_DESK: 'from-sky-400 to-blue-500',
                                 RECEPTION: 'from-sky-400 to-blue-500',
                                 HOUSEKEEPING: 'from-amber-400 to-orange-500',
-                                ADMIN: 'from-indigo-400 to-violet-500',
+                                Admin: 'from-indigo-400 to-violet-500',
                                 FINANCE: 'from-emerald-400 to-teal-500',
                                 RESTAURANT: 'from-rose-400 to-red-500',
                                 SALES: 'from-fuchsia-400 to-purple-500',
@@ -4218,7 +4220,7 @@ export default function AdminDashboard() {
                               <motion.div
                                 whileHover={{ scale: 1.08, rotate: -6 }}
                                 transition={{ type: 'spring', stiffness: 400, damping: 15 }}
-                                className={`w-14 h-14 shrink-0 rounded-2xl bg-gradient-to-br ${{ FRONT_DESK: 'from-sky-400 to-blue-500', HOUSEKEEPING: 'from-amber-400 to-orange-500', ADMIN: 'from-indigo-400 to-violet-500', FINANCE: 'from-emerald-400 to-teal-500', RESTAURANT: 'from-rose-400 to-red-500', SALES: 'from-fuchsia-400 to-purple-500', TRAVEL: 'from-cyan-400 to-sky-500' }[selectedStaff.role] || 'from-zinc-400 to-zinc-500'
+                                className={`w-14 h-14 shrink-0 rounded-2xl bg-gradient-to-br ${{ FRONT_DESK: 'from-sky-400 to-blue-500', HOUSEKEEPING: 'from-amber-400 to-orange-500', Admin: 'from-indigo-400 to-violet-500', FINANCE: 'from-emerald-400 to-teal-500', RESTAURANT: 'from-rose-400 to-red-500', SALES: 'from-fuchsia-400 to-purple-500', TRAVEL: 'from-cyan-400 to-sky-500' }[selectedStaff.role] || 'from-zinc-400 to-zinc-500'
                                   } flex items-center justify-center text-white text-lg font-black shadow-md hr-ring-indigo`}>
                                 {(selectedStaff.name || '').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)}
                               </motion.div>

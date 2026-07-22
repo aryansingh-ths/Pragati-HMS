@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { DollarSign, FileText, CreditCard, ArrowUpRight, Download,
+import {
+  DollarSign, FileText, CreditCard, ArrowUpRight, Download,
   CheckCircle2, Clock, Building2, RefreshCw, TrendingUp, Landmark, Receipt,
   Wallet, ShieldCheck, Search, Plus, X, Loader2, AlertTriangle, Link2, ScanLine,
   PieChart, Plane, UtensilsCrossed, Sofa, Car, Sparkles, ChefHat, PartyPopper,
   BedDouble, Filter, TrendingDown, Printer, Truck, CalendarClock, Scale,
   Target, Percent, Users, UserCheck, LockKeyhole, Undo2, History, ShieldAlert,
-  ArrowRightLeft, FileBarChart2, FileSpreadsheet, FileDown, LogOut } from 'lucide-react';
+  ArrowRightLeft, FileBarChart2, FileSpreadsheet, FileDown, LogOut, Zap
+} from 'lucide-react';
 
 // =============================================
 // SVG DONUT CHART (payment method split)
@@ -160,9 +162,8 @@ function RevenueTrendLine({ data = [] }) {
       <div className="flex justify-between mt-1 px-1">
         {data.map((t, i) => (
           <span key={i} onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)}
-            className={`text-[9px] font-black uppercase tracking-wide cursor-pointer transition-all duration-200 ${
-              hoverIdx === i ? 'text-[#D4A373]' : (t.isToday ? 'text-[#D4A373] animate-pulse font-extrabold' : 'text-zinc-400')
-            }`}
+            className={`text-[9px] font-black uppercase tracking-wide cursor-pointer transition-all duration-200 ${hoverIdx === i ? 'text-[#D4A373]' : (t.isToday ? 'text-[#D4A373] animate-pulse font-extrabold' : 'text-zinc-400')
+              }`}
           >
             {t.label}
           </span>
@@ -266,9 +267,8 @@ function ExpenseTrendLine({ data = [] }) {
       <div className="flex justify-between mt-1 px-1">
         {data.map((t, i) => (
           <span key={i} onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)}
-            className={`text-[9px] font-black uppercase tracking-wide cursor-pointer transition-all duration-200 ${
-              hoverIdx === i ? 'text-rose-600' : (t.isToday ? 'text-[#D4A373] animate-pulse font-extrabold' : 'text-zinc-400')
-            }`}
+            className={`text-[9px] font-black uppercase tracking-wide cursor-pointer transition-all duration-200 ${hoverIdx === i ? 'text-rose-600' : (t.isToday ? 'text-[#D4A373] animate-pulse font-extrabold' : 'text-zinc-400')
+              }`}
           >
             {t.label}
           </span>
@@ -318,8 +318,110 @@ function BarRankChart({ data = [] }) {
 // =============================================
 export default function FinanceDashboard() {
   const navigate = useNavigate();
+
+  // ─── Broadcast States ──────────────────────────────────────
+  const [broadcasts, setBroadcasts] = React.useState([]);
+  const [dismissedBroadcasts, setDismissedBroadcasts] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem('hms_dismissed_broadcasts')) || []; } catch { return []; }
+  });
+
+  React.useEffect(() => {
+    localStorage.setItem('hms_dismissed_broadcasts', JSON.stringify(dismissedBroadcasts));
+  }, [dismissedBroadcasts]);
+
+  const fetchBroadcasts = React.useCallback(async () => {
+    try {
+      const token = sessionStorage.getItem('hms_token');
+      const res = await fetch(`http://localhost:3000/api/broadcasts`, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (res?.ok) {
+        const data = await res.json();
+        setBroadcasts(data.data.broadcasts || []);
+      }
+    } catch (e) {
+      console.error('Failed to fetch broadcasts:', e);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fetchBroadcasts();
+    const interval = setInterval(fetchBroadcasts, 30000);
+    return () => clearInterval(interval);
+  }, [fetchBroadcasts]);
   const [activeTab, setActiveTab] = useState('overview');
   const [isLoading, setIsLoading] = useState(false);
+  const [apiOverview, setApiOverview] = useState(null);
+  const [apiExpenses, setApiExpenses] = useState([]);
+  const [apiInvoices, setApiInvoices] = useState([]);
+  const [apiPayables, setApiPayables] = useState([]);
+  const [apiReconciliations, setApiReconciliations] = useState([]);
+  const [apiLedger, setApiLedger] = useState([]);
+  const [apiStatements, setApiStatements] = useState(null);
+  const [apiBudgets, setApiBudgets] = useState([]);
+  const [apiPayroll, setApiPayroll] = useState([]);
+  const [apiDeposits, setApiDeposits] = useState([]);
+  const [apiBankAccounts, setApiBankAccounts] = useState([]);
+  const [apiCashRegister, setApiCashRegister] = useState(null);
+
+  React.useEffect(() => {
+    const fetchFinanceData = async () => {
+      try {
+        const token = sessionStorage.getItem('hms_token');
+        const headers = { 'Authorization': `Bearer ${token}` };
+
+        const [overviewRes, expensesRes, invoicesRes, payablesRes, reconRes, ledgerRes, stmtRes, budgetRes] = await Promise.all([
+          fetch('http://localhost:3000/api/finance/overview', { headers }),
+          fetch('http://localhost:3000/api/finance/expenses', { headers }),
+          fetch('http://localhost:3000/api/finance/invoices', { headers }),
+          fetch('http://localhost:3000/api/finance/payables', { headers }),
+          fetch('http://localhost:3000/api/finance/reconciliations', { headers }),
+          fetch('http://localhost:3000/api/finance/ledger', { headers }),
+          fetch('http://localhost:3000/api/finance/statements', { headers }),
+          fetch('http://localhost:3000/api/finance/budgets', { headers }),
+          fetch('http://localhost:3000/api/finance/cash-register', { headers })
+        ]);
+
+        if (overviewRes.ok) {
+          const { data } = await overviewRes.json();
+          setApiOverview(data);
+        }
+        if (expensesRes.ok) {
+          const { data } = await expensesRes.json();
+          setApiExpenses(data.expenses);
+        }
+        if (invoicesRes.ok) {
+          const { data } = await invoicesRes.json();
+          setApiInvoices(data.invoices);
+        }
+        if (payablesRes.ok) {
+          const { data } = await payablesRes.json();
+          setApiPayables(data.payables);
+        }
+        if (reconRes.ok) {
+          const { data } = await reconRes.json();
+          setApiReconciliations(data.reconciliations);
+        }
+        if (ledgerRes.ok) {
+          const { data } = await ledgerRes.json();
+          setApiLedger(data.ledger);
+        }
+        if (stmtRes.ok) {
+          const { data } = await stmtRes.json();
+          setApiStatements(data);
+        }
+        if (budgetRes.ok) {
+          const { data } = await budgetRes.json();
+          setApiBudgets(data.budgets);
+        }
+        if (cashRegisterRes.ok) {
+          const { data } = await cashRegisterRes.json();
+          setApiCashRegister(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch finance data:', err);
+      }
+    };
+    fetchFinanceData();
+  }, []);
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
   const [reconSearch, setReconSearch] = useState('');
   const [entryForm, setEntryForm] = useState({ account: '', type: 'Debit', amount: '', narration: '' });
@@ -355,8 +457,9 @@ export default function FinanceDashboard() {
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [transferForm, setTransferForm] = useState({ from: 'HDFC Current A/c', to: 'ICICI Savings A/c', amount: '', notes: '' });
 
-  // --- Custom Reports ---
-  const [generatingReportKey, setGeneratingReportKey] = useState(null);
+  // --- Cash Register ---
+  const [isCashModalOpen, setIsCashModalOpen] = useState(false);
+  const [cashForm, setCashForm] = useState({ actual_amount: '', notes: '' });
 
   const refresh = () => {
     setIsLoading(true);
@@ -364,11 +467,23 @@ export default function FinanceDashboard() {
   };
 
   // --- Simulated data ---
+  const todaysRevenueVal = apiOverview?.todaysRevenue || 0;
+  const pendingRecVal = apiOverview?.pendingReceivables || 0;
+  const overviewTotalTax = (apiInvoices || []).reduce((sum, inv) => sum + Number(inv.tax_amount || 0), 0);
+
+  const cashRegisterValue = apiCashRegister?.actual_amount
+    ? `₹${Number(apiCashRegister.actual_amount).toLocaleString('en-IN')}`
+    : "₹0";
+  const cashRegisterSub = apiCashRegister
+    ? `${apiCashRegister.status} • counted ${new Date(apiCashRegister.counted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+    : "Not counted today";
+  const cashRegisterBalanced = apiCashRegister?.status === 'Balanced';
+
   const metrics = [
-    { label: "Today's Revenue", value: "₹1,42,500", sub: "82% of ₹1,75,000 target", icon: <DollarSign size={16} />, theme: '#D4A373', pct: 82 },
-    { label: "Pending Receivables", value: "₹34,200", sub: "3 invoices outstanding", icon: <Clock size={16} />, theme: '#D4A373', bars: [40, 65, 30, 55] },
-    { label: "Tax Collected (GST)", value: "₹25,650", sub: "CGST + SGST this month", icon: <FileText size={16} />, theme: 'indigo', pct: 61 },
-    { label: "Cash Register", value: "₹18,400", sub: "Balanced • counted 6:00 PM", icon: <Wallet size={16} />, theme: 'sky', balanced: true },
+    { label: "Today's Revenue", value: `₹${Number(todaysRevenueVal).toLocaleString('en-IN')}`, sub: "Live from API", icon: <DollarSign size={16} />, theme: '#D4A373' },
+    { label: "Pending Receivables", value: `₹${Number(pendingRecVal).toLocaleString('en-IN')}`, sub: "Live from API", icon: <Clock size={16} />, theme: '#D4A373', bars: [40, 65, 30, 55] },
+    { label: "Tax Collected (GST)", value: `₹${Number(overviewTotalTax).toLocaleString('en-IN')}`, sub: "Live from Invoices", icon: <FileText size={16} />, theme: 'indigo' },
+    { label: "Cash Register", value: cashRegisterValue, sub: cashRegisterSub, icon: <Wallet size={16} />, theme: 'sky', balanced: cashRegisterBalanced, action: 'countCash' },
   ];
 
   const themeMap = {
@@ -385,52 +500,81 @@ export default function FinanceDashboard() {
     { label: 'Today', value: 142500, isToday: true },
   ];
 
-  const paymentSplit = [
-    { label: 'Credit Card', value: 74500, color: '#4f46e5' },
-    { label: 'Bank Transfer', value: 45000, color: '#0ea5e9' },
-    { label: 'Cash', value: 18400, color: '#f59e0b' },
-    { label: 'UPI', value: 4600, color: '#10b981' },
-  ];
+  const paymentMethodColors = {
+    'Credit Card': '#4f46e5',
+    'Bank Transfer': '#0ea5e9',
+    'Cash': '#f59e0b',
+    'UPI': '#10b981'
+  };
+  const fallbackColors = ['#4f46e5', '#0ea5e9', '#f59e0b', '#10b981', '#ec4899', '#8b5cf6'];
+  const paymentSplit = apiOverview?.paymentSplit?.length > 0 ? apiOverview.paymentSplit.map((item, idx) => ({
+    label: item.label || 'Unknown',
+    value: Number(item.value),
+    color: paymentMethodColors[item.label] || fallbackColors[idx % fallbackColors.length]
+  })) : [];
 
-  const recentTransactions = [
-    { id: 'TXN-8821', guest: 'Aryan Singh', room: '204', amount: '₹12,500', method: 'Credit Card', status: 'Settled', date: 'Today, 10:45 AM' },
-    { id: 'TXN-8822', guest: 'Corporate Account', room: 'Multiple', amount: '₹45,000', method: 'Bank Transfer', status: 'Pending Recon', date: 'Today, 09:30 AM' },
-    { id: 'TXN-8823', guest: 'Rohan Desai', room: '108', amount: '₹4,200', method: 'Cash', status: 'Settled', date: 'Yesterday, 08:15 PM' },
-    { id: 'TXN-8824', guest: 'Priya Nair', room: '312', amount: '₹8,900', method: 'UPI', status: 'Settled', date: 'Yesterday, 05:40 PM' },
-  ];
+  const recentTransactions = apiOverview?.recentTransactions?.length ? apiOverview.recentTransactions.map(t => ({
+    id: `TXN-${t.id.substring(0, 4).toUpperCase()}`,
+    guest: t.guest || 'N/A',
+    room: t.room_number || 'N/A',
+    amount: `₹${Number(t.amount).toLocaleString('en-IN')}`,
+    method: t.payment_method || 'N/A',
+    status: t.status || 'Settled',
+    date: new Date(t.created_at).toLocaleDateString()
+  })) : [];
 
-  const reconciliationItems = [
-    { id: 'BS-4471', source: 'Bank Statement', ref: 'NEFT-88213', date: 'Jul 16', amount: '₹45,000', matchedWith: 'TXN-8822', status: 'Unmatched' },
-    { id: 'BS-4472', source: 'Bank Statement', ref: 'CC-SETL-902', date: 'Jul 16', amount: '₹12,500', matchedWith: 'TXN-8821', status: 'Matched' },
-    { id: 'BS-4473', source: 'Gateway Payout', ref: 'RZP-77281', date: 'Jul 15', amount: '₹8,900', matchedWith: 'TXN-8824', status: 'Matched' },
-    { id: 'BS-4474', source: 'Bank Statement', ref: 'NEFT-88220', date: 'Jul 15', amount: '₹6,750', matchedWith: null, status: 'Unmatched' },
-  ].filter(r => (r.ref + r.source + r.status).toLowerCase().includes(reconSearch.toLowerCase()));
+  const reconciliationItems = (apiReconciliations || []).map(r => ({
+    id: `BS-${r.id.substring(0, 4).toUpperCase()}`,
+    source: r.source,
+    ref: r.reference_number,
+    date: new Date(r.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+    amount: `₹${Number(r.amount).toLocaleString('en-IN')}`,
+    rawAmount: Number(r.amount),
+    matchedWith: r.matched_with,
+    status: r.status,
+    rawId: r.id
+  })).filter(r => (r.ref + r.source + r.status).toLowerCase().includes(reconSearch.toLowerCase()));
+
+  const totalTax = (apiInvoices || []).reduce((sum, inv) => sum + Number(inv.tax_amount || 0), 0);
+  const cgst = totalTax / 2;
+  const sgst = totalTax / 2;
 
   const gstBreakup = [
-    { label: 'CGST', value: '₹9,850', sub: '9% output tax' },
-    { label: 'SGST', value: '₹9,850', sub: '9% output tax' },
-    { label: 'IGST', value: '₹5,950', sub: 'Inter-state supply' },
-    { label: 'Total Liability', value: '₹25,650', sub: 'Due 20th Aug' },
+    { label: 'CGST', value: `₹${cgst.toLocaleString('en-IN')}`, sub: '9% output tax' },
+    { label: 'SGST', value: `₹${sgst.toLocaleString('en-IN')}`, sub: '9% output tax' },
+    { label: 'IGST', value: '₹0', sub: 'Inter-state supply' },
+    { label: 'Total Liability', value: `₹${totalTax.toLocaleString('en-IN')}`, sub: 'Due 20th next month' },
   ];
 
-  const ledgerEntries = [
-    { voucher: 'JV-2201', account: 'Room Revenue', debit: '-', credit: '₹1,42,500', balance: '₹8,42,110', date: 'Today' },
-    { voucher: 'JV-2200', account: 'GST Output', debit: '-', credit: '₹25,650', balance: '₹1,12,340', date: 'Today' },
-    { voucher: 'JV-2199', account: 'Accounts Receivable', debit: '₹34,200', credit: '-', balance: '₹34,200', date: 'Today' },
-    { voucher: 'JV-2198', account: 'Bank — HDFC Current', debit: '₹45,000', credit: '-', balance: '₹6,18,220', date: 'Yesterday' },
-  ];
+  let cumulativeBalance = 0;
+  const ledgerEntries = (apiLedger || []).slice().reverse().map(l => {
+    cumulativeBalance += Number(l.amount);
+    return {
+      voucher: l.reference_number || `JV-${l.id.substring(0, 4).toUpperCase()}`,
+      account: l.transaction_type,
+      debit: Number(l.amount) > 0 ? `₹${Number(l.amount).toLocaleString('en-IN')}` : '-',
+      credit: Number(l.amount) < 0 ? `₹${Math.abs(Number(l.amount)).toLocaleString('en-IN')}` : '-',
+      balance: `₹${cumulativeBalance.toLocaleString('en-IN')}`,
+      date: new Date(l.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+    };
+  }).reverse();
 
   // --- Expense Management data ---
+  const expenseCatSpent = {};
+  (apiExpenses || []).forEach(e => {
+    expenseCatSpent[e.category] = (expenseCatSpent[e.category] || 0) + Number(e.amount);
+  });
+
   const expenseCategories = [
-    { key: 'travel', label: 'Travel Packages', icon: <Plane size={15} />, spent: 82500, budget: 100000, color: '#6366f1' },
-    { key: 'dining', label: 'Dining', icon: <UtensilsCrossed size={15} />, spent: 145200, budget: 160000, color: '#f59e0b' },
-    { key: 'roomAcc', label: 'Room Accessories', icon: <Sofa size={15} />, spent: 58300, budget: 70000, color: '#0ea5e9' },
-    { key: 'vehicles', label: 'Hotel Vehicles', icon: <Car size={15} />, spent: 41200, budget: 45000, color: '#f43f5e' },
-    { key: 'amenities', label: 'Other Amenities', icon: <Sparkles size={15} />, spent: 23800, budget: 30000, color: '#a855f7' },
-    { key: 'accounts', label: 'Hotel Accounts', icon: <Landmark size={15} />, spent: 198500, budget: 210000, color: '#10b981' },
-    { key: 'kitchen', label: 'Kitchen Items', icon: <ChefHat size={15} />, spent: 128000, budget: 120000, color: '#eab308' },
-    { key: 'roomBookings', label: 'Room Bookings Ops', icon: <BedDouble size={15} />, spent: 76900, budget: 85000, color: '#4f46e5' },
-    { key: 'eventBookings', label: 'Event Bookings Ops', icon: <PartyPopper size={15} />, spent: 134600, budget: 150000, color: '#ec4899' },
+    { key: 'travel', label: 'Travel Packages', icon: <Plane size={15} />, spent: expenseCatSpent['Travel Packages'] || 0, budget: 100000, color: '#6366f1' },
+    { key: 'dining', label: 'Dining', icon: <UtensilsCrossed size={15} />, spent: expenseCatSpent['Dining'] || 0, budget: 160000, color: '#f59e0b' },
+    { key: 'roomAcc', label: 'Room Accessories', icon: <Sofa size={15} />, spent: expenseCatSpent['Room Accessories'] || 0, budget: 70000, color: '#0ea5e9' },
+    { key: 'vehicles', label: 'Hotel Vehicles', icon: <Car size={15} />, spent: expenseCatSpent['Hotel Vehicles'] || 0, budget: 45000, color: '#f43f5e' },
+    { key: 'amenities', label: 'Other Amenities', icon: <Sparkles size={15} />, spent: expenseCatSpent['Other Amenities'] || 0, budget: 30000, color: '#a855f7' },
+    { key: 'accounts', label: 'Hotel Accounts', icon: <Landmark size={15} />, spent: expenseCatSpent['Hotel Accounts'] || 0, budget: 210000, color: '#10b981' },
+    { key: 'kitchen', label: 'Kitchen Items', icon: <ChefHat size={15} />, spent: expenseCatSpent['Kitchen Items'] || 0, budget: 120000, color: '#eab308' },
+    { key: 'roomBookings', label: 'Room Bookings Ops', icon: <BedDouble size={15} />, spent: expenseCatSpent['Room Bookings Ops'] || 0, budget: 85000, color: '#4f46e5' },
+    { key: 'eventBookings', label: 'Event Bookings Ops', icon: <PartyPopper size={15} />, spent: expenseCatSpent['Event Bookings Ops'] || 0, budget: 150000, color: '#ec4899' },
   ];
 
   const totalExpense = expenseCategories.reduce((s, c) => s + c.spent, 0);
@@ -439,30 +583,47 @@ export default function FinanceDashboard() {
   const overBudgetCount = expenseCategories.filter(c => c.spent > c.budget).length;
   const topExpenseCategory = [...expenseCategories].sort((a, b) => b.spent - a.spent)[0];
 
-  const expenseTrend = [
-    { label: 'Feb', value: 620000 }, { label: 'Mar', value: 645000 }, { label: 'Apr', value: 598000 },
-    { label: 'May', value: 671000 }, { label: 'Jun', value: 705000 }, { label: 'Jul', value: totalExpense, isToday: true },
+  const expenseTrend = apiOverview?.sixMonthExpenseTrend || [
+    { label: '', value: 0 }, { label: '', value: 0 }, { label: '', value: 0 },
+    { label: '', value: 0 }, { label: '', value: 0 }, { label: 'Today', value: totalExpense, isToday: true }
   ];
-  const momChangePct = (((expenseTrend[5].value - expenseTrend[4].value) / expenseTrend[4].value) * 100).toFixed(1);
 
-  const expenseEntries = [
-    { id: 'EXP-3301', category: 'Kitchen Items', vendor: 'Metro Cash & Carry', method: 'Bank Transfer', amount: '₹18,400', date: 'Today', status: 'Approved' },
-    { id: 'EXP-3300', category: 'Dining', vendor: 'Fresh Produce Co.', method: 'Cash', amount: '₹9,200', date: 'Today', status: 'Approved' },
-    { id: 'EXP-3299', category: 'Hotel Vehicles', vendor: 'Shell Fuel Station', method: 'Credit Card', amount: '₹6,500', date: 'Yesterday', status: 'Pending' },
-    { id: 'EXP-3298', category: 'Travel Packages', vendor: 'MakeMyTrip Corporate', method: 'Bank Transfer', amount: '₹32,000', date: 'Yesterday', status: 'Approved' },
-    { id: 'EXP-3297', category: 'Event Bookings Ops', vendor: 'Bloom Décor Studio', method: 'Bank Transfer', amount: '₹28,500', date: 'Jul 14', status: 'Approved' },
-    { id: 'EXP-3296', category: 'Room Accessories', vendor: 'IKEA Business', method: 'Credit Card', amount: '₹14,750', date: 'Jul 14', status: 'Pending' },
-    { id: 'EXP-3295', category: 'Hotel Accounts', vendor: 'State Electricity Board', method: 'Bank Transfer', amount: '₹45,200', date: 'Jul 13', status: 'Approved' },
-    { id: 'EXP-3294', category: 'Other Amenities', vendor: 'Spa Supplies Ltd', method: 'Cash', amount: '₹7,900', date: 'Jul 13', status: 'Approved' },
-    { id: 'EXP-3293', category: 'Room Bookings Ops', vendor: 'Housekeeping Services Co', method: 'Bank Transfer', amount: '₹21,300', date: 'Jul 12', status: 'Approved' },
-  ].filter(e =>
+  const currentMonthExp = expenseTrend[5]?.value || 0;
+  const lastMonthExp = expenseTrend[4]?.value || 0;
+  const momChangePct = lastMonthExp > 0 ? (((currentMonthExp - lastMonthExp) / lastMonthExp) * 100).toFixed(1) : 0;
+
+  const expenseEntries = (apiExpenses?.length ? apiExpenses.map(e => ({
+    id: `EXP-${e.id.substring(0, 4).toUpperCase()}`,
+    category: e.category,
+    vendor: e.vendor,
+    method: e.payment_method,
+    amount: `₹${Number(e.amount).toLocaleString('en-IN')}`,
+    date: new Date(e.created_at).toLocaleDateString(),
+    status: e.status
+  })) : []).filter(e =>
     (expenseCategoryFilter === 'All' || e.category === expenseCategoryFilter) &&
     (e.vendor + e.id + e.category).toLowerCase().includes(expenseSearch.toLowerCase())
   );
 
-  const handleAddExpense = (e) => {
+  const handleAddExpense = async (e) => {
     e.preventDefault();
     if (!expenseForm.vendor || !expenseForm.amount) return;
+
+    try {
+      const token = sessionStorage.getItem('hms_token');
+      const res = await fetch('http://localhost:3000/api/finance/expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(expenseForm)
+      });
+      if (res.ok) {
+        const { data } = await res.json();
+        setApiExpenses(prev => [data.expense, ...prev]);
+      }
+    } catch (err) {
+      console.error('Failed to log expense:', err);
+    }
+
     setIsExpenseModalOpen(false);
     setExpenseForm({ category: 'Kitchen Items', vendor: '', amount: '', method: 'Bank Transfer', notes: '' });
   };
@@ -475,16 +636,22 @@ export default function FinanceDashboard() {
   };
 
   // --- Invoices & Billing data ---
-  const allInvoices = [
-    { id: 'INV-5501', billTo: 'Aryan Singh', type: 'Guest Folio', amount: 18500, paid: 18500, dueDate: 'Jul 16', status: 'Paid' },
-    { id: 'INV-5500', billTo: 'Meridian Corporate Travel', type: 'Corporate Account', amount: 145000, paid: 60000, dueDate: 'Jul 22', status: 'Partial' },
-    { id: 'INV-5499', billTo: 'Rohan Desai', type: 'Guest Folio', amount: 4200, paid: 4200, dueDate: 'Jul 15', status: 'Paid' },
-    { id: 'INV-5498', billTo: 'Zenith Events Pvt Ltd', type: 'Banquet Invoice', amount: 285000, paid: 0, dueDate: 'Jul 10', status: 'Overdue' },
-    { id: 'INV-5497', billTo: 'Priya Nair', type: 'Guest Folio', amount: 8900, paid: 8900, dueDate: 'Jul 14', status: 'Paid' },
-    { id: 'INV-5496', billTo: 'Corporate Account — Infosys', type: 'Corporate Account', amount: 62000, paid: 0, dueDate: 'Jul 25', status: 'Draft' },
-    { id: 'CN-0087', billTo: 'Meridian Corporate Travel', type: 'Credit Note', amount: -5000, paid: -5000, dueDate: '—', status: 'Issued' },
-    { id: 'INV-5495', billTo: 'Vikram Malhotra', type: 'Guest Folio', amount: 12400, paid: 0, dueDate: 'Jul 5', status: 'Overdue' },
-  ];
+  const allInvoices = (apiInvoices || []).map(inv => {
+    const rawStatus = inv.status || 'UNPAID';
+    let statusFormatted = rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1).toLowerCase();
+    if (statusFormatted === 'Unpaid') statusFormatted = 'Overdue';
+
+    return {
+      id: inv.invoice_number || 'INV-0000',
+      billTo: inv.bill_to,
+      type: inv.invoice_type,
+      amount: Number(inv.total_amount) || 0,
+      paid: Number(inv.paid_amount) || 0,
+      dueDate: inv.due_date ? new Date(inv.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '-',
+      status: statusFormatted,
+      rawId: inv.id
+    };
+  });
   const invoicesData = allInvoices.filter(i =>
     (invoiceStatusFilter === 'All' || i.status === invoiceStatusFilter) &&
     (i.id + i.billTo + i.type).toLowerCase().includes(invoiceSearch.toLowerCase())
@@ -498,94 +665,150 @@ export default function FinanceDashboard() {
     label: s, value: allInvoices.filter(i => i.status === s).reduce((sum, i) => sum + Math.max(i.amount, 0), 0),
     color: ['#10b981', '#f59e0b', '#f43f5e', '#94a3b8'][idx],
   })).filter(s => s.value > 0);
+  let b0_30 = 0, b31_60 = 0, b61_90 = 0, b90 = 0;
+  const now = new Date();
+  (apiInvoices || []).forEach(inv => {
+    if (inv.status === 'PAID') return;
+    const due = new Date(inv.due_date);
+    if (isNaN(due)) return;
+    const diffDays = Math.ceil(Math.abs(now - due) / (1000 * 60 * 60 * 24));
+    const amt = Number(inv.total_amount) - Number(inv.paid_amount);
+    if (diffDays <= 30) b0_30 += amt;
+    else if (diffDays <= 60) b31_60 += amt;
+    else if (diffDays <= 90) b61_90 += amt;
+    else b90 += amt;
+  });
+
   const agingBuckets = [
-    { label: '0–30 Days', value: 62000, color: '#10b981' },
-    { label: '31–60 Days', value: 85000, color: '#f59e0b' },
-    { label: '61–90 Days', value: 297400, color: '#f43f5e' },
-    { label: '90+ Days', value: 12400, color: '#7c2d12' },
+    { label: '0–30 Days', value: b0_30, color: '#10b981' },
+    { label: '31–60 Days', value: b31_60, color: '#f59e0b' },
+    { label: '61–90 Days', value: b61_90, color: '#f43f5e' },
+    { label: '90+ Days', value: b90, color: '#7c2d12' },
   ];
-  const handleAddInvoice = (e) => {
+  const handleAddInvoice = async (e) => {
     e.preventDefault();
     if (!invoiceForm.billTo || !invoiceForm.amount) return;
+
+    try {
+      const token = sessionStorage.getItem('hms_token');
+      const res = await fetch('http://localhost:3000/api/finance/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(invoiceForm)
+      });
+      if (res.ok) {
+        const { data } = await res.json();
+        setApiInvoices(prev => [data.invoice, ...prev]);
+      }
+    } catch (err) {
+      console.error('Failed to create invoice:', err);
+    }
+
     setIsInvoiceModalOpen(false);
     setInvoiceForm({ billTo: '', type: 'Guest Folio', amount: '', dueDate: '', notes: '' });
   };
 
   // --- Accounts Payable / Vendor Bills data ---
   const vendorCategories = ['Kitchen & F&B Supplies', 'Housekeeping & Amenities', 'Utilities', 'Maintenance & AMC', 'Travel & Transport', 'Events & Décor'];
-  const allPayables = [
-    { id: 'BILL-2210', vendor: 'Metro Cash & Carry', category: 'Kitchen & F&B Supplies', amount: 48200, dueDate: 'Jul 18', status: 'Scheduled' },
-    { id: 'BILL-2209', vendor: 'State Electricity Board', category: 'Utilities', amount: 145200, dueDate: 'Jul 20', status: 'Scheduled' },
-    { id: 'BILL-2208', vendor: 'CoolAir HVAC Services', category: 'Maintenance & AMC', amount: 32000, dueDate: 'Jul 12', status: 'Overdue' },
-    { id: 'BILL-2207', vendor: 'Spa Supplies Ltd', category: 'Housekeeping & Amenities', amount: 21500, dueDate: 'Jul 24', status: 'Scheduled' },
-    { id: 'BILL-2206', vendor: 'Bloom Décor Studio', category: 'Events & Décor', amount: 58500, dueDate: 'Jul 9', status: 'Paid' },
-    { id: 'BILL-2205', vendor: 'MakeMyTrip Corporate', category: 'Travel & Transport', amount: 76000, dueDate: 'Jul 8', status: 'Paid' },
-    { id: 'BILL-2204', vendor: 'Shell Fuel Station', category: 'Travel & Transport', amount: 14200, dueDate: 'Jul 5', status: 'Overdue' },
-  ];
+  const allPayables = (apiPayables || []).map(b => ({
+    id: b.bill_number,
+    vendor: b.vendor,
+    category: b.category,
+    amount: Number(b.amount) || 0,
+    dueDate: b.due_date ? new Date(b.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '-',
+    status: b.status,
+    rawId: b.id
+  }));
   const payablesData = allPayables.filter(b =>
     (payableStatusFilter === 'All' || b.status === payableStatusFilter) &&
     (b.id + b.vendor + b.category).toLowerCase().includes(payableSearch.toLowerCase())
   );
-  const vendorLedger = [
-    { vendor: 'Metro Cash & Carry', color: '#f59e0b', outstanding: 48200 },
-    { vendor: 'State Electricity Board', color: '#0ea5e9', outstanding: 145200 },
-    { vendor: 'CoolAir HVAC Services', color: '#f43f5e', outstanding: 32000 },
-    { vendor: 'Spa Supplies Ltd', color: '#a855f7', outstanding: 21500 },
-  ];
+  const vendorLedgerMap = {};
+  allPayables.forEach(b => {
+    if (b.status === 'Paid' || b.status === 'PAID') return;
+    vendorLedgerMap[b.vendor] = (vendorLedgerMap[b.vendor] || 0) + b.amount;
+  });
+  const vColors = ['#f59e0b', '#0ea5e9', '#f43f5e', '#a855f7', '#10b981', '#6366f1'];
+  const vendorLedger = Object.keys(vendorLedgerMap).map((vendor, idx) => ({
+    vendor,
+    outstanding: vendorLedgerMap[vendor],
+    color: vColors[idx % vColors.length]
+  })).sort((a, b) => b.outstanding - a.outstanding);
   const totalPayables = allPayables.reduce((s, b) => s + b.amount, 0);
   const overduePayables = allPayables.filter(b => b.status === 'Overdue');
   const dueThisWeek = allPayables.filter(b => b.status === 'Scheduled');
-  const handleAddBill = (e) => {
+  const handleAddBill = async (e) => {
     e.preventDefault();
     if (!billForm.vendor || !billForm.amount) return;
+
+    try {
+      const token = sessionStorage.getItem('hms_token');
+      const res = await fetch('http://localhost:3000/api/finance/payables', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(billForm)
+      });
+      if (res.ok) {
+        const { data } = await res.json();
+        setApiPayables(prev => [data.payable, ...prev]);
+      }
+    } catch (err) {
+      console.error('Failed to create vendor bill:', err);
+    }
+
     setIsBillModalOpen(false);
     setBillForm({ vendor: '', category: 'Kitchen & F&B Supplies', amount: '', dueDate: '', notes: '' });
   };
 
   // --- Financial Statements data ---
+  const revRooms = apiStatements?.revenue?.find(r => r.invoice_type === 'Guest Folio')?.total || 0;
+  const revCorporate = apiStatements?.revenue?.find(r => r.invoice_type === 'Corporate Account')?.total || 0;
+  const revBanquet = apiStatements?.revenue?.find(r => r.invoice_type === 'Banquet')?.total || 0;
+
   const revenueByDept = [
-    { label: 'Rooms', value: 2840000, color: '#059669' },
-    { label: 'F&B', value: 1265000, color: '#f59e0b' },
-    { label: 'Banquets & Events', value: 985000, color: '#6366f1' },
-    { label: 'Spa & Other', value: 310000, color: '#ec4899' },
+    { label: 'Rooms (Guest Folios)', value: Number(revRooms), color: '#059669' },
+    { label: 'Corporate & B2B', value: Number(revCorporate), color: '#f59e0b' },
+    { label: 'Banquets & Events', value: Number(revBanquet), color: '#6366f1' },
+    { label: 'Other', value: 0, color: '#ec4899' },
   ];
   const totalRevenuePnl = revenueByDept.reduce((s, d) => s + d.value, 0);
-  const pnlExpenses = [
-    { label: 'Cost of Goods (F&B)', value: 512000, color: '#f59e0b', icon: <UtensilsCrossed size={15} /> },
-    { label: 'Staff Costs & Payroll', value: 1180000, color: '#4f46e5', icon: <Users size={15} /> },
-    { label: 'Utilities & Maintenance', value: 340000, color: '#0ea5e9', icon: <Building2 size={15} /> },
-    { label: 'Marketing & Admin', value: 215000, color: '#ec4899', icon: <Sparkles size={15} /> },
-    { label: 'Depreciation', value: 120000, color: '#7c3aed', icon: <TrendingDown size={15} /> },
-  ];
+
+  const pnlExpenses = (apiStatements?.expenses || []).map((e, i) => {
+    const colors = ['#f59e0b', '#4f46e5', '#0ea5e9', '#ec4899', '#7c3aed', '#10b981'];
+    return { label: e.category, value: Number(e.total), color: colors[i % colors.length] };
+  });
+  if (pnlExpenses.length === 0) pnlExpenses.push({ label: 'No Expenses Logged', value: 0, color: '#ccc' });
+
   const totalPnlExpenses = pnlExpenses.reduce((s, e) => s + e.value, 0);
   const netProfit = totalRevenuePnl - totalPnlExpenses;
+
   const balanceSheet = {
     assets: [
-      { label: 'Cash & Bank Balances', value: 1842000 },
-      { label: 'Accounts Receivable', value: 452400 },
-      { label: 'Inventory (F&B, Supplies)', value: 218000 },
-      { label: 'Property & Equipment (Net)', value: 18500000 },
+      { label: 'Cash & Bank Balances', value: Number(apiStatements?.assets?.cash_and_bank || 0) },
+      { label: 'Accounts Receivable', value: Number(apiStatements?.assets?.receivable || 0) },
+      { label: 'Inventory (F&B, Supplies)', value: Number(apiStatements?.assets?.inventory || 0) },
+      { label: 'Property & Equipment (Net)', value: Number(apiStatements?.assets?.property_and_equipment || 0) },
     ],
     liabilities: [
-      { label: 'Accounts Payable', value: 340900 },
-      { label: 'GST / Tax Payable', value: 25650 },
-      { label: 'Guest Deposits Held', value: 186000 },
-      { label: 'Long-term Loan', value: 6200000 },
+      { label: 'Accounts Payable', value: Number(apiStatements?.liabilities?.payable || 0) },
+      { label: 'GST / Tax Payable', value: Number(apiStatements?.liabilities?.taxes || 0) },
+      { label: 'Guest Deposits Held', value: Number(apiStatements?.liabilities?.deposits || 0) },
+      { label: 'Long-term Loan', value: Number(apiStatements?.liabilities?.long_term_loan || 0) },
     ],
-    equity: [{ label: "Owner's Equity & Retained Earnings", value: 14260850 }],
+    equity: [{ label: "Owner's Equity & Retained Earnings", value: Number(apiStatements?.equity?.owners_equity || 0) + netProfit }],
   };
   const totalAssets = balanceSheet.assets.reduce((s, a) => s + a.value, 0);
   const totalLiabilities = balanceSheet.liabilities.reduce((s, l) => s + l.value, 0);
   const totalEquity = balanceSheet.equity.reduce((s, e) => s + e.value, 0);
+
   const cashFlow = {
     operating: [
       { label: 'Net Profit', value: netProfit },
-      { label: 'Depreciation Add-back', value: 120000 },
-      { label: 'Change in Receivables', value: -68000 },
-      { label: 'Change in Payables', value: 42500 },
+      { label: 'Change in Receivables', value: -Number(apiStatements?.assets?.receivable || 0) },
+      { label: 'Change in Payables', value: Number(apiStatements?.liabilities?.payable || 0) },
     ],
-    investing: [{ label: 'Kitchen Equipment Purchase', value: -185000 }, { label: 'Property Improvements', value: -240000 }],
-    financing: [{ label: 'Loan Repayment', value: -150000 }, { label: 'Owner Drawings', value: -80000 }],
+    investing: [{ label: 'Property Improvements', value: Number(apiStatements?.cashFlow?.property_improvements || 0) }],
+    financing: [{ label: 'Loan Repayment', value: Number(apiStatements?.cashFlow?.loan_repayment || 0) }],
   };
   const cfOperating = cashFlow.operating.reduce((s, i) => s + i.value, 0);
   const cfInvesting = cashFlow.investing.reduce((s, i) => s + i.value, 0);
@@ -593,91 +816,52 @@ export default function FinanceDashboard() {
   const netCashFlow = cfOperating + cfInvesting + cfFinancing;
 
   // --- Budgeting & Forecasting data ---
-  const budgetByDept = [
-    { dept: 'Rooms', budget: 2700000, actual: 2840000 },
-    { dept: 'F&B', budget: 1350000, actual: 1265000 },
-    { dept: 'Banquets & Events', budget: 900000, actual: 985000 },
-    { dept: 'Housekeeping', budget: 420000, actual: 398000 },
-    { dept: 'Maintenance', budget: 260000, actual: 305000 },
-    { dept: 'Marketing & Admin', budget: 230000, actual: 215000 },
-  ];
+  const budgetByDept = (apiBudgets || []).map(b => {
+    let actual = 0;
+    if (b.type === 'Revenue') {
+      if (b.department_name === 'Rooms') {
+        actual = (apiInvoices || []).filter(i => i.invoice_type === 'Guest Folio').reduce((s, i) => s + Number(i.total_amount), 0);
+      } else if (b.department_name === 'Banquets & Events') {
+        actual = (apiInvoices || []).filter(i => i.invoice_type === 'Banquet').reduce((s, i) => s + Number(i.total_amount), 0);
+      }
+    } else {
+      actual = (apiExpenses || []).filter(e => e.category === b.department_name).reduce((s, e) => s + Number(e.amount), 0);
+    }
+    return { dept: b.department_name, budget: Number(b.budget_amount), actual };
+  });
+  if (budgetByDept.length === 0) {
+    budgetByDept.push({ dept: 'No Budgets Set', budget: 1, actual: 0 });
+  }
   const totalBudget = budgetByDept.reduce((s, d) => s + d.budget, 0);
   const totalActual = budgetByDept.reduce((s, d) => s + d.actual, 0);
   const overallVariancePct = (((totalActual - totalBudget) / totalBudget) * 100).toFixed(1);
-  const forecastTrend = [
-    { label: 'Aug', value: 5480000 }, { label: 'Sep', value: 5620000 }, { label: 'Oct', value: 5910000 },
-    { label: 'Nov', value: 6240000 }, { label: 'Dec', value: 7150000 }, { label: 'Jan', value: 6480000 },
-  ];
+  const forecastTrend = apiOverview?.sixMonthRevenueProjection || [];
 
   // --- Payroll & Staff Costs data ---
-  const payrollByDept = [
-    { label: 'Front Office', headcount: 18, gross: 612000, pf: 73440, esi: 14688, color: '#4f46e5' },
-    { label: 'Housekeeping', headcount: 26, gross: 754000, pf: 90480, esi: 18096, color: '#0ea5e9' },
-    { label: 'F&B / Kitchen', headcount: 34, gross: 1088000, pf: 130560, esi: 26112, color: '#f59e0b' },
-    { label: 'Sales & Banquets', headcount: 9, gross: 486000, pf: 58320, esi: 11664, color: '#ec4899' },
-    { label: 'Maintenance & Security', headcount: 14, gross: 392000, pf: 47040, esi: 9408, color: '#10b981' },
-    { label: 'Admin & Finance', headcount: 7, gross: 318000, pf: 38160, esi: 7632, color: '#7c3aed' },
-  ];
-  const totalHeadcount = payrollByDept.reduce((s, d) => s + d.headcount, 0);
-  const totalGrossPayroll = payrollByDept.reduce((s, d) => s + d.gross, 0);
-  const totalPfLiability = payrollByDept.reduce((s, d) => s + d.pf, 0);
-  const totalEsiLiability = payrollByDept.reduce((s, d) => s + d.esi, 0);
-  const avgCostPerEmployee = Math.round(totalGrossPayroll / totalHeadcount);
+  const payrollByDept = apiPayroll;
+  const totalHeadcount = payrollByDept.reduce((s, d) => s + (d.headcount || 0), 0);
+  const totalGrossPayroll = payrollByDept.reduce((s, d) => s + (d.gross || 0), 0);
+  const totalPfLiability = payrollByDept.reduce((s, d) => s + (d.pf || 0), 0);
+  const totalEsiLiability = payrollByDept.reduce((s, d) => s + (d.esi || 0), 0);
+  const avgCostPerEmployee = totalHeadcount > 0 ? Math.round(totalGrossPayroll / totalHeadcount) : 0;
 
   // --- Guest Deposits & Advances data ---
-  const allDeposits = [
-    { id: 'DEP-6601', guest: 'Aryan Singh', ref: 'BKG-2214', type: 'Security Deposit', amount: 5000, date: 'Jul 16', status: 'Held' },
-    { id: 'DEP-6600', guest: 'Zenith Events Pvt Ltd', ref: 'BKQ-0091', type: 'Advance Booking', amount: 120000, date: 'Jul 10', status: 'Applied to Bill' },
-    { id: 'DEP-6599', guest: 'Priya Nair', ref: 'BKG-2209', type: 'Security Deposit', amount: 3000, date: 'Jul 14', status: 'Refunded' },
-    { id: 'DEP-6598', guest: 'Meridian Corporate Travel', ref: 'BKG-2188', type: 'Advance Booking', amount: 45000, date: 'Jul 6', status: 'Held' },
-    { id: 'DEP-6597', guest: 'Rohan Desai', ref: 'BKG-2199', type: 'Security Deposit', amount: 5000, date: 'Jul 15', status: 'Refunded' },
-    { id: 'DEP-6596', guest: 'No-show — Vikram M.', ref: 'BKG-2150', type: 'Advance Booking', amount: 8500, date: 'Jul 2', status: 'Forfeited' },
-  ];
+  const allDeposits = apiDeposits;
   const depositsData = allDeposits.filter(d =>
     (depositStatusFilter === 'All' || d.status === depositStatusFilter) &&
     (d.id + d.guest + d.ref + d.type).toLowerCase().includes(depositSearch.toLowerCase())
   );
-  const totalHeldEscrow = allDeposits.filter(d => d.status === 'Held').reduce((s, d) => s + d.amount, 0);
-  const totalAdvanceBookings = allDeposits.filter(d => d.type === 'Advance Booking').reduce((s, d) => s + d.amount, 0);
+  const totalHeldEscrow = allDeposits.filter(d => d.status === 'Held').reduce((s, d) => s + (d.amount || 0), 0);
+  const totalAdvanceBookings = allDeposits.filter(d => d.type === 'Advance Booking').reduce((s, d) => s + (d.amount || 0), 0);
   const refundsPendingCount = allDeposits.filter(d => d.status === 'Held' && d.type === 'Security Deposit').length;
-  const totalForfeited = allDeposits.filter(d => d.status === 'Forfeited').reduce((s, d) => s + d.amount, 0);
-
-  // --- Audit Trail data ---
-  const allAuditLog = [
-    { id: 'AUD-9001', user: 'Finance Controller', action: 'Posted Entry', target: 'JV-2201 · Room Revenue', time: 'Today, 11:20 AM', approval: 'Auto-approved' },
-    { id: 'AUD-9000', user: 'A. Kapoor (Accountant)', action: 'Edited Entry', target: 'INV-5500 · Amount corrected', time: 'Today, 10:05 AM', approval: 'Pending Review' },
-    { id: 'AUD-8999', user: 'Finance Controller', action: 'Approved Expense', target: 'EXP-3295 · ₹45,200', time: 'Yesterday, 06:40 PM', approval: 'Approved' },
-    { id: 'AUD-8998', user: 'S. Rao (Auditor)', action: 'Flagged Entry', target: 'BILL-2208 · Overdue > 30 days', time: 'Yesterday, 04:12 PM', approval: 'Escalated' },
-    { id: 'AUD-8997', user: 'Finance Controller', action: 'Deleted Entry', target: 'JV-2187 · Duplicate voucher', time: 'Jul 14, 02:30 PM', approval: 'Approved' },
-    { id: 'AUD-8996', user: 'A. Kapoor (Accountant)', action: 'Posted Entry', target: 'JV-2186 · Bank — HDFC Current', time: 'Jul 14, 09:15 AM', approval: 'Auto-approved' },
-  ];
-  const auditLog = allAuditLog.filter(a =>
-    (auditActionFilter === 'All' || a.action === auditActionFilter) &&
-    (a.user + a.action + a.target).toLowerCase().includes(auditSearch.toLowerCase())
-  );
-  const pendingApprovalsCount = allAuditLog.filter(a => a.approval === 'Pending Review' || a.approval === 'Escalated').length;
-  const flaggedHighValueCount = allAuditLog.filter(a => a.approval === 'Escalated').length;
-  const auditActionTypes = ['Posted Entry', 'Edited Entry', 'Approved Expense', 'Flagged Entry', 'Deleted Entry'];
+  const totalForfeited = allDeposits.filter(d => d.status === 'Forfeited').reduce((s, d) => s + (d.amount || 0), 0);
 
   // --- Bank Accounts data ---
-  const bankAccounts = [
-    { name: 'HDFC Current A/c', number: '••• 4471', balance: 618220, type: 'Current', color: '#4f46e5' },
-    { name: 'ICICI Savings A/c', number: '••• 2290', balance: 342800, type: 'Savings', color: '#0ea5e9' },
-    { name: 'Axis Escrow A/c', number: '••• 7734', balance: 186000, type: 'Escrow (Guest Deposits)', color: '#10b981' },
-    { name: 'SBI Payroll A/c', number: '••• 9012', balance: 695000, type: 'Payroll', color: '#f59e0b' },
-  ];
-  const totalBankBalance = bankAccounts.reduce((s, a) => s + a.balance, 0);
-  const recentTransfers = [
-    { id: 'TRF-441', from: 'HDFC Current A/c', to: 'SBI Payroll A/c', amount: 695000, date: 'Jul 15', status: 'Completed' },
-    { id: 'TRF-440', from: 'ICICI Savings A/c', to: 'HDFC Current A/c', amount: 150000, date: 'Jul 12', status: 'Completed' },
-    { id: 'TRF-439', from: 'HDFC Current A/c', to: 'Axis Escrow A/c', amount: 45000, date: 'Jul 10', status: 'Completed' },
-    { id: 'TRF-438', from: 'HDFC Current A/c', to: 'ICICI Savings A/c', amount: 80000, date: 'Jul 18', status: 'Pending' },
-  ];
-  const standingInstructions = [
-    { label: 'Loan EMI — Axis Bank', amount: 125000, frequency: 'Monthly, 5th', account: 'HDFC Current A/c' },
-    { label: 'Payroll Sweep', amount: 695000, frequency: 'Monthly, 1st', account: 'HDFC Current A/c → SBI Payroll' },
-  ];
-  const pendingTransfersCount = recentTransfers.filter(t => t.status === 'Pending').length;
+  const bankAccounts = apiBankAccounts;
+  const totalBankBalance = bankAccounts.reduce((s, a) => s + (a.balance || 0), 0);
+  const recentTransfers = [];
+  const standingInstructions = [];
+  const pendingTransfersCount = 0;
   const handleAddTransfer = (e) => {
     e.preventDefault();
     if (!transferForm.amount || transferForm.from === transferForm.to) return;
@@ -685,22 +869,27 @@ export default function FinanceDashboard() {
     setTransferForm({ from: 'HDFC Current A/c', to: 'ICICI Savings A/c', amount: '', notes: '' });
   };
 
-  // --- Custom Reports data ---
-  const reportTemplates = [
-    { key: 'gstr1', label: 'GSTR-1', desc: 'Outward supplies return, ready for GST portal filing.', icon: <FileText size={18} />, lastGenerated: 'Jul 1' },
-    { key: 'gstr3b', label: 'GSTR-3B', desc: 'Summary return with tax liability and ITC.', icon: <FileBarChart2 size={18} />, lastGenerated: 'Jul 1' },
-    { key: 'zreport', label: 'Day-End Z-Report', desc: 'Closing register totals across all POS outlets.', icon: <Receipt size={18} />, lastGenerated: 'Today' },
-    { key: 'deptRevenue', label: 'Department Revenue Report', desc: 'Rooms, F&B and banquet revenue split by day.', icon: <PieChart size={18} />, lastGenerated: 'Jul 15' },
-  ];
-  const generatedReportsHistory = [
-    { id: 'RPT-771', name: 'GSTR-3B — June 2026', generatedOn: 'Jul 1, 09:12 AM', format: 'PDF' },
-    { id: 'RPT-770', name: 'Day-End Z-Report — Jul 15', generatedOn: 'Jul 16, 12:02 AM', format: 'PDF' },
-    { id: 'RPT-769', name: 'Department Revenue — Jun 2026', generatedOn: 'Jul 2, 04:40 PM', format: 'Excel' },
-    { id: 'RPT-768', name: 'GSTR-1 — June 2026', generatedOn: 'Jul 1, 09:05 AM', format: 'PDF' },
-  ];
-  const handleGenerateReport = (key) => {
-    setGeneratingReportKey(key);
-    setTimeout(() => setGeneratingReportKey(null), 1200);
+  const handleAddCashCount = async (e) => {
+    e.preventDefault();
+    if (!cashForm.actual_amount) return;
+
+    try {
+      const token = sessionStorage.getItem('hms_token');
+      const res = await fetch('http://localhost:3000/api/finance/cash-register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(cashForm)
+      });
+      if (res.ok) {
+        const { data } = await res.json();
+        setApiCashRegister(data);
+      }
+    } catch (err) {
+      console.error('Failed to log cash count:', err);
+    }
+
+    setIsCashModalOpen(false);
+    setCashForm({ actual_amount: '', notes: '' });
   };
 
   const navGroups = [
@@ -709,32 +898,21 @@ export default function FinanceDashboard() {
       items: [
         { key: 'overview', label: 'Financial Overview', icon: <Building2 size={15} /> },
         { key: 'invoices', label: 'Invoices & Billing', icon: <FileText size={15} /> },
-        { key: 'payables', label: 'Accounts Payable', icon: <Truck size={15} /> },
-        { key: 'expenses', label: 'Expense Management', icon: <PieChart size={15} /> },
+        { key: 'expenses', label: 'Expenses & Payables', icon: <PieChart size={15} /> },
         { key: 'reconciliation', label: 'Reconciliation', icon: <Link2 size={15} /> },
-        { key: 'reports', label: 'Tax & Ledgers', icon: <Receipt size={15} /> },
       ],
     },
     {
       heading: 'Planning & Reporting',
       items: [
         { key: 'statements', label: 'Financial Statements', icon: <Scale size={15} /> },
-        { key: 'budgeting', label: 'Budgeting & Forecasting', icon: <Target size={15} /> },
-        { key: 'customReports', label: 'Custom Reports', icon: <FileSpreadsheet size={15} /> },
       ],
     },
     {
-      heading: 'Payroll & Deposits',
+      heading: 'Treasury & HR',
       items: [
         { key: 'payroll', label: 'Payroll & Staff Costs', icon: <Users size={15} /> },
-        { key: 'deposits', label: 'Guest Deposits', icon: <LockKeyhole size={15} /> },
-      ],
-    },
-    {
-      heading: 'Governance',
-      items: [
-        { key: 'audit', label: 'Audit Trail', icon: <History size={15} /> },
-        { key: 'bank', label: 'Bank Accounts', icon: <Landmark size={15} /> },
+        { key: 'bank', label: 'Bank & Deposits', icon: <Landmark size={15} /> },
       ],
     },
   ];
@@ -864,26 +1042,20 @@ export default function FinanceDashboard() {
           <div>
             <h2 className="text-2xl font-black text-zinc-500 tracking-tight mt-0.5">
               {{
-                overview: 'Financial Overview', expenses: 'Expense Management', reconciliation: 'Reconciliation', reports: 'Tax & Ledgers',
-                invoices: 'Invoices & Billing', payables: 'Accounts Payable', statements: 'Financial Statements', budgeting: 'Budgeting & Forecasting',
-                payroll: 'Payroll & Staff Costs', deposits: 'Guest Deposits & Advances', audit: 'Audit Trail', bank: 'Bank Accounts', customReports: 'Custom Reports',
+                overview: 'Financial Overview', expenses: 'Expenses & Payables', reconciliation: 'Reconciliation',
+                invoices: 'Invoices & Billing', statements: 'Financial Statements',
+                payroll: 'Payroll & Staff Costs', bank: 'Bank & Deposits',
               }[activeTab]}
             </h2>
             <p className="text-xs text-zinc-400 mt-1">
               {{
                 overview: 'Real-time ledger, revenue and reconciliation metrics.',
-                expenses: 'Travel, dining, kitchen, vehicles, amenities and every operational cost center.',
+                expenses: 'Unified vendor bills, operational costs, and budget tracking.',
                 reconciliation: 'Match bank statements and gateway payouts against recorded transactions.',
-                reports: 'GST breakup, journal vouchers and the general ledger.',
                 invoices: 'Guest folios, corporate invoices, credit notes and partial payments.',
-                payables: 'Supplier bills, due dates, payment scheduling and vendor balances.',
-                statements: 'Profit & Loss, Balance Sheet and Cash Flow at a glance.',
-                budgeting: 'Budget vs actual by department, variance and forward projections.',
+                statements: 'Profit & Loss, Balance Sheet, Cash Flow and General Ledger.',
                 payroll: 'Salary disbursements, PF/ESI liabilities and department-wise labor cost.',
-                deposits: 'Security deposits and advance bookings held in escrow, with refund tracking.',
-                audit: 'Who edited or posted each ledger entry, and the approval chain behind it.',
-                bank: 'Balances across accounts, inter-account transfers and standing instructions.',
-                customReports: 'GSTR-ready exports, day-end Z-reports and department revenue reports.',
+                bank: 'Unified treasury view of bank balances, transfers, and guest deposits in escrow.',
               }[activeTab]}
             </p>
           </div>
@@ -910,7 +1082,7 @@ export default function FinanceDashboard() {
 
             {/* Profile Avatar Widget */}
             {(() => {
-              const staffName = localStorage.getItem('hms_name') || 'Staff';
+              const staffName = sessionStorage.getItem('hms_name') || 'Staff';
               const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
               const designation = 'Finance Officer';
               return (
@@ -938,6 +1110,46 @@ export default function FinanceDashboard() {
           </div>
         </div>
 
+        {/* BROADCAST BANNER */}
+        <AnimatePresence>
+          {broadcasts.filter(b => !dismissedBroadcasts.includes(b.id) && (!b.expires_at || new Date(b.expires_at) > new Date())).map((broadcast) => (
+            <motion.div
+              key={broadcast.id}
+              initial={{ opacity: 0, y: -20, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+              className="relative overflow-hidden rounded-[1.5rem] bg-gradient-to-r from-rose-500 via-rose-600 to-amber-500 p-[2px] shadow-lg shadow-rose-500/20 mb-4 min-h-[72px]"
+            >
+              <div className="w-full h-full relative bg-white/10 backdrop-blur-md rounded-[calc(1.5rem-2px)] px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  <div className="relative shrink-0">
+                    <div className="absolute inset-0 bg-white/40 rounded-full animate-ping opacity-75"></div>
+                    <div className="relative w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white border border-white/40 shadow-sm backdrop-blur-lg">
+                      <Zap size={18} className="drop-shadow-md" />
+                    </div>
+                  </div>
+                  <div className="flex-1 text-white flex flex-col justify-center">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] font-black uppercase tracking-widest bg-white/20 px-2 py-0.5 rounded-full backdrop-blur-sm border border-white/20">
+                        {broadcast.target_dept === 'ALL' ? 'GLOBAL BROADCAST' : 'DEPARTMENT ALERT'}
+                      </span>
+                      <span className="text-[10px] font-semibold text-white/80 border-l border-white/20 pl-2">From: {broadcast.sender_name}</span>
+                    </div>
+                    <p className="text-sm font-bold tracking-wide drop-shadow-sm leading-snug">{broadcast.message}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDismissedBroadcasts(prev => [...prev, broadcast.id])}
+                  className="shrink-0 w-8 h-8 rounded-full bg-white/10 hover:bg-white/25 flex items-center justify-center text-white transition-colors border border-white/10 self-end sm:self-center"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+
         <AnimatePresence mode="wait">
           {isLoading ? (
             <motion.div key="loader" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-96 flex flex-col items-center justify-center text-zinc-400">
@@ -964,7 +1176,10 @@ export default function FinanceDashboard() {
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: i * 0.08, type: 'spring', stiffness: 300, damping: 24 }}
                           whileHover={{ y: -5, scale: 1.015 }}
-                          className="relative overflow-hidden bg-white rounded-[1.75rem] p-5 border border-zinc-200/60 flex items-start justify-between"
+                          onClick={() => {
+                            if (kpi.action === 'countCash') setIsCashModalOpen(true);
+                          }}
+                          className={`relative overflow-hidden bg-white rounded-[1.75rem] p-5 border border-zinc-200/60 flex items-start justify-between ${kpi.action ? 'cursor-pointer' : ''}`}
                           style={{ boxShadow: `0 1px 2px rgba(0,0,0,0.04), 0 14px 30px -18px ${t.glow}` }}
                         >
                           <div className="flex-1 min-w-0">
@@ -1021,24 +1236,16 @@ export default function FinanceDashboard() {
 
                   {/* Charts row */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <motion.div
-                      whileHover={{ y: -6, scale: 1.01 }}
-                      transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-zinc-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60"
-                    >
-                      <div className="absolute -bottom-16 -right-10 w-56 h-56 rounded-full bg-emerald-200/20 blur-3xl pointer-events-none" />
+                    <motion.div whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 350, damping: 22 }}
+                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-zinc-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
                       <div className="relative flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#D4A373] to-[#D4A373] flex items-center justify-center shadow-md shadow-[#D4A373]/20">
-                            <TrendingUp size={14} className="text-white" />
-                          </div>
-                          <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">7-Day Revenue Trend</h3>
+                          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#D4A373] to-[#D4A373] flex items-center justify-center shadow-md shadow-[#D4A373]/20"><TrendingUp size={14} className="text-white" /></div>
+                          <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">6-Month Revenue Projection</h3>
                         </div>
-                        <span className="text-[9px] font-bold text-[#D4A373] uppercase tracking-widest bg-zinc-50 px-2.5 py-1 rounded-full border border-[#D4A373]/30">Live</span>
+                        <span className="text-[9px] font-bold text-[#D4A373] uppercase tracking-widest bg-zinc-50 px-2.5 py-1 rounded-full border border-[#D4A373]/30">Forecast</span>
                       </div>
-                      <div className="relative">
-                        <RevenueTrendLine data={revenueTrend} />
-                      </div>
+                      <div className="relative"><RevenueTrendLine data={forecastTrend} /></div>
                     </motion.div>
 
                     <motion.div
@@ -1098,9 +1305,8 @@ export default function FinanceDashboard() {
                               <td className="p-4 text-sm text-zinc-600">{txn.date}</td>
                               <td className="p-4 text-sm font-bold text-zinc-900 text-right">{txn.amount}</td>
                               <td className="p-4 text-right">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
-                                  txn.status === 'Settled' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30' : 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
-                                }`}>
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${txn.status === 'Settled' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30' : 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                  }`}>
                                   {txn.status === 'Settled' ? <CheckCircle2 size={12} /> : <Clock size={12} />}
                                   {txn.status}
                                 </span>
@@ -1245,6 +1451,42 @@ export default function FinanceDashboard() {
                     </div>
                   </div>
 
+                  {/* Budget vs Actual by Department */}
+                  <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden p-6">
+                    <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider mb-5"><Percent size={16} className="text-indigo-600" /> Budget vs Actual by Department</h3>
+                    <div className="flex flex-col gap-5">
+                      {budgetByDept.map((d, i) => {
+                        const variancePct = (((d.actual - d.budget) / d.budget) * 100).toFixed(1);
+                        const over = d.actual > d.budget;
+                        const maxVal = Math.max(d.budget, d.actual);
+                        return (
+                          <div key={i}>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-xs font-bold text-zinc-700">{d.dept}</span>
+                              <span className={`text-[11px] font-black ${over ? 'text-rose-600' : 'text-[#D4A373]'}`}>{over ? '+' : ''}{variancePct}% vs budget</span>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[9px] font-bold uppercase text-zinc-400 w-14 shrink-0">Budget</span>
+                                <div className="flex-1 h-2 rounded-full bg-zinc-100 overflow-hidden">
+                                  <motion.div initial={{ width: 0 }} animate={{ width: `${(d.budget / maxVal) * 100}%` }} transition={{ duration: 0.8, delay: i * 0.05 }} className="h-full rounded-full bg-zinc-300" />
+                                </div>
+                                <span className="text-[10px] font-bold text-zinc-500 w-24 text-right shrink-0">₹{d.budget.toLocaleString('en-IN')}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[9px] font-bold uppercase text-zinc-400 w-14 shrink-0">Actual</span>
+                                <div className="flex-1 h-2 rounded-full bg-zinc-100 overflow-hidden">
+                                  <motion.div initial={{ width: 0 }} animate={{ width: `${(d.actual / maxVal) * 100}%` }} transition={{ duration: 0.8, delay: i * 0.05 + 0.1 }} className={`h-full rounded-full ${over ? 'bg-rose-500' : 'bg-[#D4A373]'}`} />
+                                </div>
+                                <span className="text-[10px] font-bold text-zinc-900 w-24 text-right shrink-0">₹{d.actual.toLocaleString('en-IN')}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   {/* Expense Ledger Table */}
                   <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
                     <div className="p-5 border-b border-zinc-150 flex flex-col lg:flex-row gap-3 lg:items-center justify-between bg-white/40">
@@ -1294,11 +1536,64 @@ export default function FinanceDashboard() {
                               <td className="p-4 text-sm text-zinc-600">{e.date}</td>
                               <td className="p-4 text-sm font-bold text-zinc-900 text-right">{e.amount}</td>
                               <td className="p-4 text-right">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
-                                  e.status === 'Approved' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30' : 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
-                                }`}>
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${e.status === 'Approved' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30' : 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                  }`}>
                                   {e.status === 'Approved' ? <CheckCircle2 size={12} /> : <Clock size={12} />}
                                   {e.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden mt-6">
+                    <div className="p-5 border-b border-zinc-150 flex flex-col lg:flex-row gap-3 lg:items-center justify-between bg-white/40">
+                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><Truck size={16} className="text-indigo-600" /> Vendor Bills</h3>
+                      <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+                        <div className="relative w-full sm:w-56">
+                          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                          <input value={payableSearch} onChange={e => setPayableSearch(e.target.value)} placeholder="Search vendor or bill..." className="fd-input pl-9 py-2 text-xs" />
+                        </div>
+                        <select value={payableStatusFilter} onChange={e => setPayableStatusFilter(e.target.value)} className="fd-input py-2 text-xs bg-white appearance-none cursor-pointer w-full sm:w-40">
+                          <option value="All">All Statuses</option>
+                          <option value="Scheduled">Scheduled</option>
+                          <option value="Overdue">Overdue</option>
+                          <option value="Paid">Paid</option>
+                        </select>
+                        <button onClick={() => setIsBillModalOpen(true)} className="bg-zinc-900 text-white px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-indigo-600 transition-colors flex items-center justify-center gap-2 shrink-0">
+                          <Plus size={13} /> Add Vendor Bill
+                        </button>
+                      </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-zinc-150 text-[10px] uppercase tracking-wider text-zinc-400 bg-zinc-50/50">
+                            <th className="p-4 font-bold">Bill #</th>
+                            <th className="p-4 font-bold">Vendor</th>
+                            <th className="p-4 font-bold">Category</th>
+                            <th className="p-4 font-bold">Due Date</th>
+                            <th className="p-4 font-bold text-right">Amount</th>
+                            <th className="p-4 font-bold text-right">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-100">
+                          {payablesData.length === 0 && (<tr><td colSpan={6} className="p-8 text-center text-xs text-zinc-400">No vendor bills match your filters.</td></tr>)}
+                          {payablesData.map((b, idx) => (
+                            <tr key={idx} className="hover:bg-zinc-50/60 transition-colors">
+                              <td className="p-4 text-xs font-mono text-zinc-500">{b.id}</td>
+                              <td className="p-4 text-sm font-bold text-zinc-900">{b.vendor}</td>
+                              <td className="p-4"><span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full bg-zinc-100 text-zinc-600">{b.category}</span></td>
+                              <td className="p-4 text-sm text-zinc-600">{b.dueDate}</td>
+                              <td className="p-4 text-sm font-bold text-zinc-900 text-right">₹{b.amount.toLocaleString('en-IN')}</td>
+                              <td className="p-4 text-right">
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${b.status === 'Paid' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30' : b.status === 'Overdue' ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                  }`}>
+                                  {b.status === 'Paid' ? <CheckCircle2 size={12} /> : b.status === 'Overdue' ? <AlertTriangle size={12} /> : <Clock size={12} />}
+                                  {b.status}
                                 </span>
                               </td>
                             </tr>
@@ -1320,7 +1615,7 @@ export default function FinanceDashboard() {
                     {[
                       { label: 'Matched', value: reconciliationItems.filter(r => r.status === 'Matched').length, icon: <CheckCircle2 size={16} />, theme: '#D4A373' },
                       { label: 'Unmatched', value: reconciliationItems.filter(r => r.status === 'Unmatched').length, icon: <AlertTriangle size={16} />, theme: '#D4A373' },
-                      { label: 'Total Variance', value: '₹6,750', icon: <ScanLine size={16} />, theme: 'indigo' },
+                      { label: 'Total Variance', value: `₹${reconciliationItems.filter(r => r.status === 'Unmatched').reduce((s, r) => s + r.rawAmount, 0).toLocaleString('en-IN')}`, icon: <ScanLine size={16} />, theme: 'indigo' },
                     ].map((kpi, i) => {
                       const t = themeMap[kpi.theme];
                       return (
@@ -1372,9 +1667,8 @@ export default function FinanceDashboard() {
                               <td className="p-4 text-xs font-mono text-zinc-500">{r.matchedWith || '—'}</td>
                               <td className="p-4 text-sm font-bold text-zinc-900 text-right">{r.amount}</td>
                               <td className="p-4 text-right">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
-                                  r.status === 'Matched' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30' : 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
-                                }`}>
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${r.status === 'Matched' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30' : 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                  }`}>
                                   {r.status === 'Matched' ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
                                   {r.status}
                                 </span>
@@ -1395,63 +1689,7 @@ export default function FinanceDashboard() {
                 </motion.div>
               )}
 
-              {/* ============================================ */}
-              {/* TAB: TAX & LEDGERS                            */}
-              {/* ============================================ */}
-              {activeTab === 'reports' && (
-                <motion.div key="reports" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                    {gstBreakup.map((g, i) => (
-                      <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
-                        className="bg-white rounded-[1.5rem] p-5 border border-zinc-200/60"
-                        style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 14px 30px -18px rgba(79,70,229,0.2)' }}>
-                        <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">{g.label}</p>
-                        <p className="text-2xl font-black text-zinc-900 mb-1">{g.value}</p>
-                        <p className="text-[10px] text-zinc-400">{g.sub}</p>
-                      </motion.div>
-                    ))}
-                  </div>
-
-                  <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
-                    <div className="p-5 border-b border-zinc-150 flex justify-between items-center bg-white/40">
-                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><Receipt size={16} className="text-[#D4A373]" /> General Ledger</h3>
-                      <button
-                        onClick={() => setIsEntryModalOpen(true)}
-                        className="bg-zinc-900 text-white px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-[#D4A373] transition-colors flex items-center gap-2"
-                      >
-                        <Plus size={13} /> New Entry
-                      </button>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="border-b border-zinc-150 text-[10px] uppercase tracking-wider text-zinc-400 bg-zinc-50/50">
-                            <th className="p-4 font-bold">Voucher</th>
-                            <th className="p-4 font-bold">Account Head</th>
-                            <th className="p-4 font-bold">Date</th>
-                            <th className="p-4 font-bold text-right">Debit</th>
-                            <th className="p-4 font-bold text-right">Credit</th>
-                            <th className="p-4 font-bold text-right">Balance</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-zinc-100">
-                          {ledgerEntries.map((l, idx) => (
-                            <tr key={idx} className="hover:bg-zinc-50/60 transition-colors">
-                              <td className="p-4 text-xs font-mono text-zinc-500">{l.voucher}</td>
-                              <td className="p-4 text-sm font-bold text-zinc-900">{l.account}</td>
-                              <td className="p-4 text-sm text-zinc-600">{l.date}</td>
-                              <td className="p-4 text-sm text-red-500 text-right">{l.debit}</td>
-                              <td className="p-4 text-sm text-[#D4A373] text-right">{l.credit}</td>
-                              <td className="p-4 text-sm font-bold text-zinc-900 text-right">{l.balance}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
               {/* ============================================ */}
               {/* TAB: INVOICES & BILLING                       */}
               {/* ============================================ */}
@@ -1480,6 +1718,19 @@ export default function FinanceDashboard() {
                         </motion.div>
                       );
                     })}
+                  </div>
+
+                  {/* GST Breakup */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                    {gstBreakup.map((g, i) => (
+                      <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
+                        className="bg-white rounded-[1.5rem] p-5 border border-zinc-200/60"
+                        style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 14px 30px -18px rgba(79,70,229,0.2)' }}>
+                        <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">{g.label}</p>
+                        <p className="text-2xl font-black text-zinc-900 mb-1">{g.value}</p>
+                        <p className="text-[10px] text-zinc-400">{g.sub}</p>
+                      </motion.div>
+                    ))}
                   </div>
 
                   {/* Charts row: aging + status split */}
@@ -1562,13 +1813,12 @@ export default function FinanceDashboard() {
                               <td className="p-4 text-sm text-zinc-600">{inv.dueDate}</td>
                               <td className={`p-4 text-sm font-bold text-right ${inv.amount < 0 ? 'text-rose-500' : 'text-zinc-900'}`}>{inv.amount < 0 ? '-' : ''}₹{Math.abs(inv.amount).toLocaleString('en-IN')}</td>
                               <td className="p-4 text-right">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
-                                  inv.status === 'Paid' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${inv.status === 'Paid' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
                                   : inv.status === 'Partial' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
-                                  : inv.status === 'Overdue' ? 'bg-rose-50 text-rose-600 border-rose-200'
-                                  : inv.status === 'Issued' ? 'bg-indigo-50 text-indigo-600 border-indigo-200'
-                                  : 'bg-zinc-100 text-zinc-500 border-zinc-200'
-                                }`}>
+                                    : inv.status === 'Overdue' ? 'bg-rose-50 text-rose-600 border-rose-200'
+                                      : inv.status === 'Issued' ? 'bg-indigo-50 text-indigo-600 border-indigo-200'
+                                        : 'bg-zinc-100 text-zinc-500 border-zinc-200'
+                                  }`}>
                                   {inv.status === 'Paid' ? <CheckCircle2 size={12} /> : inv.status === 'Overdue' ? <AlertTriangle size={12} /> : <Clock size={12} />}
                                   {inv.status}
                                 </span>
@@ -1585,122 +1835,7 @@ export default function FinanceDashboard() {
                 </motion.div>
               )}
 
-              {/* ============================================ */}
-              {/* TAB: ACCOUNTS PAYABLE                         */}
-              {/* ============================================ */}
-              {activeTab === 'payables' && (
-                <motion.div key="payables" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                    {[
-                      { label: 'Total Payables', value: `₹${totalPayables.toLocaleString('en-IN')}`, sub: `${allPayables.length} vendor bills`, icon: <Truck size={16} />, theme: 'indigo' },
-                      { label: 'Due This Week', value: `₹${dueThisWeek.reduce((s, b) => s + b.amount, 0).toLocaleString('en-IN')}`, sub: `${dueThisWeek.length} bills scheduled`, icon: <CalendarClock size={16} />, theme: '#D4A373' },
-                      { label: 'Overdue Payables', value: `₹${overduePayables.reduce((s, b) => s + b.amount, 0).toLocaleString('en-IN')}`, sub: `${overduePayables.length} bill${overduePayables.length === 1 ? '' : 's'} past due`, icon: <AlertTriangle size={16} />, theme: 'rose' },
-                      { label: 'Active Vendors', value: new Set(allPayables.map(b => b.vendor)).size, sub: 'With open balances', icon: <Building2 size={16} />, theme: '#D4A373' },
-                    ].map((kpi, i) => {
-                      const t = { rose: { iconBg: 'bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-lg shadow-rose-500/30', glow: 'rgba(225,29,72,0.3)' }, ...themeMap }[kpi.theme];
-                      return (
-                        <motion.div key={i} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, type: 'spring', stiffness: 300, damping: 24 }}
-                          whileHover={{ y: -5, scale: 1.015 }} className="relative overflow-hidden bg-white rounded-[1.75rem] p-5 border border-zinc-200/60"
-                          style={{ boxShadow: `0 1px 2px rgba(0,0,0,0.04), 0 14px 30px -18px ${t.glow}` }}>
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${t.iconBg}`}>{kpi.icon}</div>
-                          <p className="text-2xl font-black text-zinc-900 tracking-tight leading-none mb-1.5 truncate">{kpi.value}</p>
-                          <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 leading-none">{kpi.label}</p>
-                          <p className="text-[10px] text-zinc-400 mt-1">{kpi.sub}</p>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <motion.div whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-indigo-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
-                      <div className="absolute -top-14 -left-14 w-40 h-40 rounded-full bg-indigo-200/20 blur-3xl pointer-events-none" />
-                      <div className="relative flex items-center gap-2 mb-5">
-                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-md shadow-indigo-500/30"><Truck size={14} className="text-white" /></div>
-                        <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Outstanding by Vendor</h3>
-                      </div>
-                      <div className="relative"><BarRankChart data={vendorLedger.map(v => ({ label: v.vendor, value: v.outstanding, color: v.color }))} /></div>
-                    </motion.div>
-
-                    <motion.div whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-zinc-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
-                      <div className="absolute -top-14 -right-14 w-40 h-40 rounded-full bg-amber-200/20 blur-3xl pointer-events-none" />
-                      <div className="relative flex items-center gap-2 mb-4">
-                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#D4A373] to-[#D4A373] flex items-center justify-center shadow-md shadow-[#D4A373]/20"><CalendarClock size={14} className="text-white" /></div>
-                        <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Upcoming Payment Schedule</h3>
-                      </div>
-                      <div className="relative flex flex-col gap-3">
-                        {[...allPayables].filter(b => b.status !== 'Paid').sort((a, b) => a.dueDate.localeCompare(b.dueDate)).map((b, i) => (
-                          <motion.div key={i} initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.06 }}
-                            className="flex items-center justify-between p-3 rounded-xl bg-white border border-zinc-100">
-                            <div className="min-w-0">
-                              <p className="text-xs font-bold text-zinc-900 truncate">{b.vendor}</p>
-                              <p className="text-[10px] text-zinc-400">{b.category} · Due {b.dueDate}</p>
-                            </div>
-                            <span className={`text-xs font-black shrink-0 ml-3 ${b.status === 'Overdue' ? 'text-rose-600' : 'text-zinc-900'}`}>₹{b.amount.toLocaleString('en-IN')}</span>
-                          </motion.div>
-                        ))}
-                      </div>
-                    </motion.div>
-                  </div>
-
-                  <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
-                    <div className="p-5 border-b border-zinc-150 flex flex-col lg:flex-row gap-3 lg:items-center justify-between bg-white/40">
-                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><Truck size={16} className="text-indigo-600" /> Vendor Bills</h3>
-                      <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
-                        <div className="relative w-full sm:w-56">
-                          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-                          <input value={payableSearch} onChange={e => setPayableSearch(e.target.value)} placeholder="Search vendor or bill..." className="fd-input pl-9 py-2 text-xs" />
-                        </div>
-                        <select value={payableStatusFilter} onChange={e => setPayableStatusFilter(e.target.value)} className="fd-input py-2 text-xs bg-white appearance-none cursor-pointer w-full sm:w-40">
-                          <option value="All">All Statuses</option>
-                          <option value="Scheduled">Scheduled</option>
-                          <option value="Overdue">Overdue</option>
-                          <option value="Paid">Paid</option>
-                        </select>
-                        <button onClick={() => setIsBillModalOpen(true)} className="bg-zinc-900 text-white px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-indigo-600 transition-colors flex items-center justify-center gap-2 shrink-0">
-                          <Plus size={13} /> Add Vendor Bill
-                        </button>
-                      </div>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="border-b border-zinc-150 text-[10px] uppercase tracking-wider text-zinc-400 bg-zinc-50/50">
-                            <th className="p-4 font-bold">Bill #</th>
-                            <th className="p-4 font-bold">Vendor</th>
-                            <th className="p-4 font-bold">Category</th>
-                            <th className="p-4 font-bold">Due Date</th>
-                            <th className="p-4 font-bold text-right">Amount</th>
-                            <th className="p-4 font-bold text-right">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-zinc-100">
-                          {payablesData.length === 0 && (<tr><td colSpan={6} className="p-8 text-center text-xs text-zinc-400">No vendor bills match your filters.</td></tr>)}
-                          {payablesData.map((b, idx) => (
-                            <tr key={idx} className="hover:bg-zinc-50/60 transition-colors">
-                              <td className="p-4 text-xs font-mono text-zinc-500">{b.id}</td>
-                              <td className="p-4 text-sm font-bold text-zinc-900">{b.vendor}</td>
-                              <td className="p-4"><span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full bg-zinc-100 text-zinc-600">{b.category}</span></td>
-                              <td className="p-4 text-sm text-zinc-600">{b.dueDate}</td>
-                              <td className="p-4 text-sm font-bold text-zinc-900 text-right">₹{b.amount.toLocaleString('en-IN')}</td>
-                              <td className="p-4 text-right">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
-                                  b.status === 'Paid' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30' : b.status === 'Overdue' ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
-                                }`}>
-                                  {b.status === 'Paid' ? <CheckCircle2 size={12} /> : b.status === 'Overdue' ? <AlertTriangle size={12} /> : <Clock size={12} />}
-                                  {b.status}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
 
               {/* ============================================ */}
               {/* TAB: FINANCIAL STATEMENTS                     */}
@@ -1713,11 +1848,11 @@ export default function FinanceDashboard() {
                       { key: 'pnl', label: 'Profit & Loss', icon: <TrendingUp size={13} /> },
                       { key: 'balance', label: 'Balance Sheet', icon: <Scale size={13} /> },
                       { key: 'cashflow', label: 'Cash Flow', icon: <ArrowRightLeft size={13} /> },
+                      { key: 'ledger', label: 'General Ledger', icon: <Receipt size={13} /> },
                     ].map(v => (
                       <button key={v.key} onClick={() => setStatementView(v.key)}
-                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                          statementView === v.key ? 'bg-[#D4A373] text-white shadow-md shadow-emerald-600/20' : 'text-zinc-500 hover:bg-zinc-50'
-                        }`}>
+                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${statementView === v.key ? 'bg-[#D4A373] text-white shadow-md shadow-emerald-600/20' : 'text-zinc-500 hover:bg-zinc-50'
+                          }`}>
                         {v.icon} {v.label}
                       </button>
                     ))}
@@ -1740,7 +1875,7 @@ export default function FinanceDashboard() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div className="grid grid-cols-1 gap-6">
                         <motion.div whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 350, damping: 22 }}
                           className="relative overflow-hidden bg-gradient-to-br from-white via-white to-zinc-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
                           <div className="relative flex items-center gap-2 mb-4">
@@ -1759,15 +1894,6 @@ export default function FinanceDashboard() {
                               ))}
                             </div>
                           </div>
-                        </motion.div>
-
-                        <motion.div whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                          className="relative overflow-hidden bg-gradient-to-br from-white via-white to-rose-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
-                          <div className="relative flex items-center gap-2 mb-5">
-                            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center shadow-md shadow-rose-500/30"><Wallet size={14} className="text-white" /></div>
-                            <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Expenses Breakdown</h3>
-                          </div>
-                          <div className="relative"><BarRankChart data={pnlExpenses} /></div>
                         </motion.div>
                       </div>
                     </div>
@@ -1867,84 +1993,45 @@ export default function FinanceDashboard() {
                       </div>
                     </div>
                   )}
-                </motion.div>
-              )}
 
-              {/* ============================================ */}
-              {/* TAB: BUDGETING & FORECASTING                  */}
-              {/* ============================================ */}
-              {activeTab === 'budgeting' && (
-                <motion.div key="budgeting" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                    {[
-                      { label: 'Total Budget', value: `₹${totalBudget.toLocaleString('en-IN')}`, sub: 'Across 6 departments', icon: <Target size={16} />, theme: 'indigo' },
-                      { label: 'Actual Spend', value: `₹${totalActual.toLocaleString('en-IN')}`, sub: 'Month to date', icon: <Wallet size={16} />, theme: 'sky' },
-                      { label: 'Variance', value: `${overallVariancePct > 0 ? '+' : ''}${overallVariancePct}%`, sub: overallVariancePct > 0 ? 'Over budget' : 'Under budget', icon: overallVariancePct > 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />, theme: overallVariancePct > 0 ? '#D4A373' : '#D4A373' },
-                      { label: 'Projected Year-End', value: `₹${forecastTrend[forecastTrend.length - 1].value.toLocaleString('en-IN')}`, sub: 'Forward revenue projection', icon: <TrendingUp size={16} />, theme: '#D4A373' },
-                    ].map((kpi, i) => {
-                      const t = themeMap[kpi.theme];
-                      return (
-                        <motion.div key={i} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, type: 'spring', stiffness: 300, damping: 24 }}
-                          whileHover={{ y: -5, scale: 1.015 }} className="relative overflow-hidden bg-white rounded-[1.75rem] p-5 border border-zinc-200/60"
-                          style={{ boxShadow: `0 1px 2px rgba(0,0,0,0.04), 0 14px 30px -18px ${t.glow}` }}>
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${t.iconBg}`}>{kpi.icon}</div>
-                          <p className="text-2xl font-black text-zinc-900 tracking-tight leading-none mb-1.5 truncate">{kpi.value}</p>
-                          <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 leading-none">{kpi.label}</p>
-                          <p className="text-[10px] text-zinc-400 mt-1">{kpi.sub}</p>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-
-                  <motion.div whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                    className="relative overflow-hidden bg-gradient-to-br from-white via-white to-zinc-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
-                    <div className="relative flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#D4A373] to-[#D4A373] flex items-center justify-center shadow-md shadow-[#D4A373]/20"><TrendingUp size={14} className="text-white" /></div>
-                        <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">6-Month Revenue Projection</h3>
+                  {statementView === 'ledger' && (
+                    <div className="space-y-6">
+                      <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
+                        <div className="p-5 border-b border-zinc-150 flex justify-between items-center bg-white/40">
+                          <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><Receipt size={16} className="text-[#D4A373]" /> General Ledger</h3>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="border-b border-zinc-150 text-[10px] uppercase tracking-wider text-zinc-400 bg-zinc-50/50">
+                                <th className="p-4 font-bold">Voucher</th>
+                                <th className="p-4 font-bold">Account Head</th>
+                                <th className="p-4 font-bold">Date</th>
+                                <th className="p-4 font-bold text-right">Debit</th>
+                                <th className="p-4 font-bold text-right">Credit</th>
+                                <th className="p-4 font-bold text-right">Balance</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-zinc-100">
+                              {ledgerEntries.map((l, idx) => (
+                                <tr key={idx} className="hover:bg-zinc-50/60 transition-colors">
+                                  <td className="p-4 text-xs font-mono text-zinc-500">{l.voucher}</td>
+                                  <td className="p-4 text-sm font-bold text-zinc-900">{l.account}</td>
+                                  <td className="p-4 text-sm text-zinc-600">{l.date}</td>
+                                  <td className="p-4 text-sm text-red-500 text-right">{l.debit}</td>
+                                  <td className="p-4 text-sm text-[#D4A373] text-right">{l.credit}</td>
+                                  <td className="p-4 text-sm font-bold text-zinc-900 text-right">{l.balance}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
-                      <span className="text-[9px] font-bold text-[#D4A373] uppercase tracking-widest bg-zinc-50 px-2.5 py-1 rounded-full border border-[#D4A373]/30">Forecast</span>
                     </div>
-                    <div className="relative"><RevenueTrendLine data={forecastTrend} /></div>
-                  </motion.div>
-
-                  <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden p-6">
-                    <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider mb-5"><Percent size={16} className="text-indigo-600" /> Budget vs Actual by Department</h3>
-                    <div className="flex flex-col gap-5">
-                      {budgetByDept.map((d, i) => {
-                        const variancePct = (((d.actual - d.budget) / d.budget) * 100).toFixed(1);
-                        const over = d.actual > d.budget;
-                        const maxVal = Math.max(d.budget, d.actual);
-                        return (
-                          <div key={i}>
-                            <div className="flex items-center justify-between mb-1.5">
-                              <span className="text-xs font-bold text-zinc-700">{d.dept}</span>
-                              <span className={`text-[11px] font-black ${over ? 'text-rose-600' : 'text-[#D4A373]'}`}>{over ? '+' : ''}{variancePct}% vs budget</span>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                              <div className="flex items-center gap-2">
-                                <span className="text-[9px] font-bold uppercase text-zinc-400 w-14 shrink-0">Budget</span>
-                                <div className="flex-1 h-2 rounded-full bg-zinc-100 overflow-hidden">
-                                  <motion.div initial={{ width: 0 }} animate={{ width: `${(d.budget / maxVal) * 100}%` }} transition={{ duration: 0.8, delay: i * 0.05 }} className="h-full rounded-full bg-zinc-300" />
-                                </div>
-                                <span className="text-[10px] font-bold text-zinc-500 w-24 text-right shrink-0">₹{d.budget.toLocaleString('en-IN')}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[9px] font-bold uppercase text-zinc-400 w-14 shrink-0">Actual</span>
-                                <div className="flex-1 h-2 rounded-full bg-zinc-100 overflow-hidden">
-                                  <motion.div initial={{ width: 0 }} animate={{ width: `${(d.actual / maxVal) * 100}%` }} transition={{ duration: 0.8, delay: i * 0.05 + 0.1 }} className={`h-full rounded-full ${over ? 'bg-rose-500' : 'bg-[#D4A373]'}`} />
-                                </div>
-                                <span className="text-[10px] font-bold text-zinc-900 w-24 text-right shrink-0">₹{d.actual.toLocaleString('en-IN')}</span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                  )}
                 </motion.div>
               )}
+
 
               {/* ============================================ */}
               {/* TAB: PAYROLL & STAFF COSTS                    */}
@@ -2095,12 +2182,11 @@ export default function FinanceDashboard() {
                               <td className="p-4 text-sm text-zinc-600">{d.date}</td>
                               <td className="p-4 text-sm font-bold text-zinc-900 text-right">₹{d.amount.toLocaleString('en-IN')}</td>
                               <td className="p-4 text-right">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
-                                  d.status === 'Held' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${d.status === 'Held' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
                                   : d.status === 'Refunded' ? 'bg-sky-50 text-sky-600 border-sky-200'
-                                  : d.status === 'Forfeited' ? 'bg-rose-50 text-rose-600 border-rose-200'
-                                  : 'bg-indigo-50 text-indigo-600 border-indigo-200'
-                                }`}>
+                                    : d.status === 'Forfeited' ? 'bg-rose-50 text-rose-600 border-rose-200'
+                                      : 'bg-indigo-50 text-indigo-600 border-indigo-200'
+                                  }`}>
                                   {d.status}
                                 </span>
                               </td>
@@ -2158,9 +2244,8 @@ export default function FinanceDashboard() {
                       {auditLog.length === 0 && (<div className="p-8 text-center text-xs text-zinc-400">No audit entries match your filters.</div>)}
                       {auditLog.map((a, idx) => (
                         <div key={idx} className="p-5 flex items-start gap-4 hover:bg-zinc-50/60 transition-colors">
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                            a.approval === 'Escalated' ? 'bg-rose-100 text-rose-600' : a.approval === 'Pending Review' ? 'bg-[#D4A373]/10 text-[#D4A373]' : 'bg-[#D4A373]/10 text-[#D4A373]'
-                          }`}>
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${a.approval === 'Escalated' ? 'bg-rose-100 text-rose-600' : a.approval === 'Pending Review' ? 'bg-[#D4A373]/10 text-[#D4A373]' : 'bg-[#D4A373]/10 text-[#D4A373]'
+                            }`}>
                             {a.approval === 'Escalated' ? <ShieldAlert size={16} /> : a.approval === 'Pending Review' ? <Clock size={16} /> : <CheckCircle2 size={16} />}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -2171,11 +2256,10 @@ export default function FinanceDashboard() {
                             <p className="text-xs text-zinc-500 mt-1">{a.target}</p>
                             <p className="text-[10px] text-zinc-400 mt-1">{a.time}</p>
                           </div>
-                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border shrink-0 ${
-                            a.approval === 'Escalated' ? 'bg-rose-50 text-rose-600 border-rose-200'
+                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border shrink-0 ${a.approval === 'Escalated' ? 'bg-rose-50 text-rose-600 border-rose-200'
                             : a.approval === 'Pending Review' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
-                            : 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
-                          }`}>{a.approval}</span>
+                              : 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                            }`}>{a.approval}</span>
                         </div>
                       ))}
                     </div>
@@ -2231,9 +2315,7 @@ export default function FinanceDashboard() {
                     <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
                       <div className="p-5 border-b border-zinc-150 flex justify-between items-center bg-white/40">
                         <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><ArrowRightLeft size={16} className="text-[#D4A373]" /> Recent Transfers</h3>
-                        <button onClick={() => setIsTransferModalOpen(true)} className="bg-zinc-900 text-white px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-[#D4A373] transition-colors flex items-center gap-2">
-                          <Plus size={13} /> New Transfer
-                        </button>
+                        {/* Automated read-only view */}
                       </div>
                       <div className="divide-y divide-zinc-100">
                         {recentTransfers.map((t, idx) => (
@@ -2266,73 +2348,6 @@ export default function FinanceDashboard() {
                           </div>
                         ))}
                       </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              {/* ============================================ */}
-              {/* TAB: CUSTOM REPORTS                           */}
-              {/* ============================================ */}
-              {activeTab === 'customReports' && (
-                <motion.div key="customReports" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    {reportTemplates.map((r, i) => (
-                      <motion.div key={r.key} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
-                        whileHover={{ y: -4 }}
-                        className="fd-dealdeck-card rounded-[1.75rem] p-6 flex flex-col gap-4">
-                        <div className="flex items-start justify-between">
-                          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#D4A373] to-[#D4A373] text-white flex items-center justify-center shadow-md shadow-[#D4A373]/20">{r.icon}</div>
-                          <span className="text-[10px] text-zinc-400 font-semibold">Last generated {r.lastGenerated}</span>
-                        </div>
-                        <div>
-                          <h3 className="text-sm font-black text-zinc-900">{r.label}</h3>
-                          <p className="text-xs text-zinc-500 mt-1">{r.desc}</p>
-                        </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <button
-                            onClick={() => handleGenerateReport(r.key)}
-                            disabled={generatingReportKey === r.key}
-                            className="flex-1 bg-zinc-900 text-white px-4 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider hover:bg-[#D4A373] transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
-                          >
-                            {generatingReportKey === r.key ? <Loader2 size={13} className="animate-spin" /> : <FileBarChart2 size={13} />}
-                            {generatingReportKey === r.key ? 'Generating...' : 'Generate'}
-                          </button>
-                          <button className="p-2.5 rounded-xl border border-zinc-200/80 bg-white hover:bg-zinc-50 text-zinc-500 transition-all"><FileDown size={15} /></button>
-                          <button className="p-2.5 rounded-xl border border-zinc-200/80 bg-white hover:bg-zinc-50 text-zinc-500 transition-all"><Printer size={15} /></button>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-
-                  <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
-                    <div className="p-5 border-b border-zinc-150 flex justify-between items-center bg-white/40">
-                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><FileSpreadsheet size={16} className="text-[#D4A373]" /> Recently Generated</h3>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="border-b border-zinc-150 text-[10px] uppercase tracking-wider text-zinc-400 bg-zinc-50/50">
-                            <th className="p-4 font-bold">Report</th>
-                            <th className="p-4 font-bold">Generated On</th>
-                            <th className="p-4 font-bold">Format</th>
-                            <th className="p-4 font-bold text-right">Download</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-zinc-100">
-                          {generatedReportsHistory.map((r, idx) => (
-                            <tr key={idx} className="hover:bg-zinc-50/60 transition-colors">
-                              <td className="p-4 text-sm font-bold text-zinc-900">{r.name}</td>
-                              <td className="p-4 text-sm text-zinc-600">{r.generatedOn}</td>
-                              <td className="p-4"><span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full bg-zinc-100 text-zinc-600">{r.format}</span></td>
-                              <td className="p-4 text-right">
-                                <button className="text-xs font-bold text-[#D4A373] hover:text-[#D4A373] inline-flex items-center gap-1"><Download size={12} /> Download</button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
                     </div>
                   </div>
                 </motion.div>
@@ -2791,6 +2806,69 @@ export default function FinanceDashboard() {
                   className="w-full bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-lg shadow-sky-500/20 flex items-center justify-center gap-2 mt-4 disabled:opacity-50"
                 >
                   <ArrowRightLeft size={16} /> Confirm Transfer
+                </button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+        {/* Cash Count Modal */}
+        {isCashModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-900/40 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              variants={modalVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="bg-[#fcfcfc] rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden border border-zinc-200/60"
+            >
+              <div className="bg-gradient-to-br from-sky-50 to-white px-6 py-5 border-b border-zinc-100 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center shadow-lg shadow-sky-500/20 text-white">
+                    <Wallet size={18} />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-black text-zinc-900 tracking-tight leading-none">Count Cash Register</h2>
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 mt-1">Reconcile physical cash</p>
+                  </div>
+                </div>
+                <button onClick={() => setIsCashModalOpen(false)} className="w-8 h-8 rounded-full bg-white border border-zinc-200 flex items-center justify-center text-zinc-400 hover:text-rose-500 hover:border-rose-200 hover:bg-rose-50 transition-all shadow-sm">
+                  <X size={14} strokeWidth={3} />
+                </button>
+              </div>
+
+              <form onSubmit={handleAddCashCount} className="p-6 flex flex-col gap-5">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Actual Cash in Drawer (₹)</label>
+                  <input
+                    required
+                    type="number"
+                    step="0.01"
+                    placeholder="e.g. 15000"
+                    value={cashForm.actual_amount}
+                    onChange={e => setCashForm({ ...cashForm, actual_amount: e.target.value })}
+                    className="fd-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Notes</label>
+                  <textarea
+                    rows={3}
+                    placeholder="Optional notes (e.g. why it's short)..."
+                    value={cashForm.notes}
+                    onChange={e => setCashForm({ ...cashForm, notes: e.target.value })}
+                    className="fd-input resize-none bg-white"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-lg shadow-sky-500/20 flex items-center justify-center gap-2 mt-4"
+                >
+                  <CheckCircle2 size={16} /> Submit Count
                 </button>
               </form>
             </motion.div>

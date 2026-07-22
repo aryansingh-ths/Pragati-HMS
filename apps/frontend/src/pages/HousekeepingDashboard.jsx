@@ -781,7 +781,7 @@ export default function HousekeepingDashboard() {
 
             {/* Profile Avatar Widget */}
             {(() => {
-              const staffName = localStorage.getItem('hms_name') || 'Staff';
+              const staffName = sessionStorage.getItem('hms_name') || 'Staff';
               const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
               const designation = 'Head Housekeeper';
               return (

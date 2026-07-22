@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Utensils, Coffee, Clock, CheckCircle2, ChefHat, Receipt,
+import {
+  Utensils, Coffee, Clock, CheckCircle2, ChefHat, Receipt,
   Calendar, Users, BellRing, Building2, Search, ArrowUpRight,
-  TrendingUp, PieChart, LayoutGrid, X, Loader2, Plus, Flame, MapPin, 
-  RefreshCw, LogOut } from 'lucide-react';
+  TrendingUp, PieChart, LayoutGrid, X, Loader2, Plus, Flame, MapPin,
+  RefreshCw, LogOut, Zap
+} from 'lucide-react';
 
 // =============================================
 // Helper Components
@@ -95,9 +97,37 @@ const iconMap = {
 // MAIN DASHBOARD COMPONENT
 // =============================================
 export default function DiningDashboard() {
+  // ─── Broadcast States ──────────────────────────────────────
+  const [broadcasts, setBroadcasts] = React.useState([]);
+  const [dismissedBroadcasts, setDismissedBroadcasts] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem('hms_dismissed_broadcasts')) || []; } catch { return []; }
+  });
+
+  React.useEffect(() => {
+    localStorage.setItem('hms_dismissed_broadcasts', JSON.stringify(dismissedBroadcasts));
+  }, [dismissedBroadcasts]);
+
+  const fetchBroadcasts = React.useCallback(async () => {
+    try {
+      const token = sessionStorage.getItem('hms_token');
+      const res = await fetch(`http://localhost:3000/api/broadcasts`, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (res?.ok) {
+        const data = await res.json();
+        setBroadcasts(data.data.broadcasts || []);
+      }
+    } catch (e) {
+      console.error('Failed to fetch broadcasts:', e);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fetchBroadcasts();
+    const interval = setInterval(fetchBroadcasts, 30000);
+    return () => clearInterval(interval);
+  }, [fetchBroadcasts]);
   const navigate = useNavigate();
   const location = useLocation();
-  const isAdmin = location.state?.fromAdmin === true || sessionStorage.getItem('hms_role')?.toUpperCase() === 'ADMIN';
+  const isAdmin = location.state?.fromAdmin === true || sessionStorage.getItem('hms_role')?.toUpperCase() === 'Admin';
 
   const [activeTab, setActiveTab] = useState('overview');
   const [isLoading, setIsLoading] = useState(true);
@@ -335,7 +365,7 @@ export default function DiningDashboard() {
             </div>
             <button onClick={refresh} className="p-2.5 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-500 transition-all"><RefreshCw size={15} className={isLoading ? 'animate-spin' : ''}/></button>
             {(() => {
-              const staffName = localStorage.getItem('hms_name') || 'Staff';
+              const staffName = sessionStorage.getItem('hms_name') || 'Staff';
               const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
               const designation = 'Restaurant admin';
               return (
@@ -593,7 +623,7 @@ export default function DiningDashboard() {
         {isKOTModalOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-55 flex items-center justify-center dd-glass-backdrop p-4" onClick={() => setIsKOTModalOpen(false)}>
             <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={e => e.stopPropagation()} className="w-full max-w-md dd-glass-modal rounded-3xl p-7">
-              <div className="flex justify-between items-center mb-6"><div><h2 className="text-lg font-serif font-bold text-zinc-900">Punch KOT</h2></div><button onClick={() => setIsKOTModalOpen(false)}><X size={20} className="text-zinc-500"/></button></div>
+              <div className="flex justify-between items-center mb-6"><div><h2 className="text-lg font-serif font-bold text-zinc-900">Punch KOT</h2></div><button onClick={() => setIsKOTModalOpen(false)}><X size={20} className="text-zinc-500" /></button></div>
               <form onSubmit={handleAddKOT} className="space-y-4">
                 <div><label className="block text-[10px] font-bold uppercase text-zinc-400 mb-1">Table / Room</label><input required placeholder="e.g. Table 5 or Room 102" value={kotForm.table} onChange={e => setKotForm({ ...kotForm, table: e.target.value })} className="dd-input" /></div>
                 <div><label className="block text-[10px] font-bold uppercase text-zinc-400 mb-1">Order Items</label><textarea required rows={4} placeholder="e.g. 2x Butter Chicken, 1x Naan" value={kotForm.items} onChange={e => setKotForm({ ...kotForm, items: e.target.value })} className="dd-input resize-none" /></div>
