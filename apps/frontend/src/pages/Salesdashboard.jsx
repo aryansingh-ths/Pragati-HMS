@@ -6,7 +6,8 @@ import {
   AlertTriangle, CheckCircle2, Clock, XCircle, Send, FileText, DollarSign,
   ArrowUpRight, Star, ChevronRight, PieChart, Trophy, CalendarClock, Eye,
   PhoneCall, Mail, CheckSquare, ListTodo, Flame, Activity, ShieldCheck, Globe,
-  User, Building2, MapPin, BarChart3, ArrowRight, Percent, TrendingDown, LogOut
+  User, Building2, MapPin, BarChart3, ArrowRight, Percent, TrendingDown, LogOut,
+  RefreshCw
 } from 'lucide-react';
 
 // =============================================
@@ -210,6 +211,20 @@ export default function SalesExecutiveDashboard() {
   const [otaData, setOtaData] = useState([]);
   const [leadSearch, setLeadSearch] = useState('');
 
+  // Add Lead Modal State
+  const [showAddLeadModal, setShowAddLeadModal] = useState(false);
+  const [isSubmittingLead, setIsSubmittingLead] = useState(false);
+  const [newLeadForm, setNewLeadForm] = useState({
+    company: '',
+    deal_name: '',
+    value: '',
+    stage: 'New',
+    source: 'Hotel Website',
+    contact_name: '',
+    contact_email: '',
+    contact_phone: ''
+  });
+
   const CURRENT_USER = { initials: 'AS', name: 'Aditi Sharma', target: 1200000, achieved: 980000, baseIncentiveRate: 0.025 };
   const STAGES = ['New', 'Contacted', 'Proposal Sent', 'Negotiation', 'Won', 'Lost'];
 
@@ -298,6 +313,39 @@ export default function SalesExecutiveDashboard() {
     fetchData();
   };
 
+  const handleAddLead = async (e) => {
+    e.preventDefault();
+    setIsSubmittingLead(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('http://localhost:3000/api/sales/leads', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          ...newLeadForm,
+          value: parseFloat(newLeadForm.value) || 0
+        })
+      });
+
+      if (res.ok) {
+        setShowAddLeadModal(false);
+        setNewLeadForm({ company: '', deal_name: '', value: '', stage: 'New', source: 'Hotel Website', contact_name: '', contact_email: '', contact_phone: '' });
+        refresh();
+      } else {
+        const errData = await res.json();
+        alert(`Error: ${errData.error || 'Failed to add lead'}`);
+      }
+    } catch (error) {
+      console.error('Failed to add lead:', error);
+      alert('Network error while saving the lead.');
+    } finally {
+      setIsSubmittingLead(false);
+    }
+  };
+
   const filteredLeads = myLeads.filter(l => (l.company + l.deal + l.contactName).toLowerCase().includes(leadSearch.toLowerCase()));
 
   const moveToAccounts = async (lead) => {
@@ -350,13 +398,50 @@ export default function SalesExecutiveDashboard() {
 
   const stageColors = { 'New': '#94a3b8', 'Contacted': '#0ea5e9', 'Proposal Sent': '#f59e0b', 'Negotiation': '#8b5cf6', 'Won': '#10b981', 'Lost': '#f43f5e' };
 
-  const themeMap = {
-    '#D4A373': { iconBg: 'bg-[#D4A373] text-zinc-900', glow: 'rgba(212,163,115,0.35)' },
-    violet: { iconBg: 'bg-gradient-to-br from-[#D4A373] to-[#D4A373] text-white', glow: 'rgba(124,58,237,0.35)' },
-    amber: { iconBg: 'bg-gradient-to-br from-[#D4A373] to-[#D4A373] text-white', glow: 'rgba(245,158,11,0.35)' },
-    emerald: { iconBg: 'bg-gradient-to-br from-[#D4A373] to-[#D4A373] text-white', glow: 'rgba(16,185,129,0.35)' },
-    sky: { iconBg: 'bg-gradient-to-br from-sky-500 to-blue-500 text-white', glow: 'rgba(14,165,233,0.35)' },
-    rose: { iconBg: 'bg-gradient-to-br from-rose-500 to-pink-600 text-white', glow: 'rgba(225,29,72,0.3)' },
+  // Enhanced Theme Map with diverse gradients and glowing effects
+  const enhancedThemeMap = {
+    indigo: {
+      gradient: 'from-indigo-50 via-white to-white',
+      ring: 'ring-indigo-500/10',
+      glow: 'rgba(79,70,229,0.35)',
+      iconBg: 'bg-[#4f46e5] text-white shadow-lg shadow-[#4f46e5]/30'
+    },
+    emerald: {
+      gradient: 'from-emerald-50 via-white to-white',
+      ring: 'ring-emerald-500/10',
+      glow: 'rgba(16,185,129,0.35)',
+      iconBg: 'bg-[#10b981] text-white shadow-lg shadow-[#10b981]/30'
+    },
+    amber: {
+      gradient: 'from-amber-50 via-white to-white',
+      ring: 'ring-amber-500/10',
+      glow: 'rgba(245,158,11,0.35)',
+      iconBg: 'bg-[#f59e0b] text-white shadow-lg shadow-[#f59e0b]/30'
+    },
+    rose: {
+      gradient: 'from-rose-50 via-white to-white',
+      ring: 'ring-rose-500/10',
+      glow: 'rgba(225,29,72,0.35)',
+      iconBg: 'bg-[#e11d48] text-white shadow-lg shadow-[#e11d48]/30'
+    },
+    sky: {
+      gradient: 'from-sky-50 via-white to-white',
+      ring: 'ring-sky-500/10',
+      glow: 'rgba(14,165,233,0.35)',
+      iconBg: 'bg-[#0ea5e9] text-white shadow-lg shadow-[#0ea5e9]/30'
+    },
+    violet: {
+      gradient: 'from-violet-50 via-white to-white',
+      ring: 'ring-violet-500/10',
+      glow: 'rgba(139,92,246,0.35)',
+      iconBg: 'bg-[#8b5cf6] text-white shadow-lg shadow-[#8b5cf6]/30'
+    },
+    orange: { 
+      gradient: 'from-orange-50 via-white to-white',
+      ring: 'ring-orange-500/10',
+      glow: 'rgba(212,163,115,0.35)',
+      iconBg: 'bg-[#D4A373] text-white shadow-lg shadow-[#D4A373]/30'
+    }
   };
 
   const navGroups = [
@@ -398,6 +483,15 @@ export default function SalesExecutiveDashboard() {
         .sd-dealdeck-sidebar { background: #FFFFFF; box-shadow: 14px 17px 40px 4px rgba(112, 144, 176, 0.08); border: 1px solid rgba(226, 232, 240, 0.8); }
         .sd-dealdeck-card { background: #FFFFFF; border: 1px solid rgba(226, 232, 240, 0.8); box-shadow: 0px 18px 40px 0px rgba(112, 144, 176, 0.08); }
         .sd-input { width: 100%; padding: 0.75rem 1.1rem; background: #F4F7FE; border: 1px solid #E2E8F0; border-radius: 1rem; font-size: 0.875rem; font-weight: 500; }
+        
+        .sd-glass-backdrop { background: rgba(24, 24, 27, 0.4); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+        .sd-glass-modal {
+          background: rgba(255, 255, 255, 0.98);
+          border: 1px solid rgba(226, 232, 240, 0.8);
+          box-shadow: 0 30px 70px -12px rgba(112, 144, 176, 0.25);
+          backdrop-filter: blur(24px);
+          -webkit-backdrop-filter: blur(24px);
+        }
       `}</style>
 
       {/* LEFT SIDEBAR */}
@@ -445,10 +539,24 @@ export default function SalesExecutiveDashboard() {
             <p className="text-xs text-zinc-500 mt-1">Manage your active deals, daily tasks, and track your quota.</p>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={refresh} className="p-2.5 rounded-xl bg-white border border-zinc-200/60 text-zinc-500 hover:text-[#D4A373] transition-all shadow-xs">
-              <Loader2 size={16} className={isLoading ? 'animate-spin' : ''} />
+            {/* Live Indicator */}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+              </span>
+              <span className="text-[9px] font-bold uppercase tracking-wider">Live System</span>
+            </div>
+
+            {/* Refresh */}
+            <button
+              onClick={refresh}
+              className={`p-2.5 rounded-xl border border-zinc-200/80 bg-white hover:bg-zinc-50 text-zinc-500 transition-all ${isLoading ? 'animate-spin' : ''}`}
+            >
+              <RefreshCw size={15} />
             </button>
-            <button className="bg-zinc-900 text-white px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#D4A373] transition-colors flex items-center gap-2 shadow-sm">
+
+            <button onClick={() => setShowAddLeadModal(true)} className="bg-zinc-900 text-white px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#D4A373] transition-colors flex items-center gap-2 shadow-sm">
               <Plus size={14} /> Add Lead
             </button>
             {(() => {
@@ -494,21 +602,47 @@ export default function SalesExecutiveDashboard() {
                 <motion.div key="overview" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                     {[
-                      { label: 'Target', value: `₹${(CURRENT_USER.target / 100000).toFixed(1)}L`, sub: 'Monthly Goal', icon: <Target size={16} />, theme: '#D4A373' },
-                      { label: 'Revenue Generated', value: `₹${(CURRENT_USER.achieved / 100000).toFixed(1)}L`, sub: `${Math.round((CURRENT_USER.achieved / CURRENT_USER.target) * 100)}% of Target`, icon: <TrendingUp size={16} />, theme: '#D4A373' },
-                      { label: 'Deals In Pipeline', value: activeDealsCount, sub: `₹${(myPipelineValue / 100000).toFixed(1)}L Total Value`, icon: <Briefcase size={16} />, theme: '#D4A373' },
+                      { label: 'Target', value: `₹${(CURRENT_USER.target / 100000).toFixed(1)}L`, sub: 'Monthly Goal', icon: <Target size={16} />, theme: 'indigo' },
+                      { label: 'Revenue Generated', value: `₹${(CURRENT_USER.achieved / 100000).toFixed(1)}L`, sub: `${Math.round((CURRENT_USER.achieved / CURRENT_USER.target) * 100)}% of Target`, icon: <TrendingUp size={16} />, theme: 'emerald' },
+                      { label: 'Deals In Pipeline', value: activeDealsCount, sub: `₹${(myPipelineValue / 100000).toFixed(1)}L Total Value`, icon: <Briefcase size={16} />, theme: 'amber' },
                       { label: 'Pending Tasks', value: pendingTasksCount, sub: 'Ongoing & Assigned', icon: <CheckSquare size={16} />, theme: 'rose' },
                     ].map((kpi, i) => {
-                      const t = themeMap[kpi.theme];
+                      const t = enhancedThemeMap[kpi.theme];
                       return (
-                        <motion.div key={i} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, type: 'spring' }} whileHover={{ y: -5 }}
-                          className="relative overflow-hidden bg-white rounded-[1.75rem] p-5 border border-zinc-200/60 flex flex-col shadow-sm"
-                          style={{ boxShadow: `0 1px 2px rgba(0,0,0,0.04), 0 14px 30px -18px ${t.glow}` }}
+                        <motion.div
+                          key={i}
+                          initial={{ opacity: 0, y: 16 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: i * 0.08, type: 'spring', stiffness: 200, damping: 20 }}
+                          whileHover={{ y: -8, scale: 1.02 }}
+                          style={{ '--kpi-glow': t.glow }}
+                          className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between border border-zinc-200/70 bg-gradient-to-br ${t.gradient} shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_24px_-16px_rgba(0,0,0,0.15)] transition-shadow duration-500 hover:shadow-[0_20px_45px_-18px_var(--kpi-glow)] ring-1 ${t.ring}`}
                         >
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${t.iconBg}`}>{kpi.icon}</div>
-                          <p className="text-3xl font-black text-zinc-900 tracking-tight leading-none mb-1.5">{kpi.value}</p>
-                          <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 leading-none">{kpi.label}</p>
-                          <p className="text-[10px] text-zinc-400 mt-1">{kpi.sub}</p>
+                          <div
+                            className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
+                            style={{ background: t.glow }}
+                          />
+                          <div className="relative flex-1 min-w-0">
+                            <div className="flex items-start justify-between mb-4">
+                              <motion.div
+                                whileHover={{ rotate: -8, scale: 1.1 }}
+                                transition={{ type: 'spring', stiffness: 400, damping: 14 }}
+                                className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${t.iconBg}`}
+                              >
+                                {kpi.icon}
+                              </motion.div>
+                            </div>
+                            <motion.p
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              transition={{ delay: i * 0.08 + 0.2 }}
+                              className="text-3xl font-black text-zinc-900 tracking-tight leading-none mb-1.5"
+                            >
+                              {kpi.value}
+                            </motion.p>
+                            <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 leading-none">{kpi.label}</p>
+                            <p className="text-[10px] text-zinc-400 mt-1">{kpi.sub}</p>
+                          </div>
                         </motion.div>
                       );
                     })}
@@ -557,7 +691,7 @@ export default function SalesExecutiveDashboard() {
               {activeTab === 'tasks' && (
                 <motion.div key="tasks" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="sd-dealdeck-card rounded-[2rem] overflow-hidden p-6 flex flex-col">
+                    <div className="bg-white border border-zinc-200/60 rounded-[2rem] overflow-hidden p-6 flex flex-col shadow-sm">
                       <div className="flex items-center justify-between mb-6">
                         <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><ShieldCheck size={16} className="text-rose-500" /> Assigned by Admin/Lead</h3>
                       </div>
@@ -581,7 +715,7 @@ export default function SalesExecutiveDashboard() {
                       </div>
                     </div>
 
-                    <div className="sd-dealdeck-card rounded-[2rem] overflow-hidden p-6 flex flex-col">
+                    <div className="bg-white border border-zinc-200/60 rounded-[2rem] overflow-hidden p-6 flex flex-col shadow-sm">
                       <div className="flex items-center justify-between mb-6">
                         <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><Activity size={16} className="text-[#D4A373]" /> Ongoing Tasks Status</h3>
                         <button className="text-[11px] font-bold text-[#D4A373] bg-zinc-50 px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/10 transition flex items-center gap-1"><Plus size={12} /> New Task</button>
@@ -642,7 +776,7 @@ export default function SalesExecutiveDashboard() {
                           <div className="flex flex-col gap-3 min-h-[100px]">
                             {stageLeads.map((lead, i) => (
                               <motion.div key={lead.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
-                                className="bg-white rounded-2xl p-4 border border-zinc-200/80 shadow-sm relative overflow-hidden flex flex-col"
+                                className="bg-white rounded-[1.5rem] p-4 border border-zinc-200/80 shadow-sm relative overflow-hidden flex flex-col"
                               >
                                 <div className="absolute top-0 left-0 w-1 h-full" style={{ background: stageColors[stage] }} />
                                 <div className="pl-2">
@@ -678,7 +812,7 @@ export default function SalesExecutiveDashboard() {
                               </motion.div>
                             ))}
                             {stageLeads.length === 0 && (
-                              <div className="rounded-2xl border border-dashed border-zinc-200 p-6 text-center text-[10px] text-zinc-400 font-semibold">Empty stage</div>
+                              <div className="rounded-[1.5rem] border border-dashed border-zinc-200 p-6 text-center text-[10px] text-zinc-400 font-semibold">Empty stage</div>
                             )}
                           </div>
                         </div>
@@ -691,14 +825,14 @@ export default function SalesExecutiveDashboard() {
               {/* TAB: MY ACCOUNTS */}
               {activeTab === 'accounts' && (
                 <motion.div key="accounts" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
-                  <div className="sd-dealdeck-card rounded-[2rem] overflow-hidden p-6">
+                  <div className="bg-white border border-zinc-200/60 rounded-[2rem] overflow-hidden p-6 shadow-sm">
                     <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider mb-6"><Briefcase size={16} className="text-[#D4A373]" /> Accounts Managed By Me</h3>
                     <p className="text-xs text-zinc-500 mb-6">Leads you start working on heavily can be moved here for long-term management.</p>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       {myAccounts.length === 0 && <div className="text-center text-zinc-400 text-xs py-4 col-span-full">No active accounts.</div>}
                       {myAccounts.map(acc => (
-                        <div key={acc.id} className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-sm hover:border-[#D4A373]/30 transition-colors">
+                        <div key={acc.id} className="bg-white border border-zinc-200 rounded-[1.5rem] p-5 shadow-sm hover:border-[#D4A373]/30 transition-colors">
                           <div className="flex justify-between items-start mb-3">
                             <div className="w-10 h-10 rounded-xl bg-zinc-50 text-[#D4A373] flex items-center justify-center"><Building2 size={20} /></div>
                             <span className={`px-2 py-1 text-[9px] font-black uppercase tracking-wider rounded ${acc.status === 'Active' ? 'bg-[#D4A373]/10 text-[#D4A373]' : 'bg-[#D4A373]/10 text-[#D4A373]'}`}>{acc.status}</span>
@@ -767,19 +901,45 @@ export default function SalesExecutiveDashboard() {
                     {[
                       { label: 'Total Gross Revenue', value: `₹${(totalOtaGross / 100000).toFixed(2)}L`, sub: 'All OTA Channels', icon: <Globe size={16} />, theme: 'sky' },
                       { label: 'Commission Paid', value: `₹${(totalOtaCommission / 100000).toFixed(2)}L`, sub: 'Direct Expense', icon: <Percent size={16} />, theme: 'rose' },
-                      { label: 'Net Revenue', value: `₹${(totalOtaNet / 100000).toFixed(2)}L`, sub: 'After Commissions', icon: <DollarSign size={16} />, theme: '#D4A373' },
-                      { label: 'Avg Cancel Rate', value: `${avgCancelRate}%`, sub: 'Across platforms', icon: <TrendingDown size={16} />, theme: '#D4A373' },
+                      { label: 'Net Revenue', value: `₹${(totalOtaNet / 100000).toFixed(2)}L`, sub: 'After Commissions', icon: <DollarSign size={16} />, theme: 'emerald' },
+                      { label: 'Avg Cancel Rate', value: `${avgCancelRate}%`, sub: 'Across platforms', icon: <TrendingDown size={16} />, theme: 'violet' },
                     ].map((kpi, i) => {
-                      const t = themeMap[kpi.theme];
+                      const t = enhancedThemeMap[kpi.theme];
                       return (
-                        <motion.div key={i} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, type: 'spring' }} whileHover={{ y: -5 }}
-                          className="relative overflow-hidden bg-white rounded-[1.75rem] p-5 border border-zinc-200/60 flex flex-col shadow-sm"
-                          style={{ boxShadow: `0 1px 2px rgba(0,0,0,0.04), 0 14px 30px -18px ${t.glow}` }}
+                        <motion.div
+                          key={i}
+                          initial={{ opacity: 0, y: 16 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: i * 0.08, type: 'spring', stiffness: 200, damping: 20 }}
+                          whileHover={{ y: -8, scale: 1.02 }}
+                          style={{ '--kpi-glow': t.glow }}
+                          className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between border border-zinc-200/70 bg-gradient-to-br ${t.gradient} shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_24px_-16px_rgba(0,0,0,0.15)] transition-shadow duration-500 hover:shadow-[0_20px_45px_-18px_var(--kpi-glow)] ring-1 ${t.ring}`}
                         >
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${t.iconBg}`}>{kpi.icon}</div>
-                          <p className="text-2xl font-black text-zinc-900 tracking-tight leading-none mb-1.5">{kpi.value}</p>
-                          <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 leading-none">{kpi.label}</p>
-                          <p className="text-[10px] text-zinc-400 mt-1">{kpi.sub}</p>
+                          <div
+                            className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
+                            style={{ background: t.glow }}
+                          />
+                          <div className="relative flex-1 min-w-0">
+                            <div className="flex items-start justify-between mb-4">
+                              <motion.div
+                                whileHover={{ rotate: -8, scale: 1.1 }}
+                                transition={{ type: 'spring', stiffness: 400, damping: 14 }}
+                                className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${t.iconBg}`}
+                              >
+                                {kpi.icon}
+                              </motion.div>
+                            </div>
+                            <motion.p
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              transition={{ delay: i * 0.08 + 0.2 }}
+                              className="text-3xl font-black text-zinc-900 tracking-tight leading-none mb-1.5"
+                            >
+                              {kpi.value}
+                            </motion.p>
+                            <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 leading-none">{kpi.label}</p>
+                            <p className="text-[10px] text-zinc-400 mt-1">{kpi.sub}</p>
+                          </div>
                         </motion.div>
                       );
                     })}
@@ -817,7 +977,7 @@ export default function SalesExecutiveDashboard() {
                     </motion.div>
                   </div>
 
-                  <div className="sd-dealdeck-card rounded-[2rem] overflow-hidden">
+                  <div className="bg-white border border-zinc-200/60 rounded-[2rem] overflow-hidden shadow-sm">
                     <div className="p-5 border-b border-zinc-150 bg-white/40">
                       <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><Globe size={16} className="text-sky-500" /> Detailed OTA Ledger</h3>
                     </div>
@@ -875,6 +1035,140 @@ export default function SalesExecutiveDashboard() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* =============================================
+          ADD LEAD MODAL
+      ============================================= */}
+      <AnimatePresence>
+        {showAddLeadModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center sd-glass-backdrop p-4"
+            onClick={() => setShowAddLeadModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+              onClick={e => e.stopPropagation()}
+              className="w-full max-w-lg sd-glass-modal rounded-3xl p-7 overflow-hidden relative"
+            >
+              <div className="flex justify-between items-center mb-6 border-b border-zinc-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#D4A373]/10 text-[#D4A373] flex items-center justify-center">
+                    <Target size={20} />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-serif font-black text-zinc-900">Add Hotel Booking Lead</h2>
+                    <p className="text-[10px] uppercase font-bold tracking-wider text-zinc-400">Corporate Stays, Groups & Events</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowAddLeadModal(false)} className="p-2 rounded-xl hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-all">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleAddLead} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Company / Group Name</label>
+                    <input
+                      type="text" required placeholder="e.g. Reliance Retreat or Verma Wedding"
+                      value={newLeadForm.company}
+                      onChange={e => setNewLeadForm({ ...newLeadForm, company: e.target.value })}
+                      className="sd-input bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Booking Requirements</label>
+                    <input
+                      type="text" required placeholder="e.g. 10 Deluxe Rooms - 3 Nights"
+                      value={newLeadForm.deal_name}
+                      onChange={e => setNewLeadForm({ ...newLeadForm, deal_name: e.target.value })}
+                      className="sd-input bg-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Estimated Revenue (₹)</label>
+                    <input
+                      type="number" required min="0" placeholder="e.g. 120000"
+                      value={newLeadForm.value}
+                      onChange={e => setNewLeadForm({ ...newLeadForm, value: e.target.value })}
+                      className="sd-input bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Enquiry Source</label>
+                    <select
+                      value={newLeadForm.source}
+                      onChange={e => setNewLeadForm({ ...newLeadForm, source: e.target.value })}
+                      className="sd-input bg-white appearance-none cursor-pointer"
+                    >
+                      <option value="Hotel Website">Hotel Website</option>
+                      <option value="Call Enquiry">Call Enquiry</option>
+                      <option value="Walk In Enquiry">Walk In Enquiry</option>
+                      <option value="Different Websites">OTA / Third Party (B2B)</option>
+                      <option value="Corporate Tie-up">Corporate Tie-up</option>
+                    </select>
+                  </div>
+                </div>
+
+                <hr className="border-zinc-100 my-4" />
+                <h3 className="text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-3">Guest / Organizer Contact</h3>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Organizer Name</label>
+                  <input
+                    type="text" required placeholder="e.g. Rahul Sharma"
+                    value={newLeadForm.contact_name}
+                    onChange={e => setNewLeadForm({ ...newLeadForm, contact_name: e.target.value })}
+                    className="sd-input bg-white"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Email Address</label>
+                    <input
+                      type="email" placeholder="rahul@example.com"
+                      value={newLeadForm.contact_email}
+                      onChange={e => setNewLeadForm({ ...newLeadForm, contact_email: e.target.value })}
+                      className="sd-input bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Phone Number</label>
+                    <input
+                      type="text" required placeholder="+91 98765 43210"
+                      value={newLeadForm.contact_phone}
+                      onChange={e => setNewLeadForm({ ...newLeadForm, contact_phone: e.target.value })}
+                      className="sd-input bg-white"
+                    />
+                  </div>
+                </div>
+
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  type="submit"
+                  disabled={isSubmittingLead}
+                  className="w-full mt-6 bg-zinc-900 hover:bg-[#D4A373] text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {isSubmittingLead ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                  {isSubmittingLead ? 'Saving...' : 'Add Lead to Pipeline'}
+                </motion.button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }

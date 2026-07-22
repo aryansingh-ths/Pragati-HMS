@@ -113,11 +113,62 @@ export default function DiningDashboard() {
   const [overview, setOverview] = useState({ metrics: [], orderTrend: [], salesSplit: [] });
 
   const themeMap = {
-    '#D4A373': { iconBg: 'bg-[#D4A373] text-zinc-900', glow: 'rgba(212,163,115,0.35)' },
-    amber: { iconBg: 'bg-gradient-to-br from-[#D4A373] to-[#D4A373] text-white shadow-lg shadow-[#D4A373]/20', glow: 'rgba(245,158,11,0.35)', ring: '#d97706' },
-    rose: { iconBg: 'bg-gradient-to-br from-rose-400 to-pink-600 text-white shadow-lg shadow-rose-500/30', glow: 'rgba(244,63,94,0.35)', ring: '#e11d48' },
-    emerald: { iconBg: 'bg-gradient-to-br from-[#D4A373] to-[#D4A373] text-white shadow-lg shadow-[#D4A373]/20', glow: 'rgba(16,185,129,0.35)', ring: '#059669' },
-    indigo: { iconBg: 'bg-gradient-to-br from-indigo-500 to-blue-600 text-white shadow-lg shadow-indigo-500/30', glow: 'rgba(99,102,241,0.35)', ring: '#4f46e5' },
+    '#D4A373': { iconBg: 'bg-[#D4A373] text-zinc-900 shadow-lg shadow-[#D4A373]/30', gradient: 'from-amber-50 via-white to-white', ring: 'ring-amber-500/10', glow: 'rgba(212,163,115,0.35)' },
+    amber: { iconBg: 'bg-gradient-to-br from-[#D4A373] to-[#b9834f] text-white shadow-lg shadow-[#D4A373]/30', gradient: 'from-amber-50 via-white to-white', ring: 'ring-amber-500/10', glow: 'rgba(245,158,11,0.35)' },
+    rose: { iconBg: 'bg-gradient-to-br from-rose-400 to-pink-600 text-white shadow-lg shadow-rose-500/30', gradient: 'from-rose-50 via-white to-white', ring: 'ring-rose-500/10', glow: 'rgba(244,63,94,0.35)' },
+    emerald: { iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/30', gradient: 'from-emerald-50 via-white to-white', ring: 'ring-emerald-500/10', glow: 'rgba(16,185,129,0.35)' },
+    indigo: { iconBg: 'bg-gradient-to-br from-indigo-500 to-blue-600 text-white shadow-lg shadow-indigo-500/30', gradient: 'from-indigo-50 via-white to-white', ring: 'ring-indigo-500/10', glow: 'rgba(99,102,241,0.35)' },
+  };
+
+  // Small decorative graphics cycled per KPI card, mirroring the Admin dashboard's KPI cards
+  const kpiGraphic = (i, color) => {
+    const kind = i % 4;
+    if (kind === 0) {
+      return (
+        <div className="relative flex items-center justify-center shrink-0 ml-4">
+          <svg className="w-14 h-14 rotate-[-90deg]">
+            <circle cx="28" cy="28" r="20" fill="none" stroke={`${color}22`} strokeWidth="4" />
+            <motion.circle cx="28" cy="28" r="20" fill="none" strokeWidth="4.5" stroke={color}
+              strokeDasharray={2 * Math.PI * 20}
+              initial={{ strokeDashoffset: 2 * Math.PI * 20 }}
+              animate={{ strokeDashoffset: (2 * Math.PI * 20) * 0.28 }}
+              transition={{ duration: 1.3, ease: 'easeOut' }}
+              strokeLinecap="round" />
+          </svg>
+        </div>
+      );
+    }
+    if (kind === 1) {
+      return (
+        <div className="shrink-0 ml-4 border rounded-xl bg-white p-1.5 shadow-sm" style={{ borderColor: `${color}33` }}>
+          <svg className="w-16 h-9 overflow-visible">
+            <motion.path d="M0 22 Q8 6, 16 16 T32 3 T48 12 T60 8" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"
+              initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: 'easeOut' }} />
+            <motion.circle cx="60" cy="8" r="3" fill={color} initial={{ scale: 0 }} animate={{ scale: [0, 1.4, 1] }} transition={{ duration: 0.5, delay: 1.3 }} />
+          </svg>
+        </div>
+      );
+    }
+    if (kind === 2) {
+      return (
+        <div className="flex gap-1.5 h-7 items-end shrink-0 ml-4 border rounded-xl bg-white px-2.5 py-1.5 shadow-sm" style={{ borderColor: `${color}33` }}>
+          {[...Array(5)].map((_, idx) => (
+            <motion.div key={idx} className="w-2.5 rounded-t-md" style={{ background: idx < 3 ? color : '#e4e4e7' }}
+              initial={{ height: 0 }} animate={{ height: idx < 3 ? '20px' : '8px' }}
+              transition={{ duration: 0.6, delay: idx * 0.08, type: 'spring', stiffness: 200 }} />
+          ))}
+        </div>
+      );
+    }
+    return (
+      <div className="shrink-0 ml-4 border rounded-xl bg-white p-1.5 shadow-sm" style={{ borderColor: `${color}33` }}>
+        <svg className="w-16 h-9 overflow-visible">
+          <motion.path d="M0 25 L12 18 L24 22 L36 10 L48 14 L60 4" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"
+            initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: 'easeOut', delay: 0.2 }} />
+          <motion.circle cx="60" cy="4" r="3" fill={color} initial={{ scale: 0 }} animate={{ scale: [0, 1.4, 1] }} transition={{ duration: 0.5, delay: 1.5 }} />
+        </svg>
+      </div>
+    );
   };
 
   const fetchData = async () => {
@@ -218,7 +269,10 @@ export default function DiningDashboard() {
         }
 
         .dd-sidebar { background: #FFFFFF; box-shadow: 14px 17px 40px 4px rgba(112, 144, 176, 0.08); border: 1px solid rgba(226, 232, 240, 0.8); }
-        .dd-card { background: #FFFFFF; border: 1px solid rgba(226, 232, 240, 0.8); box-shadow: 0px 18px 40px 0px rgba(112, 144, 176, 0.08); transition: all 0.3s ease; }
+        .dd-card { background: #FFFFFF; border: 1px solid rgba(226, 232, 240, 0.8); box-shadow: 0px 18px 40px 0px rgba(112, 144, 176, 0.08); transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .dd-card:hover { transform: translateY(-4px) scale(1.02); box-shadow: 0px 24px 48px 0px rgba(112, 144, 176, 0.16); }
+        .dd-icon-btn { transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1); display: inline-flex; }
+        .group:hover .dd-icon-btn { transform: translateY(-1px) scale(1.12) rotate(-6deg); }
         .dd-glass-backdrop { background: rgba(24, 24, 27, 0.4); backdrop-filter: blur(10px); }
         .dd-glass-modal { background: rgba(255, 255, 255, 0.98); border: 1px solid rgba(226, 232, 240, 0.8); box-shadow: 0 30px 70px -12px rgba(245,158,11, 0.25); backdrop-filter: blur(24px); }
         .dd-input { width: 100%; padding: 0.75rem 1.1rem; background: #F4F7FE; border: 1px solid #E2E8F0; border-radius: 1rem; font-size: 0.875rem; font-weight: 500; outline: none; transition: border 0.3s; }
@@ -272,6 +326,13 @@ export default function DiningDashboard() {
             <p className="text-xs text-zinc-400 mt-1">Manage kitchen workflows, restaurant seating, and F&B revenue.</p>
           </div>
           <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+              </span>
+              <span className="text-[9px] font-bold uppercase tracking-wider">Live System</span>
+            </div>
             <button onClick={refresh} className="p-2.5 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-500 transition-all"><RefreshCw size={15} className={isLoading ? 'animate-spin' : ''}/></button>
             {(() => {
               const staffName = localStorage.getItem('hms_name') || 'Staff';
@@ -317,28 +378,76 @@ export default function DiningDashboard() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                     {overview.metrics && overview.metrics.map((kpi, i) => {
                       const t = themeMap[kpi.theme] || themeMap['#D4A373'];
+                      const dotColor = kpi.theme && kpi.theme.startsWith('#') ? kpi.theme : { amber: '#D4A373', rose: '#e11d48', emerald: '#059669', indigo: '#4f46e5' }[kpi.theme] || '#D4A373';
                       return (
-                        <div key={i} className="bg-white rounded-[1.75rem] p-5 border border-zinc-200/60 flex flex-col justify-between" style={{ boxShadow: `0 14px 30px -18px ${t.glow}` }}>
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${t.iconBg}`}>{iconMap[kpi.iconName]}</div>
-                          <div>
-                            <p className="text-3xl font-black text-zinc-900 leading-none mb-1.5">{kpi.value}</p>
-                            <p className="text-xs font-bold uppercase tracking-wider text-zinc-500">{kpi.label}</p>
+                        <motion.div
+                          key={i}
+                          initial={{ opacity: 0, y: 16 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: i * 0.08, type: 'spring', stiffness: 200, damping: 20 }}
+                          whileHover={{ y: -8, scale: 1.02 }}
+                          style={{ '--kpi-glow': t.glow }}
+                          className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between border border-zinc-200/70 bg-gradient-to-br ${t.gradient} shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_24px_-16px_rgba(0,0,0,0.15)] transition-shadow duration-500 hover:shadow-[0_20px_45px_-18px_var(--kpi-glow)] ring-1 ${t.ring}`}
+                        >
+                          {/* decorative glow blob */}
+                          <div
+                            className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
+                            style={{ background: t.glow }}
+                          />
+                          <div className="relative flex-1 min-w-0">
+                            <div className="flex items-start justify-between mb-4">
+                              <motion.div
+                                whileHover={{ rotate: -8, scale: 1.1 }}
+                                transition={{ type: 'spring', stiffness: 400, damping: 14 }}
+                                className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${t.iconBg}`}
+                              >
+                                {iconMap[kpi.iconName]}
+                              </motion.div>
+                            </div>
+                            <motion.p
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              transition={{ delay: i * 0.08 + 0.2 }}
+                              className="text-3xl font-black text-zinc-900 tracking-tight leading-none mb-1.5"
+                            >
+                              {kpi.value}
+                            </motion.p>
+                            <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 leading-none">{kpi.label}</p>
                             <p className="text-[10px] text-zinc-400 mt-1">{kpi.sub}</p>
                           </div>
-                        </div>
+                          <div className="relative">{kpiGraphic(i, dotColor)}</div>
+                        </motion.div>
                       );
                     })}
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="bg-white rounded-[2rem] p-6 border border-zinc-200/60 shadow-sm relative overflow-hidden">
+                    <motion.div
+                      whileHover={{ y: -6, scale: 1.01 }}
+                      transition={{ type: 'spring', stiffness: 350, damping: 22 }}
+                      className="relative overflow-hidden bg-white rounded-[2rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]"
+                    >
                       <div className="absolute -bottom-16 -right-10 w-56 h-56 rounded-full bg-amber-200/20 blur-3xl pointer-events-none" />
-                      <h3 className="font-black text-sm uppercase mb-4 flex items-center gap-2 text-zinc-800"><TrendingUp size={16} className="text-[#D4A373]"/> Order Volume Trend</h3>
+                      <div className="relative flex items-center gap-2 mb-4">
+                        <div className="w-7 h-7 rounded-lg bg-[#D4A373] flex items-center justify-center shadow-md shadow-[#D4A373]/30">
+                          <TrendingUp size={14} className="text-white" />
+                        </div>
+                        <h3 className="font-black text-sm uppercase text-zinc-800">Order Volume Trend</h3>
+                      </div>
                       <OrderTrendLine data={overview.orderTrend || []} />
-                    </div>
-                    <div className="bg-white rounded-[2rem] p-6 border border-zinc-200/60 shadow-sm relative overflow-hidden">
+                    </motion.div>
+                    <motion.div
+                      whileHover={{ y: -6, scale: 1.01 }}
+                      transition={{ type: 'spring', stiffness: 350, damping: 22 }}
+                      className="relative overflow-hidden bg-white rounded-[2rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]"
+                    >
                       <div className="absolute -top-14 -right-14 w-40 h-40 rounded-full bg-rose-200/20 blur-3xl pointer-events-none" />
-                      <h3 className="font-black text-sm uppercase mb-4 flex items-center gap-2 text-zinc-800"><PieChart size={16} className="text-rose-500"/> Sales by Outlet</h3>
+                      <div className="relative flex items-center gap-2 mb-4">
+                        <div className="w-7 h-7 rounded-lg bg-rose-500 flex items-center justify-center shadow-md shadow-rose-500/30">
+                          <PieChart size={14} className="text-white" />
+                        </div>
+                        <h3 className="font-black text-sm uppercase text-zinc-800">Sales by Outlet</h3>
+                      </div>
                       <div className="flex flex-col sm:flex-row items-center justify-around gap-6">
                         <DonutChart data={overview.salesSplit || []} centerLabel="Orders" />
                         <div className="grid grid-cols-1 gap-y-2.5">
@@ -351,7 +460,7 @@ export default function DiningDashboard() {
                           ))}
                         </div>
                       </div>
-                    </div>
+                    </motion.div>
                   </div>
                 </motion.div>
               )}
@@ -360,7 +469,10 @@ export default function DiningDashboard() {
               {activeTab === 'kots' && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 h-[calc(100vh-14rem)] flex flex-col">
                   <div className="flex justify-between items-center bg-white p-4 rounded-[1.5rem] border border-zinc-200/60 shrink-0">
-                    <div className="flex items-center gap-2 text-sm font-bold uppercase text-zinc-800"><ChefHat size={16} className="text-[#D4A373]"/> Live Kitchen Display</div>
+                    <div className="flex items-center gap-2 text-sm font-bold uppercase text-zinc-800">
+                      <div className="w-7 h-7 rounded-lg bg-[#D4A373] flex items-center justify-center shadow-md shadow-[#D4A373]/30"><ChefHat size={14} className="text-white"/></div>
+                      Live Kitchen Display
+                    </div>
                     <button onClick={() => setIsKOTModalOpen(true)} className="bg-[#D4A373] text-white px-4 py-2 rounded-xl text-xs font-bold uppercase hover:bg-[#D4A373] transition-colors flex items-center gap-1"><Plus size={14}/> Punch Order</button>
                   </div>
                   
@@ -401,7 +513,10 @@ export default function DiningDashboard() {
               {activeTab === 'tables' && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                   <div className="bg-white p-5 rounded-[1.5rem] border border-zinc-200/60 flex flex-wrap gap-4 justify-between items-center">
-                    <div className="flex items-center gap-2 text-sm font-bold uppercase text-zinc-800"><MapPin size={16} className="text-indigo-500"/> Floor Plan Status</div>
+                    <div className="flex items-center gap-2 text-sm font-bold uppercase text-zinc-800">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-500 flex items-center justify-center shadow-md shadow-indigo-500/30"><MapPin size={14} className="text-white"/></div>
+                      Floor Plan Status
+                    </div>
                     <div className="flex gap-4 text-xs font-bold text-zinc-500">
                       <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-[#D4A373]/10 border border-[#D4A373]/30"/> Available</span>
                       <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-rose-100 border border-rose-400"/> Occupied</span>
@@ -434,7 +549,10 @@ export default function DiningDashboard() {
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                   <div className="dd-card rounded-[2rem] overflow-hidden">
                     <div className="p-5 border-b border-zinc-150 flex justify-between items-center bg-white/40">
-                      <h3 className="font-bold flex gap-2 text-sm uppercase"><Utensils size={16} className="text-[#D4A373]" /> Top Performing Items</h3>
+                      <h3 className="font-bold flex items-center gap-2 text-sm uppercase">
+                        <div className="w-7 h-7 rounded-lg bg-[#D4A373] flex items-center justify-center shadow-md shadow-[#D4A373]/30"><Utensils size={14} className="text-white" /></div>
+                        Top Performing Items
+                      </h3>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-left border-collapse">
