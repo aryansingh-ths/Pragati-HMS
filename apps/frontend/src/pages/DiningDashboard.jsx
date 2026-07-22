@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Utensils, Coffee, Clock, CheckCircle2, ChefHat, Receipt,
+import {
+  Utensils, Coffee, Clock, CheckCircle2, ChefHat, Receipt,
   Calendar, Users, BellRing, Building2, Search, ArrowUpRight,
-  TrendingUp, PieChart, LayoutGrid, X, Loader2, Plus, Flame, MapPin, 
-  RefreshCw, LogOut } from 'lucide-react';
+  TrendingUp, PieChart, LayoutGrid, X, Loader2, Plus, Flame, MapPin,
+  RefreshCw, LogOut, Zap
+} from 'lucide-react';
 
 // =============================================
 // Helper Components
@@ -86,9 +88,37 @@ function OrderTrendLine({ data = [] }) {
 // MAIN DASHBOARD COMPONENT
 // =============================================
 export default function DiningDashboard() {
+  // ─── Broadcast States ──────────────────────────────────────
+  const [broadcasts, setBroadcasts] = React.useState([]);
+  const [dismissedBroadcasts, setDismissedBroadcasts] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem('hms_dismissed_broadcasts')) || []; } catch { return []; }
+  });
+
+  React.useEffect(() => {
+    localStorage.setItem('hms_dismissed_broadcasts', JSON.stringify(dismissedBroadcasts));
+  }, [dismissedBroadcasts]);
+
+  const fetchBroadcasts = React.useCallback(async () => {
+    try {
+      const token = sessionStorage.getItem('hms_token');
+      const res = await fetch(`http://localhost:3000/api/broadcasts`, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (res?.ok) {
+        const data = await res.json();
+        setBroadcasts(data.data.broadcasts || []);
+      }
+    } catch (e) {
+      console.error('Failed to fetch broadcasts:', e);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fetchBroadcasts();
+    const interval = setInterval(fetchBroadcasts, 30000);
+    return () => clearInterval(interval);
+  }, [fetchBroadcasts]);
   const navigate = useNavigate();
   const location = useLocation();
-  const isAdmin = location.state?.fromAdmin === true || sessionStorage.getItem('hms_role')?.toUpperCase() === 'ADMIN';
+  const isAdmin = location.state?.fromAdmin === true || sessionStorage.getItem('hms_role')?.toUpperCase() === 'Admin';
 
   const [activeTab, setActiveTab] = useState('overview');
   const [isLoading, setIsLoading] = useState(false);
@@ -217,7 +247,7 @@ export default function DiningDashboard() {
           {isAdmin && (
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Command Center</p>
-              <button onClick={() => navigate('/dashboard/manager')} className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-500 hover:bg-zinc-50 hover:text-[#D4A373] transition-all text-left">
+              <button onClick={() => navigate('/dashboard/Admin')} className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-500 hover:bg-zinc-50 hover:text-[#D4A373] transition-all text-left">
                 <span className="flex items-center gap-3"><Building2 size={15} /> Back to Admin</span><ArrowUpRight size={14} className="opacity-50" />
               </button>
             </div>
@@ -227,6 +257,45 @@ export default function DiningDashboard() {
 
       {/* MAIN CONTENT */}
       <div className="flex-1 flex flex-col gap-6 overflow-hidden min-w-0">
+        {/* BROADCAST BANNER */}
+        <AnimatePresence>
+          {broadcasts.filter(b => !dismissedBroadcasts.includes(b.id) && (!b.expires_at || new Date(b.expires_at) > new Date())).map((broadcast) => (
+            <motion.div
+              key={broadcast.id}
+              initial={{ opacity: 0, y: -20, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+              className="relative overflow-hidden rounded-[1.5rem] bg-gradient-to-r from-rose-500 via-rose-600 to-amber-500 p-[2px] shadow-lg shadow-rose-500/20 mb-4 min-h-[72px]"
+            >
+              <div className="w-full h-full relative bg-white/10 backdrop-blur-md rounded-[calc(1.5rem-2px)] px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  <div className="relative shrink-0">
+                    <div className="absolute inset-0 bg-white/40 rounded-full animate-ping opacity-75"></div>
+                    <div className="relative w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white border border-white/40 shadow-sm backdrop-blur-lg">
+                      <Zap size={18} className="drop-shadow-md" />
+                    </div>
+                  </div>
+                  <div className="flex-1 text-white flex flex-col justify-center">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] font-black uppercase tracking-widest bg-white/20 px-2 py-0.5 rounded-full backdrop-blur-sm border border-white/20">
+                        {broadcast.target_dept === 'ALL' ? 'GLOBAL BROADCAST' : 'DEPARTMENT ALERT'}
+                      </span>
+                      <span className="text-[10px] font-semibold text-white/80 border-l border-white/20 pl-2">From: {broadcast.sender_name}</span>
+                    </div>
+                    <p className="text-sm font-bold tracking-wide drop-shadow-sm leading-snug">{broadcast.message}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDismissedBroadcasts(prev => [...prev, broadcast.id])}
+                  className="shrink-0 w-8 h-8 rounded-full bg-white/10 hover:bg-white/25 flex items-center justify-center text-white transition-colors border border-white/10 self-end sm:self-center"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl font-black text-zinc-600 tracking-tight mt-0.5">
@@ -235,12 +304,12 @@ export default function DiningDashboard() {
             <p className="text-xs text-zinc-400 mt-1">Manage kitchen workflows, restaurant seating, and F&B revenue.</p>
           </div>
           <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
-            <button onClick={refresh} className="p-2.5 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-500 transition-all"><RefreshCw size={15} className={isLoading ? 'animate-spin' : ''}/></button>
+            <button onClick={refresh} className="p-2.5 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-500 transition-all"><RefreshCw size={15} className={isLoading ? 'animate-spin' : ''} /></button>
             {/* Profile Avatar Widget */}
             {(() => {
-              const staffName = localStorage.getItem('hms_name') || 'Staff';
+              const staffName = sessionStorage.getItem('hms_name') || 'Staff';
               const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
-              const designation = 'Restaurant Manager';
+              const designation = 'Restaurant Admin';
               return (
                 <motion.button
                   whileHover={{ y: -2 }}
@@ -291,12 +360,12 @@ export default function DiningDashboard() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div className="bg-white rounded-[2rem] p-6 border border-zinc-200/60 shadow-sm relative overflow-hidden">
                     <div className="absolute -bottom-16 -right-10 w-56 h-56 rounded-full bg-amber-200/20 blur-3xl pointer-events-none" />
-                    <h3 className="font-black text-sm uppercase mb-4 flex items-center gap-2 text-zinc-800"><TrendingUp size={16} className="text-[#D4A373]"/> Order Volume Trend</h3>
+                    <h3 className="font-black text-sm uppercase mb-4 flex items-center gap-2 text-zinc-800"><TrendingUp size={16} className="text-[#D4A373]" /> Order Volume Trend</h3>
                     <OrderTrendLine data={orderTrend} />
                   </div>
                   <div className="bg-white rounded-[2rem] p-6 border border-zinc-200/60 shadow-sm relative overflow-hidden">
                     <div className="absolute -top-14 -right-14 w-40 h-40 rounded-full bg-rose-200/20 blur-3xl pointer-events-none" />
-                    <h3 className="font-black text-sm uppercase mb-4 flex items-center gap-2 text-zinc-800"><PieChart size={16} className="text-rose-500"/> Sales by Outlet</h3>
+                    <h3 className="font-black text-sm uppercase mb-4 flex items-center gap-2 text-zinc-800"><PieChart size={16} className="text-rose-500" /> Sales by Outlet</h3>
                     <div className="flex flex-col sm:flex-row items-center justify-around gap-6">
                       <DonutChart data={salesSplit} centerLabel="Orders" />
                       <div className="grid grid-cols-1 gap-y-2.5">
@@ -318,10 +387,10 @@ export default function DiningDashboard() {
             {activeTab === 'kots' && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 h-[calc(100vh-14rem)] flex flex-col">
                 <div className="flex justify-between items-center bg-white p-4 rounded-[1.5rem] border border-zinc-200/60 shrink-0">
-                  <div className="flex items-center gap-2 text-sm font-bold uppercase text-zinc-800"><ChefHat size={16} className="text-[#D4A373]"/> Live Kitchen Display</div>
-                  <button onClick={() => setIsKOTModalOpen(true)} className="bg-[#D4A373] text-white px-4 py-2 rounded-xl text-xs font-bold uppercase hover:bg-[#D4A373] transition-colors flex items-center gap-1"><Plus size={14}/> Punch Order</button>
+                  <div className="flex items-center gap-2 text-sm font-bold uppercase text-zinc-800"><ChefHat size={16} className="text-[#D4A373]" /> Live Kitchen Display</div>
+                  <button onClick={() => setIsKOTModalOpen(true)} className="bg-[#D4A373] text-white px-4 py-2 rounded-xl text-xs font-bold uppercase hover:bg-[#D4A373] transition-colors flex items-center gap-1"><Plus size={14} /> Punch Order</button>
                 </div>
-                
+
                 <div className="flex-1 flex gap-4 overflow-x-auto dd-scrollbar pb-2">
                   {['New', 'Preparing', 'Ready', 'Served'].map(status => {
                     const columnKOTs = activeKOTs.filter(k => k.status === status);
@@ -329,7 +398,7 @@ export default function DiningDashboard() {
                     return (
                       <div key={status} className="w-72 shrink-0 flex flex-col gap-3 bg-zinc-50/50 rounded-3xl p-3 border border-zinc-100">
                         <div className="flex items-center justify-between px-2 pt-1">
-                          <h4 className="text-xs font-black uppercase tracking-wider text-zinc-700 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: colColor }}/> {status}</h4>
+                          <h4 className="text-xs font-black uppercase tracking-wider text-zinc-700 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: colColor }} /> {status}</h4>
                           <span className="text-[10px] font-bold text-zinc-500 bg-white px-2 py-0.5 rounded-full border border-zinc-200">{columnKOTs.length}</span>
                         </div>
                         <div className="flex flex-col gap-3 overflow-y-auto dd-scrollbar h-full">
@@ -342,7 +411,7 @@ export default function DiningDashboard() {
                               </div>
                               <p className="text-xs text-zinc-600 font-medium pl-2 leading-relaxed mb-3">{kot.items}</p>
                               <div className="flex justify-between items-center pl-2 border-t border-zinc-100 pt-2 mt-auto">
-                                <span className="text-[10px] text-zinc-400 font-semibold flex items-center gap-1"><Clock size={11}/> {kot.time}</span>
+                                <span className="text-[10px] text-zinc-400 font-semibold flex items-center gap-1"><Clock size={11} /> {kot.time}</span>
                                 <span className="text-[10px] font-mono font-bold text-zinc-300">{kot.id}</span>
                               </div>
                             </div>
@@ -359,12 +428,12 @@ export default function DiningDashboard() {
             {activeTab === 'tables' && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                 <div className="bg-white p-5 rounded-[1.5rem] border border-zinc-200/60 flex flex-wrap gap-4 justify-between items-center">
-                  <div className="flex items-center gap-2 text-sm font-bold uppercase text-zinc-800"><MapPin size={16} className="text-indigo-500"/> Floor Plan Status</div>
+                  <div className="flex items-center gap-2 text-sm font-bold uppercase text-zinc-800"><MapPin size={16} className="text-indigo-500" /> Floor Plan Status</div>
                   <div className="flex gap-4 text-xs font-bold text-zinc-500">
-                    <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-[#D4A373]/10 border border-[#D4A373]/30"/> Available</span>
-                    <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-rose-100 border border-rose-400"/> Occupied</span>
-                    <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-[#D4A373]/10 border border-[#D4A373]/30"/> Dirty</span>
-                    <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-sky-100 border border-sky-400"/> Reserved</span>
+                    <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-[#D4A373]/10 border border-[#D4A373]/30" /> Available</span>
+                    <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-rose-100 border border-rose-400" /> Occupied</span>
+                    <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-[#D4A373]/10 border border-[#D4A373]/30" /> Dirty</span>
+                    <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-sky-100 border border-sky-400" /> Reserved</span>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -432,7 +501,7 @@ export default function DiningDashboard() {
         {isKOTModalOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-55 flex items-center justify-center dd-glass-backdrop p-4" onClick={() => setIsKOTModalOpen(false)}>
             <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={e => e.stopPropagation()} className="w-full max-w-md dd-glass-modal rounded-3xl p-7">
-              <div className="flex justify-between items-center mb-6"><div><h2 className="text-lg font-serif font-bold text-zinc-900">Punch KOT</h2></div><button onClick={() => setIsKOTModalOpen(false)}><X size={20} className="text-zinc-500"/></button></div>
+              <div className="flex justify-between items-center mb-6"><div><h2 className="text-lg font-serif font-bold text-zinc-900">Punch KOT</h2></div><button onClick={() => setIsKOTModalOpen(false)}><X size={20} className="text-zinc-500" /></button></div>
               <form onSubmit={handleAddKOT} className="space-y-4">
                 <div><label className="block text-[10px] font-bold uppercase text-zinc-400 mb-1">Table / Room</label><input required placeholder="e.g. Table 5 or Room 102" value={kotForm.table} onChange={e => setKotForm({ ...kotForm, table: e.target.value })} className="dd-input" /></div>
                 <div><label className="block text-[10px] font-bold uppercase text-zinc-400 mb-1">Order Items</label><textarea required rows={4} placeholder="e.g. 2x Butter Chicken, 1x Naan" value={kotForm.items} onChange={e => setKotForm({ ...kotForm, items: e.target.value })} className="dd-input resize-none" /></div>

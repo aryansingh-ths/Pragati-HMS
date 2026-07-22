@@ -34,12 +34,12 @@ export default function Header({
 
   const getDashboardPath = (role) => {
     const r = role.toLowerCase();
-    if (r === 'admin') return '/dashboard/manager';
+    if (r === 'admin') return '/dashboard/Admin';
     if (r === 'housekeeping') return '/dashboard/housekeeping';
     if (r === 'finance') return '/dashboard/finance';
     if (r === 'sales') return '/dashboard/sales';
     if (r === 'travel') return '/dashboard/travel';
-    if (r === 'restaurant') return '/dashboard/dining'; 
+    if (r === 'restaurant') return '/dashboard/dining';
     return '/dashboard/front-desk';
   };
 
@@ -82,8 +82,8 @@ export default function Header({
       animate={{ y: 0 }}
       transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
       className={`fixed top-0 left-0 w-full z-50 h-28 transition-all duration-300 ${isScrolled || isDashboard
-          ? 'bg-white/85 backdrop-blur-lg shadow-[0_1px_0_0_rgba(0,0,0,0.06)]'
-          : 'bg-white'
+        ? 'bg-white/85 backdrop-blur-lg shadow-[0_1px_0_0_rgba(0,0,0,0.06)]'
+        : 'bg-white'
         }`}
     >
       <div className="h-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">

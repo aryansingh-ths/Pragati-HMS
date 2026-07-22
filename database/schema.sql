@@ -168,3 +168,123 @@ CREATE TABLE IF NOT EXISTS travel_bookings (
     booked_by UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- ==========================================
+-- FINANCE & ACCOUNTING TABLES
+-- ==========================================
+
+-- 1. Operational & Department Expenses Table (Extends basic room_expenses)
+CREATE TABLE IF NOT EXISTS operational_expenses (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    category VARCHAR(100) NOT NULL, -- e.g., 'Kitchen Items', 'Utilities', 'Maintenance'
+    vendor VARCHAR(255) NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL,
+    payment_method VARCHAR(50) DEFAULT 'Bank Transfer',
+    status VARCHAR(50) DEFAULT 'Approved',
+    notes TEXT,
+    logged_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. Invoices & Guest Folios Table
+CREATE TABLE IF NOT EXISTS invoices (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    invoice_number VARCHAR(100) UNIQUE NOT NULL,
+    booking_id UUID REFERENCES bookings(id) ON DELETE CASCADE,
+    bill_to VARCHAR(255) NOT NULL,
+    invoice_type VARCHAR(50) DEFAULT 'Guest Folio', -- 'Guest Folio', 'Corporate Account', 'Banquet'
+    subtotal DECIMAL(10, 2) NOT NULL,
+    tax_amount DECIMAL(10, 2) DEFAULT 0,
+    total_amount DECIMAL(10, 2) NOT NULL,
+    paid_amount DECIMAL(10, 2) DEFAULT 0,
+    due_date DATE,
+    status VARCHAR(50) DEFAULT 'UNPAID', -- 'PAID', 'PARTIAL', 'OVERDUE', 'DRAFT'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 3. Accounts Payable / Vendor Bills Table
+CREATE TABLE IF NOT EXISTS vendor_bills (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    bill_number VARCHAR(100) UNIQUE NOT NULL,
+    vendor VARCHAR(255) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL,
+    due_date DATE NOT NULL,
+    status VARCHAR(50) DEFAULT 'Scheduled', -- 'Scheduled', 'Overdue', 'Paid'
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 4. Guest Deposits & Escrow Table
+CREATE TABLE IF NOT EXISTS guest_deposits (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    booking_id UUID REFERENCES bookings(id) ON DELETE CASCADE,
+    guest_id UUID REFERENCES guests(id) ON DELETE CASCADE,
+    deposit_type VARCHAR(50) NOT NULL, -- 'Security Deposit', 'Advance Booking'
+    amount DECIMAL(10, 2) NOT NULL,
+    status VARCHAR(50) DEFAULT 'Held', -- 'Held', 'Refunded', 'Applied to Bill', 'Forfeited'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 5. Upgrade Existing ledger_transactions Table
+ALTER TABLE ledger_transactions 
+ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50) DEFAULT 'Cash',
+ADD COLUMN IF NOT EXISTS reference_number VARCHAR(255);
+
+-- 6. Reconciliations Table
+CREATE TABLE IF NOT EXISTS reconciliations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    source VARCHAR(100) NOT NULL, -- 'Bank Statement', 'Gateway Payout'
+    reference_number VARCHAR(255) NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL,
+    matched_with VARCHAR(255),
+    status VARCHAR(50) DEFAULT 'Unmatched', -- 'Matched', 'Unmatched'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 7. Department Budgets Table
+CREATE TABLE IF NOT EXISTS department_budgets (
+    id SERIAL PRIMARY KEY,
+    department_name VARCHAR(100) UNIQUE NOT NULL,
+    budget_amount DECIMAL(10, 2) NOT NULL,
+    type VARCHAR(50) NOT NULL -- 'Revenue', 'Expense'
+);
+
+-- Seed data for department_budgets (Do Nothing if exists)
+INSERT INTO department_budgets (department_name, budget_amount, type) VALUES
+('Rooms', 2700000, 'Revenue'),
+('F&B', 1350000, 'Revenue'),
+('Banquets & Events', 900000, 'Revenue'),
+('Housekeeping', 420000, 'Expense'),
+('Marketing & Admin', 230000, 'Expense')
+ON CONFLICT (department_name) DO NOTHING;
+
+-- 8. Cash Drawer Logs
+CREATE TABLE IF NOT EXISTS cash_drawer_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    counted_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    actual_amount DECIMAL(10, 2) NOT NULL,
+    expected_amount DECIMAL(10, 2) NOT NULL,
+    status VARCHAR(50) NOT NULL, -- 'Balanced', 'Short', 'Over'
+    notes TEXT,
+    counted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 9. Accounting Balances (For Balance Sheet & Cash Flow)
+CREATE TABLE IF NOT EXISTS accounting_balances (
+    id SERIAL PRIMARY KEY,
+    key_name VARCHAR(100) UNIQUE NOT NULL,
+    balance DECIMAL(15, 2) NOT NULL
+);
+
+INSERT INTO accounting_balances (key_name, balance) VALUES
+('cash_and_bank', 1842000),
+('inventory', 218000),
+('property_and_equipment', 18500000),
+('long_term_loan', 6200000),
+('property_improvements', -240000),
+('loan_repayment', -150000),
+('owners_equity', 14260850)
+ON CONFLICT (key_name) DO NOTHING;
+
+

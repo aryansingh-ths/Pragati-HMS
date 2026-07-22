@@ -29,7 +29,7 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
 
       if (response.ok) {
         const { token, user } = data;
-        
+
         sessionStorage.setItem('hms_token', token);
         sessionStorage.setItem('hms_role', user.role);
         sessionStorage.setItem('hms_name', user.name);
@@ -37,8 +37,8 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
         // Computed role tracking state and target routing maps
         const role = user.role.toUpperCase();
         let redirectPath = '/';
-        
-        if (role === 'ADMIN') redirectPath = '/dashboard/manager';
+
+        if (role === 'ADMIN') redirectPath = '/dashboard/Admin';
         else if (role === 'FRONT_DESK' || role === 'RECEPTION') redirectPath = '/dashboard/front-desk';
         else if (role === 'HOUSEKEEPING') redirectPath = '/dashboard/housekeeping';
         else if (role === 'FINANCE') redirectPath = '/dashboard/finance';
@@ -68,14 +68,14 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
 
   return (
     <div className="min-h-[calc(100vh-6rem)] flex items-center justify-center bg-gradient-to-br from-orange-50/50 via-zinc-50 to-zinc-100 p-4">
-      
+
       {/* Decorative Background Elements */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
         <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-orange-100/40 blur-3xl"></div>
         <div className="absolute top-[60%] -right-[10%] w-[40%] h-[60%] rounded-full bg-peach-100/30 blur-3xl"></div>
       </div>
 
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 100, damping: 20 }}
@@ -84,9 +84,9 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
         {/* Branding */}
         <div className="flex flex-col items-center mb-10 text-center cursor-pointer" onClick={() => navigate('/')}>
           <div className="w-12 h-12 bg-white border border-orange-200 rounded-xl flex items-center justify-center overflow-hidden shadow-sm mb-4">
-            <img 
-              src="/images/techhansa-logo.png" 
-              alt="Logo" 
+            <img
+              src="/images/techhansa-logo.png"
+              alt="Logo"
               className="w-full h-full object-cover"
               onError={(e) => {
                 e.target.style.display = 'none';
@@ -111,7 +111,7 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
 
         {/* Error Message */}
         {error && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
             className="mb-6 p-3 bg-red-50 border border-red-100 rounded-lg flex items-start gap-2 text-red-600 text-xs font-medium"
           >
@@ -128,12 +128,12 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-400">
                 <Mail size={16} />
               </div>
-              <input 
-                type="email" 
+              <input
+                type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@pragati.com" 
+                placeholder="name@pragati.com"
                 className="w-full pl-10 pr-4 py-3 bg-zinc-50/50 border border-zinc-200 rounded-xl text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 transition-all"
               />
             </div>
@@ -148,19 +148,19 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-400">
                 <Lock size={16} />
               </div>
-              <input 
-                type="password" 
+              <input
+                type="password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••" 
+                placeholder="••••••••"
                 className="w-full pl-10 pr-4 py-3 bg-zinc-50/50 border border-zinc-200 rounded-xl text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 transition-all"
               />
             </div>
           </div>
 
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={isLoading}
             className="w-full mt-4 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white py-3.5 rounded-xl text-xs font-bold uppercase tracking-[0.15em] transition-all shadow-md hover:shadow-lg active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed group"
           >

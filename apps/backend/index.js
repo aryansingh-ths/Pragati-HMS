@@ -404,7 +404,7 @@ app.get('/api/front-desk/rooms/available', verifyToken, requireRole(['FRONT_DESK
   }
 });
 
-// Helper function to push inventory changes to your Channel Manager
+// Helper function to push inventory changes to your Channel Admin
 const pushInventoryUpdateToOTA = async (roomTypeId, dateFrom, dateTo) => {
   try {
     // 1. Calculate how many rooms of this type are left
@@ -415,8 +415,8 @@ const pushInventoryUpdateToOTA = async (roomTypeId, dateFrom, dateTo) => {
 
     const remainingInventory = countRes.rows[0].remaining;
 
-    // 2. Make an HTTP request to your Channel Manager (e.g., Channex, SiteMinder)
-    /* await fetch('https://api.yourchannelmanager.com/v1/inventory', {
+    // 2. Make an HTTP request to your Channel Admin (e.g., Channex, SiteMinder)
+    /* await fetch('https://api.yourchannelAdmin.com/v1/inventory', {
       method: 'POST',
       headers: { 'Authorization': \`Bearer \${process.env.CHANNEL_MANAGER_API_KEY}\` },
       body: JSON.stringify({
@@ -427,7 +427,7 @@ const pushInventoryUpdateToOTA = async (roomTypeId, dateFrom, dateTo) => {
       })
     });
     */
-    console.log(`📡 [OTA SYNC] Pushed new inventory count (${remainingInventory}) to Channel Manager for RoomType ${roomTypeId}`);
+    console.log(`📡 [OTA SYNC] Pushed new inventory count (${remainingInventory}) to Channel Admin for RoomType ${roomTypeId}`);
   } catch (err) {
     console.error('Failed to sync inventory to OTA:', err);
   }
@@ -745,23 +745,6 @@ app.post('/api/housekeeping/rooms/:id/report-damage', verifyToken, requireRole([
 });
 
 // 5. Finance & Revenue Reconciliation Logs
-app.get('/api/finance/overview', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
-  try {
-    const revenueRes = await pool.query("SELECT COALESCE(SUM(total_price), 0) as total FROM bookings WHERE created_at >= CURRENT_DATE");
-
-    res.json({
-      metrics: [
-        { label: "Today's Revenue", value: `₹${revenueRes.rows[0].total}`, trend: "+14.2%", isPositive: true },
-        { label: "Pending Receivables", value: "₹12,400", trend: "-1.1%", isPositive: false }
-      ],
-      transactions: [
-        { id: 'TXN-9901', guest: 'System Walk-in', room: '101', amount: '₹14,000', method: 'Digital Gateway', status: 'Settled', date: 'Today' }
-      ]
-    });
-  } catch (err) {
-    res.status(500).json({ error: 'Unable to stream general ledger array metrics.' });
-  }
-});
 
 
 // ==========================================
@@ -969,11 +952,11 @@ app.get('/api/travel/customers', verifyToken, requireTravel, async (req, res) =>
 
 
 // ==========================================
-// MANAGER (ADMIN) ADMINISTRATIVE ENDPOINTS
+// Admin (Admin) AdminISTRATIVE ENDPOINTS
 // ==========================================
 
 // 1. COMPREHENSIVE LIVE OPERATIONS DASHBOARD ENDPOINT
-app.get('/api/manager/live-operations', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/admin/live-operations', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     // === KPIs ===
     const totalRoomsRes = await pool.query("SELECT COUNT(*) FROM rooms;");
@@ -1121,9 +1104,9 @@ app.get('/api/manager/live-operations', verifyToken, requireRole(['ADMIN']), asy
   }
 });
 
-// 2. GET ALL ROOMS CONFIGURATION LIST FOR ADMIN MANAGEMENT
+// 2. GET ALL ROOMS CONFIGURATION LIST FOR Admin MANAGEMENT
 // FETCH ALL ROOMS FOR INVENTORY GRID (Updated for Hierarchical Grouping)
-app.get('/api/manager/rooms', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/admin/rooms', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const query = `
       SELECT 
@@ -1140,8 +1123,8 @@ app.get('/api/manager/rooms', verifyToken, requireRole(['ADMIN']), async (req, r
   }
 });
 
-// 3. ACTION TRIGGER: TOGGLE ADMINISTRATIVE ROOM BLOCK (Out of Order)
-app.post('/api/manager/rooms/:id/toggle-block', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+// 3. ACTION TRIGGER: TOGGLE AdminISTRATIVE ROOM BLOCK (Out of Order)
+app.post('/api/admin/rooms/:id/toggle-block', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { id } = req.params;
   try {
     // 1. Check current status
@@ -1169,7 +1152,7 @@ app.post('/api/manager/rooms/:id/toggle-block', verifyToken, requireRole(['ADMIN
 });
 
 // 4. GET ROOM TYPES (For the Add Room Dropdown)
-app.get('/api/manager/room-types', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/admin/room-types', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const result = await pool.query('SELECT id, name, base_price FROM room_types ORDER BY base_price ASC');
     res.json({ status: 'success', data: { roomTypes: result.rows } });
@@ -1179,7 +1162,7 @@ app.get('/api/manager/room-types', verifyToken, requireRole(['ADMIN']), async (r
 });
 
 // 5. ADD NEW ROOM TO INVENTORY
-app.post('/api/manager/rooms', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/admin/rooms', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { room_number, room_type_id } = req.body;
   try {
     // Check if room number already exists
@@ -1198,7 +1181,7 @@ app.post('/api/manager/rooms', verifyToken, requireRole(['ADMIN']), async (req, 
 });
 
 // 6. REMOVE ROOM FROM INVENTORY (Force Delete connected records)
-app.delete('/api/manager/rooms/:id', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.delete('/api/admin/rooms/:id', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { id } = req.params;
 
   try {
@@ -1216,7 +1199,7 @@ app.delete('/api/manager/rooms/:id', verifyToken, requireRole(['ADMIN']), async 
 });
 
 // 7. GET MAINTENANCE TICKETS
-app.get('/api/manager/maintenance', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/admin/maintenance', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const query = `
       SELECT m.id, m.issue, m.assigned_to, m.priority, m.status, m.created_at, m.room_id, r.room_number, r.room_blocked 
@@ -1233,7 +1216,7 @@ app.get('/api/manager/maintenance', verifyToken, requireRole(['ADMIN']), async (
 });
 
 // 8. CREATE MAINTENANCE TICKET
-app.post('/api/manager/maintenance', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/admin/maintenance', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { room_id, issue, priority, assigned_to } = req.body;
   try {
     await pool.query('BEGIN');
@@ -1260,7 +1243,7 @@ app.post('/api/manager/maintenance', verifyToken, requireRole(['ADMIN']), async 
 });
 
 // 9. UPDATE TICKET STATUS
-app.patch('/api/manager/maintenance/:id/status', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.patch('/api/admin/maintenance/:id/status', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
   try {
@@ -1291,7 +1274,7 @@ app.patch('/api/manager/maintenance/:id/status', verifyToken, requireRole(['ADMI
 });
 
 // 10. DYNAMIC STAFF ASSIGNMENT
-app.patch('/api/manager/maintenance/:id/assign', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.patch('/api/admin/maintenance/:id/assign', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { id } = req.params;
   const { assigned_to } = req.body;
   try {
@@ -1311,7 +1294,7 @@ app.patch('/api/manager/maintenance/:id/assign', verifyToken, requireRole(['ADMI
   }
 });
 
-app.patch('/api/manager/rooms/:id/status', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.patch('/api/admin/rooms/:id/status', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
 
@@ -1437,12 +1420,12 @@ app.post('/api/bookings', async (req, res) => {
 });
 
 // ==========================================
-// OTA & CHANNEL MANAGER INTEGRATION
+// OTA & CHANNEL Admin INTEGRATION
 // ==========================================
 
-// Helper: Secure Channel Manager Webhook Endpoint
+// Helper: Secure Channel Admin Webhook Endpoint
 app.post('/api/channel-manager/webhook', async (req, res) => {
-  // 1. SECURITY: Verify Channel Manager Secret Key
+  // 1. SECURITY: Verify Channel Admin Secret Key
   const apiKey = req.headers['x-channel-api-key'];
   if (apiKey !== (process.env.CHANNEL_MANAGER_SECRET || 'fallback_secret_key_123')) {
     return res.status(403).json({ error: 'Unauthorized OTA payload' });
@@ -1550,7 +1533,7 @@ app.post('/api/channel-manager/webhook', async (req, res) => {
 
   } catch (err) {
     await pool.query('ROLLBACK');
-    console.error('Channel Manager Webhook Error:', err);
+    console.error('Channel Admin Webhook Error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1575,18 +1558,18 @@ app.patch('/api/rooms/:id/status', verifyStaffToken, async (req, res) => {
 });
 
 // =========================================================================
-// MANAGER / ADMIN COMMAND CENTER EXTENDED ENDPOINTS
+// Admin / Admin COMMAND CENTER EXTENDED ENDPOINTS
 // =========================================================================
 
 // 1. DYNAMIC PRICING & YIELD MANAGEMENT: Fetch All Rules
-app.get('/api/manager/yield-rules', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/admin/yield-rules', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const rules = await pool.query('SELECT * FROM yield_rules;');
     const rulesObj = {
       pricing_surges: { enabled: false, surge_percentage: 20, occupancy_threshold: 80 },
       los_discount: { enabled: false, min_nights: 5, discount_percentage: 10 },
       seasonal_multiplier: [],
-      channel_manager: { master_ota_toggle: false, allotments: { agoda: 5, direct: 10, expedia: 5, booking_com: 5 } },
+      channel_Admin: { master_ota_toggle: false, allotments: { agoda: 5, direct: 10, expedia: 5, booking_com: 5 } },
       crm_triggers: { pre_arrival_upsell: false, post_checkout_feedback: false },
       maintenance_automation: { ac_servicing_days: 90, backup_contractor: 'QuickFix Hospitality Group', auto_route_contractor: false, generator_check_days: 30 }
     };
@@ -1599,7 +1582,7 @@ app.get('/api/manager/yield-rules', verifyToken, requireRole(['ADMIN']), async (
 });
 
 // 2. DYNAMIC PRICING & YIELD MANAGEMENT: Update Yield Rule
-app.post('/api/manager/yield-rules', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/admin/yield-rules', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { key, value } = req.body;
   if (!key || value === undefined) return res.status(400).json({ error: 'Key and value are required' });
 
@@ -1617,7 +1600,7 @@ app.post('/api/manager/yield-rules', verifyToken, requireRole(['ADMIN']), async 
 });
 
 // 3. SYSTEM WATCHDOG: Fetch Immutable Audit Trail
-app.get('/api/manager/audit-logs', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/admin/audit-logs', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { q } = req.query;
   try {
     let query = 'SELECT * FROM system_audit_logs ORDER BY created_at DESC LIMIT 100;';
@@ -1639,7 +1622,7 @@ app.get('/api/manager/audit-logs', verifyToken, requireRole(['ADMIN']), async (r
 });
 
 // 4. ACCESS CONTROL: Fetch All User Roles & Custom Permissions
-app.get('/api/manager/permissions', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/admin/permissions', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const permQuery = `
       SELECT u.id, u.name, u.email, u.role, 
@@ -1659,7 +1642,7 @@ app.get('/api/manager/permissions', verifyToken, requireRole(['ADMIN']), async (
 });
 
 // 5. ACCESS CONTROL: Save Specific User Permissions
-app.post('/api/manager/permissions/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/admin/permissions/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { userId } = req.params;
   const { role, can_process_refunds, can_apply_discounts, can_overbook } = req.body;
 
@@ -1690,7 +1673,7 @@ app.post('/api/manager/permissions/:userId', verifyToken, requireRole(['ADMIN'])
 });
 
 // 6. SHIFT & ACTIVE STAFF SESSION MONITORING
-app.get('/api/manager/shifts', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/admin/shifts', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const shiftQuery = `
       SELECT s.id, u.id as user_id, u.name, u.email, u.role, s.login_time, s.logout_time,
@@ -1711,7 +1694,7 @@ app.get('/api/manager/shifts', verifyToken, requireRole(['ADMIN']), async (req, 
 });
 
 // 6b. STAFF SALARY CONFIGURATION
-app.get('/api/manager/salaries', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/admin/salaries', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM staff_salaries');
     res.json({ status: 'success', data: { salaries: result.rows } });
@@ -1721,7 +1704,7 @@ app.get('/api/manager/salaries', verifyToken, requireRole(['ADMIN']), async (req
   }
 });
 
-app.get('/api/manager/salary/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/admin/salary/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const { userId } = req.params;
     const result = await pool.query('SELECT * FROM staff_salaries WHERE user_id = $1', [userId]);
@@ -1736,18 +1719,18 @@ app.get('/api/manager/salary/:userId', verifyToken, requireRole(['ADMIN']), asyn
   }
 });
 
-app.post('/api/manager/salary/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/admin/salary/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const { userId } = req.params;
     const { base_salary_monthly, daily_deduction } = req.body;
-    
+
     await pool.query(`
       INSERT INTO staff_salaries (user_id, base_salary_monthly, daily_deduction)
       VALUES ($1, $2, $3)
       ON CONFLICT (user_id) 
       DO UPDATE SET base_salary_monthly = EXCLUDED.base_salary_monthly, daily_deduction = EXCLUDED.daily_deduction, updated_at = NOW()
     `, [userId, base_salary_monthly, daily_deduction]);
-    
+
     await logAuditAction(req.user.userId, 'Salary Config Updated', `Updated salary rules for user ID ${userId}`);
     res.json({ status: 'success', message: 'Salary configuration saved successfully' });
   } catch (err) {
@@ -1757,7 +1740,7 @@ app.post('/api/manager/salary/:userId', verifyToken, requireRole(['ADMIN']), asy
 });
 
 // 7. CRM / GUEST REGISTRY: VIP & Blacklist Controls
-app.get('/api/manager/crm/guests', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/admin/crm/guests', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const guests = await pool.query('SELECT * FROM guests ORDER BY is_vip DESC, is_blacklisted DESC, name ASC;');
     res.json({ status: 'success', data: { guests: guests.rows } });
@@ -1767,7 +1750,7 @@ app.get('/api/manager/crm/guests', verifyToken, requireRole(['ADMIN']), async (r
   }
 });
 
-app.post('/api/manager/crm/guests/:id', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/admin/crm/guests/:id', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { id } = req.params;
   const { is_vip, is_blacklisted } = req.body;
 
@@ -1789,13 +1772,13 @@ app.post('/api/manager/crm/guests/:id', verifyToken, requireRole(['ADMIN']), asy
 });
 
 // 8. DEPARTMENTAL BROADCASTING
-app.post('/api/manager/broadcast', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/admin/broadcast', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { targetDept, message } = req.body;
   if (!message) return res.status(400).json({ error: 'Message content is required' });
 
   try {
     const senderName = await pool.query('SELECT name FROM users WHERE id = $1', [req.user.userId]);
-    const name = senderName.rows.length > 0 ? senderName.rows[0].name : 'Admin';
+    const name = senderName.rows.length > 0 ? senderName.rows[0].name : 'ADMIN';
 
     await pool.query(
       `INSERT INTO broadcasts (target_dept, message, sender_id, sender_name, expires_at)
@@ -1836,7 +1819,7 @@ app.get('/api/broadcasts', verifyToken, async (req, res) => {
 });
 
 // 9. HR lifecycle: Onboard Employee
-app.post('/api/manager/staff/onboard', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/admin/staff/onboard', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { email, password, name, role } = req.body;
   if (!email || !password || !name) return res.status(400).json({ error: 'All fields are required' });
 
@@ -1866,7 +1849,7 @@ app.post('/api/manager/staff/onboard', verifyToken, requireRole(['ADMIN']), asyn
 });
 
 // 10. HR lifecycle: Update Employee Details
-app.patch('/api/manager/staff/:id', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.patch('/api/admin/staff/:id', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { id } = req.params;
   const { name, email } = req.body;
   if (!name || !email) return res.status(400).json({ error: 'Name and email are required' });
@@ -1886,9 +1869,9 @@ app.patch('/api/manager/staff/:id', verifyToken, requireRole(['ADMIN']), async (
 });
 
 // 11. HR lifecycle: Offboard Employee
-app.post('/api/manager/staff/offboard/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/admin/staff/offboard/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { userId } = req.params;
-  if (userId === req.user.userId) return res.status(400).json({ error: 'You cannot offboard your own administrator account' });
+  if (userId === req.user.userId) return res.status(400).json({ error: 'You cannot offboard your own Administrator account' });
 
   try {
     const userRes = await pool.query('SELECT email FROM users WHERE id = $1', [userId]);
@@ -1904,7 +1887,7 @@ app.post('/api/manager/staff/offboard/:userId', verifyToken, requireRole(['ADMIN
 });
 
 // 11. PREDICTIVE ANALYTICS & STATS PACE ENGINE
-app.get('/api/manager/analytics', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/admin/analytics', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     // A. Pace Report: Simulated comparison series (booking pace this month vs last year)
     const currentMonthPace = [
@@ -2018,7 +2001,7 @@ async function runMigrations() {
           expires_at TIMESTAMP WITH TIME ZONE
       );
     `);
-    
+
     console.log('✅ Auto-migrations completed successfully.');
 
     // Add columns dynamically (ignore error if they already exist)
@@ -2130,7 +2113,7 @@ async function runMigrations() {
       const travelHash = await bcrypt.hash('password123', 10);
       await pool.query(
         'INSERT INTO users (email, password_hash, name, role) VALUES ($1, $2, $3, $4)',
-        ['travel@techhansa.com', travelHash, 'Travel Desk Manager', 'TRAVEL']
+        ['travel@techhansa.com', travelHash, 'Travel Desk Admin', 'TRAVEL']
       );
     }
 
@@ -2139,23 +2122,389 @@ async function runMigrations() {
   }
 
   // Add RESTAURANT to the ENUM if it's missing
-    const enumRestCheck = await pool.query(
-      "SELECT 1 FROM pg_enum WHERE enumlabel = 'RESTAURANT' AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'user_role')"
-    );
-    if (enumRestCheck.rows.length === 0) {
-      await pool.query("ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'RESTAURANT'");
-    }
+  const enumRestCheck = await pool.query(
+    "SELECT 1 FROM pg_enum WHERE enumlabel = 'RESTAURANT' AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'user_role')"
+  );
+  if (enumRestCheck.rows.length === 0) {
+    await pool.query("ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'RESTAURANT'");
+  }
 
-    // Auto-create the requested Dining user credentials
-    const diningUserCheck = await pool.query("SELECT * FROM users WHERE email = 'dinning@techhansa.com'");
-    if (diningUserCheck.rows.length === 0) {
-      const hash = await bcrypt.hash('password123', 10);
-      await pool.query(
-        "INSERT INTO users (email, password_hash, name, role) VALUES ($1, $2, $3, 'RESTAURANT')",
-        ['dinning@techhansa.com', hash, 'F&B Manager']
-      );
-    }
+  // Auto-create the requested Dining user credentials
+  const diningUserCheck = await pool.query("SELECT * FROM users WHERE email = 'dinning@techhansa.com'");
+  if (diningUserCheck.rows.length === 0) {
+    const hash = await bcrypt.hash('password123', 10);
+    await pool.query(
+      "INSERT INTO users (email, password_hash, name, role) VALUES ($1, $2, $3, 'RESTAURANT')",
+      ['dinning@techhansa.com', hash, 'F&B Admin']
+    );
+  }
 }
+
+// ==========================================
+// FINANCE & LEDGER ENDPOINTS
+// ==========================================
+
+// 0. Cash Register
+app.get('/api/finance/cash-register', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
+  try {
+    const latestCount = await pool.query("SELECT * FROM cash_drawer_logs ORDER BY counted_at DESC LIMIT 1");
+    res.json({ status: 'success', data: latestCount.rows[0] || null });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch cash register' });
+  }
+});
+
+app.post('/api/finance/cash-register', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
+  try {
+    const { actual_amount, notes } = req.body;
+    // Calculate expected amount: Start with previous actual amount, add cash revenues, subtract cash expenses since last count.
+    // For simplicity, we just look at net cash since last count.
+    const lastCount = await pool.query("SELECT * FROM cash_drawer_logs ORDER BY counted_at DESC LIMIT 1");
+    const lastTime = lastCount.rows.length > 0 ? lastCount.rows[0].counted_at : new Date(0);
+
+    // Get total cash revenue since last count
+    const cashRevRes = await pool.query(
+      "SELECT COALESCE(SUM(amount), 0) AS total FROM ledger_transactions WHERE payment_method = 'Cash' AND transaction_type IN ('Revenue', 'Folio Payment', 'Payment') AND created_at > $1",
+      [lastTime]
+    );
+    const cashRev = Number(cashRevRes.rows[0].total);
+
+    // Get total cash expenses since last count
+    const cashExpRes = await pool.query(
+      "SELECT COALESCE(SUM(amount), 0) AS total FROM ledger_transactions WHERE payment_method = 'Cash' AND transaction_type IN ('Expense', 'Refund') AND created_at > $1",
+      [lastTime]
+    );
+    const cashExp = Number(cashExpRes.rows[0].total);
+
+    const prevBalance = lastCount.rows.length > 0 ? Number(lastCount.rows[0].actual_amount) : 0;
+    const expected_amount = prevBalance + cashRev - cashExp;
+
+    let status = 'Balanced';
+    if (Number(actual_amount) > expected_amount) status = 'Over';
+    if (Number(actual_amount) < expected_amount) status = 'Short';
+
+    const insertRes = await pool.query(
+      "INSERT INTO cash_drawer_logs (counted_by, actual_amount, expected_amount, status, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+      [req.user.userId, actual_amount, expected_amount, status, notes]
+    );
+
+    res.json({ status: 'success', data: insertRes.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to save cash count' });
+  }
+});
+
+// 1. Full Finance Dashboard Summary
+app.get('/api/finance/overview', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
+  try {
+    const todayRev = await pool.query("SELECT COALESCE(SUM(total_price), 0) AS total FROM bookings WHERE DATE(created_at) = CURRENT_DATE AND status != 'CANCELLED'");
+    const pendingReceivables = await pool.query("SELECT COALESCE(SUM(total_amount - paid_amount), 0) AS total FROM invoices WHERE status IN ('UNPAID', 'PARTIAL')");
+
+    const recentTxns = await pool.query(`
+      SELECT l.id, g.name AS guest, r.room_number, l.amount, l.payment_method, l.status, l.created_at
+      FROM ledger_transactions l
+      LEFT JOIN bookings b ON l.booking_id = b.id
+      LEFT JOIN guests g ON b.guest_id = g.id
+      LEFT JOIN rooms r ON b.room_id = r.id
+      ORDER BY l.created_at DESC LIMIT 10
+    `);
+
+    // Payment Method Split
+    const paymentSplitRes = await pool.query(`
+      SELECT payment_method AS label, COALESCE(SUM(amount), 0) AS value 
+      FROM ledger_transactions 
+      WHERE transaction_type IN ('Revenue', 'Folio Payment') 
+      GROUP BY payment_method
+    `);
+
+    // 6-Month Revenue Projection based on actual current month revenue
+    const currentMonthRevRes = await pool.query(`
+      SELECT COALESCE(SUM(total_price), 0) AS total 
+      FROM bookings 
+      WHERE status != 'CANCELLED' AND created_at >= date_trunc('month', CURRENT_DATE)
+    `);
+
+    let baseRevenue = Number(currentMonthRevRes.rows[0].total);
+    if (baseRevenue === 0) baseRevenue = 5000000; // fallback if no data
+
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const currentMonthIdx = new Date().getMonth();
+    const sixMonthRevenueProjection = Array.from({ length: 6 }).map((_, i) => {
+      const nextMonthIdx = (currentMonthIdx + i + 1) % 12;
+      baseRevenue = baseRevenue * 1.035; // 3.5% projected MoM growth
+      return { label: monthNames[nextMonthIdx], value: Math.round(baseRevenue) };
+    });
+
+    // 6-Month Expense Trend (Historical)
+    const expenseTrendRes = await pool.query(`
+      SELECT 
+        EXTRACT(MONTH FROM created_at) AS month_idx, 
+        EXTRACT(YEAR FROM created_at) AS year_idx,
+        COALESCE(SUM(amount), 0) AS total_expense 
+      FROM operational_expenses 
+      WHERE created_at >= date_trunc('month', CURRENT_DATE) - INTERVAL '5 months'
+      GROUP BY year_idx, month_idx
+    `);
+    const expensesByMonth = {};
+    expenseTrendRes.rows.forEach(row => {
+      // month_idx from postgres is 1-12
+      expensesByMonth[Number(row.month_idx) - 1] = Number(row.total_expense);
+    });
+
+    const sixMonthExpenseTrend = Array.from({ length: 6 }).map((_, i) => {
+      const mIdx = (currentMonthIdx - 5 + i + 12) % 12;
+      const isToday = i === 5; // The last item in the array is the current month
+      return {
+        label: monthNames[mIdx],
+        value: expensesByMonth[mIdx] || 0,
+        isToday
+      };
+    });
+
+    res.json({
+      status: 'success',
+      data: {
+        todaysRevenue: todayRev.rows[0].total,
+        pendingReceivables: pendingReceivables.rows[0]?.total || 0,
+        recentTransactions: recentTxns.rows,
+        paymentSplit: paymentSplitRes.rows,
+        sixMonthRevenueProjection: sixMonthRevenueProjection,
+        sixMonthExpenseTrend: sixMonthExpenseTrend
+      }
+    });
+  } catch (err) {
+    console.error('Overview error:', err.message, err.stack);
+    res.status(500).json({ error: 'Failed to aggregate financial overview' });
+  }
+});
+
+// 2. Fetch & Create Expenses
+app.get('/api/finance/expenses', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT e.*, u.name AS logged_by_name 
+      FROM operational_expenses e 
+      LEFT JOIN users u ON e.logged_by = u.id 
+      ORDER BY e.created_at DESC
+    `);
+    res.json({ status: 'success', data: { expenses: result.rows } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch operational expenses' });
+  }
+});
+
+app.post('/api/finance/expenses', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
+  const { category, vendor, amount, method, notes } = req.body;
+  try {
+    const result = await pool.query(`
+      INSERT INTO operational_expenses (category, vendor, amount, payment_method, notes, logged_by)
+      VALUES ($1, $2, $3, $4, $5, $6) RETURNING *
+    `, [category, vendor, amount, method, notes, req.user.userId]);
+
+    await logAuditAction(req.user.userId, 'Create Expense', `Logged expense of ₹${amount} for ${vendor} (${category})`);
+    res.status(201).json({ status: 'success', data: { expense: result.rows[0] } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to record expense' });
+  }
+});
+
+// 3. Fetch Invoices
+app.get('/api/finance/invoices', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT * FROM invoices ORDER BY created_at DESC
+    `);
+    res.json({ status: 'success', data: { invoices: result.rows } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch invoices' });
+  }
+});
+
+// 4. Create Invoice
+app.post('/api/finance/invoices', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
+  const { billTo, type, amount, dueDate, notes } = req.body;
+  try {
+    const invoiceNumber = `INV-${Math.floor(1000 + Math.random() * 9000)}`;
+    const subtotal = amount; // simplified for now
+    const tax_amount = 0;
+    const total_amount = amount;
+
+    const result = await pool.query(`
+      INSERT INTO invoices (invoice_number, bill_to, invoice_type, subtotal, tax_amount, total_amount, due_date)
+      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *
+    `, [invoiceNumber, billTo, type, subtotal, tax_amount, total_amount, dueDate || null]);
+
+    await logAuditAction(req.user.userId, 'Create Invoice', `Generated invoice ${invoiceNumber} for ${billTo}`);
+    res.status(201).json({ status: 'success', data: { invoice: result.rows[0] } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create invoice' });
+  }
+});
+
+// 5. Update Invoice (Pay/Partial)
+app.put('/api/finance/invoices/:id', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
+  const { id } = req.params;
+  const { paid_amount, status } = req.body;
+  try {
+    const result = await pool.query(`
+      UPDATE invoices SET paid_amount = $1, status = $2 WHERE id = $3 RETURNING *
+    `, [paid_amount, status, id]);
+
+    await logAuditAction(req.user.userId, 'Update Invoice', `Updated invoice ${id} to status ${status}`);
+    res.json({ status: 'success', data: { invoice: result.rows[0] } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update invoice' });
+  }
+});
+
+// 6. Fetch Payables (Vendor Bills)
+app.get('/api/finance/payables', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT * FROM vendor_bills ORDER BY created_at DESC
+    `);
+    res.json({ status: 'success', data: { payables: result.rows } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch vendor bills' });
+  }
+});
+
+// 7. Create Payable
+app.post('/api/finance/payables', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
+  const { vendor, category, amount, dueDate, notes } = req.body;
+  try {
+    const billNumber = `BILL-${Math.floor(1000 + Math.random() * 9000)}`;
+    const status = 'Scheduled';
+
+    const result = await pool.query(`
+      INSERT INTO vendor_bills (bill_number, vendor, category, amount, due_date, status, notes)
+      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *
+    `, [billNumber, vendor, category, amount, dueDate || null, status, notes]);
+
+    await logAuditAction(req.user.userId, 'Log Vendor Bill', `Scheduled bill ${billNumber} for ${vendor}`);
+    res.status(201).json({ status: 'success', data: { payable: result.rows[0] } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create vendor bill' });
+  }
+});
+
+// 8. Fetch Reconciliations
+app.get('/api/finance/reconciliations', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT * FROM reconciliations ORDER BY created_at DESC
+    `);
+    res.json({ status: 'success', data: { reconciliations: result.rows } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch reconciliations' });
+  }
+});
+
+// 9. Match Reconciliation
+app.put('/api/finance/reconciliations/:id/match', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
+  const { id } = req.params;
+  const { matchedWith } = req.body;
+  try {
+    const result = await pool.query(`
+      UPDATE reconciliations 
+      SET matched_with = $1, status = 'Matched' 
+      WHERE id = $2 RETURNING *
+    `, [matchedWith, id]);
+
+    await logAuditAction(req.user.userId, 'Match Reconciliation', `Matched reconciliation ${id} with ${matchedWith}`);
+    res.json({ status: 'success', data: { reconciliation: result.rows[0] } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to match reconciliation' });
+  }
+});
+
+// 10. Fetch General Ledger
+app.get('/api/finance/ledger', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT l.id, l.amount, l.transaction_type, l.payment_method, l.status, l.created_at, l.reference_number
+      FROM ledger_transactions l
+      ORDER BY l.created_at DESC
+    `);
+    res.json({ status: 'success', data: { ledger: result.rows } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch general ledger' });
+  }
+});
+
+// 11. Fetch Financial Statements
+app.get('/api/finance/statements', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
+  try {
+    const revenueRes = await pool.query(`
+      SELECT invoice_type, SUM(total_amount) as total
+      FROM invoices
+      GROUP BY invoice_type
+    `);
+
+    const expensesRes = await pool.query(`
+      SELECT category, SUM(amount) as total
+      FROM operational_expenses
+      GROUP BY category
+    `);
+
+    const liabilitiesRes = await pool.query(`
+      SELECT 
+        (SELECT COALESCE(SUM(amount), 0) FROM vendor_bills WHERE status != 'Paid') as payable,
+        (SELECT COALESCE(SUM(tax_amount), 0) FROM invoices) as taxes,
+        (SELECT COALESCE(SUM(amount), 0) FROM guest_deposits WHERE status = 'Active') as deposits
+    `);
+
+    const assetsRes = await pool.query(`
+      SELECT 
+        (SELECT COALESCE(SUM(total_amount - paid_amount), 0) FROM invoices WHERE status != 'PAID') as receivable
+    `);
+
+    // Fetch dynamic accounting balances
+    const balancesRes = await pool.query(`SELECT key_name, balance FROM accounting_balances`);
+    const balances = {};
+    balancesRes.rows.forEach(r => balances[r.key_name] = Number(r.balance));
+
+    res.json({
+      status: 'success',
+      data: {
+        revenue: revenueRes.rows,
+        expenses: expensesRes.rows,
+        liabilities: {
+          ...liabilitiesRes.rows[0],
+          long_term_loan: balances.long_term_loan || 0
+        },
+        equity: {
+          owners_equity: balances.owners_equity || 0
+        },
+        assets: {
+          ...assetsRes.rows[0],
+          cash_and_bank: balances.cash_and_bank || 0,
+          inventory: balances.inventory || 0,
+          property_and_equipment: balances.property_and_equipment || 0
+        },
+        cashFlow: {
+          property_improvements: balances.property_improvements || 0,
+          loan_repayment: balances.loan_repayment || 0
+        }
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch financial statements' });
+  }
+});
+
+// 12. Fetch Budgets
+app.get('/api/finance/budgets', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM department_budgets ORDER BY id');
+    res.json({ status: 'success', data: { budgets: result.rows } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch budgets' });
+  }
+});
+
+
 
 // Start the server
 const server = app.listen(PORT, async () => {

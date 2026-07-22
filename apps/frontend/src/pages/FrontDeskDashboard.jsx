@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, animate } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, CalendarDays, Clock, MapPin, DoorOpen,
+import {
+  Search, Plus, CalendarDays, Clock, MapPin, DoorOpen,
   Loader2, X, Phone, Mail, Users, KeySquare, ArrowRightLeft,
   CheckCircle2, LogIn, ChevronDown, History, AlertTriangle,
   Building2, User, CreditCard, CalendarCheck, BedDouble,
   RefreshCw, Filter, Sparkles, Wifi, TrendingUp, ShieldCheck,
-  Radio, Zap, Hotel, FileText, LogOut } from 'lucide-react';
+  Radio, Zap, Hotel, FileText, LogOut
+} from 'lucide-react';
 
 const API_BASE = 'http://localhost:3000';
 
@@ -41,7 +43,7 @@ const FD_STYLES = `
   .fd-sidebar-scroll { scrollbar-width: none; -ms-overflow-style: none; }
   .fd-sidebar-scroll::-webkit-scrollbar { display: none; }
 
-  /* Soft, solid background — admin dashboard match */
+  /* Soft, solid background — Admin dashboard match */
   .fd-app-bg {
     background: #F8F1E3 !important;
   }
@@ -907,7 +909,7 @@ export default function FrontDeskDashboard() {
                   <CountUp value={pendingCheckinsCount} />
                 </span>
               </button>
-              
+
               <button
                 onClick={() => { setViewMode('active'); setActiveFilter('pending_checkout'); }}
                 className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'active' && activeFilter === 'pending_checkout'
@@ -929,7 +931,7 @@ export default function FrontDeskDashboard() {
           </div>
         </div>
 
-        {/* Section: History — pinned footer action, matches Manager & Housekeeping convention */}
+        {/* Section: History — pinned footer action, matches Admin & Housekeeping convention */}
         <div className="pt-4 border-t border-zinc-100 shrink-0">
           <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">History &amp; Ledger</p>
           <button
@@ -1023,7 +1025,7 @@ export default function FrontDeskDashboard() {
 
             {/* Profile Avatar Widget */}
             {(() => {
-              const staffName = localStorage.getItem('hms_name') || 'Staff';
+              const staffName = sessionStorage.getItem('hms_name') || 'Staff';
               const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
               const designation = 'Front Desk Agent';
               return (

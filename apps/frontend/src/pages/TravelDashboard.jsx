@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Plane, MapPin, Users, Wallet, Clock, CheckCircle2, AlertTriangle, RefreshCw,
   Download, Plus, X, Loader2, Search, Filter, TrendingUp, Building2, ArrowUpRight,
-  ShieldCheck, PieChart, Compass, CalendarClock, Phone, Mail, Star, Ban, CreditCard, LogOut } from 'lucide-react';
+  ShieldCheck, PieChart, Compass, CalendarClock, Phone, Mail, Star, Ban, CreditCard, LogOut, Zap } from 'lucide-react';
 
 const API_BASE = 'http://localhost:3000';
 const getToken = () => sessionStorage.getItem('hms_token');
@@ -170,6 +170,34 @@ const modalVariants = {
 // MAIN COMPONENT
 // =============================================
 export default function TravelDashboard() {
+  // ─── Broadcast States ──────────────────────────────────────
+  const [broadcasts, setBroadcasts] = React.useState([]);
+  const [dismissedBroadcasts, setDismissedBroadcasts] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem('hms_dismissed_broadcasts')) || []; } catch { return []; }
+  });
+
+  React.useEffect(() => {
+    localStorage.setItem('hms_dismissed_broadcasts', JSON.stringify(dismissedBroadcasts));
+  }, [dismissedBroadcasts]);
+
+  const fetchBroadcasts = React.useCallback(async () => {
+    try {
+      const token = sessionStorage.getItem('hms_token');
+      const res = await fetch(`http://localhost:3000/api/broadcasts`, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (res?.ok) {
+        const data = await res.json();
+        setBroadcasts(data.data.broadcasts || []);
+      }
+    } catch (e) {
+      console.error('Failed to fetch broadcasts:', e);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fetchBroadcasts();
+    const interval = setInterval(fetchBroadcasts, 30000);
+    return () => clearInterval(interval);
+  }, [fetchBroadcasts]);
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [isLoading, setIsLoading] = useState(false);
@@ -437,7 +465,7 @@ export default function TravelDashboard() {
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Command Center</p>
             <button
-              onClick={() => navigate('/dashboard/manager')}
+              onClick={() => navigate('/dashboard/Admin')}
               className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-500 hover:bg-zinc-50 hover:text-[#D4A373] transition-all text-left"
             >
               <span className="flex items-center gap-3"><Building2 size={15} /> Back to Admin</span>
@@ -495,9 +523,9 @@ export default function TravelDashboard() {
 
             {/* Profile Avatar Widget */}
             {(() => {
-              const staffName = localStorage.getItem('hms_name') || 'Staff';
+              const staffName = sessionStorage.getItem('hms_name') || 'Staff';
               const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
-              const designation = 'Travel Desk Manager';
+              const designation = 'Travel Desk Admin';
               return (
                 <motion.button
                   whileHover={{ y: -2 }}
@@ -528,6 +556,46 @@ export default function TravelDashboard() {
             <AlertTriangle size={14} /> {errorMsg}
           </div>
         )}
+
+        {/* BROADCAST BANNER */}
+        <AnimatePresence>
+          {broadcasts.filter(b => !dismissedBroadcasts.includes(b.id) && (!b.expires_at || new Date(b.expires_at) > new Date())).map((broadcast) => (
+            <motion.div
+              key={broadcast.id}
+              initial={{ opacity: 0, y: -20, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+              className="relative overflow-hidden rounded-[1.5rem] bg-gradient-to-r from-rose-500 via-rose-600 to-amber-500 p-[2px] shadow-lg shadow-rose-500/20 mb-4 min-h-[72px]"
+            >
+              <div className="w-full h-full relative bg-white/10 backdrop-blur-md rounded-[calc(1.5rem-2px)] px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  <div className="relative shrink-0">
+                    <div className="absolute inset-0 bg-white/40 rounded-full animate-ping opacity-75"></div>
+                    <div className="relative w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white border border-white/40 shadow-sm backdrop-blur-lg">
+                      <Zap size={18} className="drop-shadow-md" />
+                    </div>
+                  </div>
+                  <div className="flex-1 text-white flex flex-col justify-center">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] font-black uppercase tracking-widest bg-white/20 px-2 py-0.5 rounded-full backdrop-blur-sm border border-white/20">
+                        {broadcast.target_dept === 'ALL' ? 'GLOBAL BROADCAST' : 'DEPARTMENT ALERT'}
+                      </span>
+                      <span className="text-[10px] font-semibold text-white/80 border-l border-white/20 pl-2">From: {broadcast.sender_name}</span>
+                    </div>
+                    <p className="text-sm font-bold tracking-wide drop-shadow-sm leading-snug">{broadcast.message}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDismissedBroadcasts(prev => [...prev, broadcast.id])}
+                  className="shrink-0 w-8 h-8 rounded-full bg-white/10 hover:bg-white/25 flex items-center justify-center text-white transition-colors border border-white/10 self-end sm:self-center"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
 
         <AnimatePresence mode="wait">
           {isLoading ? (

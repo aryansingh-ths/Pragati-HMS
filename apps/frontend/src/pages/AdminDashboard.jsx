@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Activity, Users, Lock, Unlock, Sparkles, DollarSign,
+import {
+  Activity, Users, Lock, Unlock, Sparkles, DollarSign,
   Sliders, Wrench, Loader2, Plus, Trash2, X, ChevronDown, ChevronUp, Edit,
   TrendingUp, AlertTriangle, Clock, BedDouble, Zap, ArrowUpRight, ArrowDownRight,
   UserCheck, UserX, ShieldAlert, Hammer, Eye, CircleDot, RefreshCw, CheckCircle,
-  LogIn, DoorOpen, Maximize2, Search, LogOut } from 'lucide-react';
+  LogIn, DoorOpen, Maximize2, Search, LogOut
+} from 'lucide-react';
 
 // SVG DONUT CHART COMPONENT (Pure SVG, no deps)
 function DonutChart({ data, size = 180 }) {
@@ -426,8 +428,8 @@ function SlaCountdownTimer({ createdAt, priority, status }) {
   );
 }
 
-// MAIN MANAGER DASHBOARD
-export default function ManagerDashboard() {
+// MAIN Admin DASHBOARD
+export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
   const navigate = useNavigate();
   const [expandedQueueCol, setExpandedQueueCol] = useState(null);  // Live Operations state
@@ -507,28 +509,28 @@ export default function ManagerDashboard() {
     } catch (err) { return null; }
   }, [navigate]);
 
-  const loadManagerData = async () => {
+  const loadAdminData = async () => {
     setIsLoading(true);
     try {
       if (['overview', 'activity_monitor', 'operations_log', 'broadcasting', 'security_audit', 'analytics'].includes(activeTab)) {
-        const liveRes = await fetchWithAuth('http://localhost:3000/api/manager/live-operations');
+        const liveRes = await fetchWithAuth('http://localhost:3000/api/admin/live-operations');
         if (liveRes?.ok) {
           const json = await liveRes.json();
           setLiveData(json.data);
         }
 
-        const auditRes = await fetchWithAuth('http://localhost:3000/api/manager/audit-logs');
+        const auditRes = await fetchWithAuth('http://localhost:3000/api/admin/audit-logs');
         if (auditRes?.ok) setAuditLogs((await auditRes.json()).data.logs || []);
 
-        const analyticsRes = await fetchWithAuth('http://localhost:3000/api/manager/analytics');
+        const analyticsRes = await fetchWithAuth('http://localhost:3000/api/admin/analytics');
         if (analyticsRes?.ok) setAnalyticsData((await analyticsRes.json()).data || null);
       }
 
       if (activeTab === 'properties') {
-        const roomsRes = await fetchWithAuth('http://localhost:3000/api/manager/rooms');
+        const roomsRes = await fetchWithAuth('http://localhost:3000/api/admin/rooms');
         if (roomsRes?.ok) setRoomsList((await roomsRes.json()).data.rooms || []);
 
-        const typesRes = await fetchWithAuth('http://localhost:3000/api/manager/room-types');
+        const typesRes = await fetchWithAuth('http://localhost:3000/api/admin/room-types');
         if (typesRes?.ok) {
           const fetchedTypes = (await typesRes.json()).data.roomTypes || [];
           setRoomTypes(fetchedTypes);
@@ -537,40 +539,40 @@ export default function ManagerDashboard() {
           setExpandedClasses(initialExpanded);
         }
 
-        const yieldRes = await fetchWithAuth('http://localhost:3000/api/manager/yield-rules');
+        const yieldRes = await fetchWithAuth('http://localhost:3000/api/admin/yield-rules');
         if (yieldRes?.ok) setYieldRules((await yieldRes.json()).data.rules || null);
       }
 
       if (activeTab === 'crm') {
-        const crmRes = await fetchWithAuth('http://localhost:3000/api/manager/crm/guests');
+        const crmRes = await fetchWithAuth('http://localhost:3000/api/admin/crm/guests');
         if (crmRes?.ok) setCrmGuests((await crmRes.json()).data.guests || []);
       }
 
       if (activeTab === 'maintenance') {
-        const roomsRes = await fetchWithAuth('http://localhost:3000/api/manager/rooms');
+        const roomsRes = await fetchWithAuth('http://localhost:3000/api/admin/rooms');
         if (roomsRes?.ok) setRoomsList((await roomsRes.json()).data.rooms || []);
 
-        const ticketsRes = await fetchWithAuth('http://localhost:3000/api/manager/maintenance');
+        const ticketsRes = await fetchWithAuth('http://localhost:3000/api/admin/maintenance');
         if (ticketsRes?.ok) {
           const ticketsData = await ticketsRes.json();
           setMaintenanceTickets(ticketsData.data.tickets || []);
         }
 
-        const yieldRes = await fetchWithAuth('http://localhost:3000/api/manager/yield-rules');
+        const yieldRes = await fetchWithAuth('http://localhost:3000/api/admin/yield-rules');
         if (yieldRes?.ok) setYieldRules((await yieldRes.json()).data.rules || null);
       }
 
       if (activeTab === 'hr') {
-        const permRes = await fetchWithAuth('http://localhost:3000/api/manager/permissions');
+        const permRes = await fetchWithAuth('http://localhost:3000/api/admin/permissions');
         if (permRes?.ok) setStaffPermissions((await permRes.json()).data.permissions || []);
 
-        const shiftsRes = await fetchWithAuth('http://localhost:3000/api/manager/shifts');
+        const shiftsRes = await fetchWithAuth('http://localhost:3000/api/admin/shifts');
         if (shiftsRes?.ok) setStaffShifts((await shiftsRes.json()).data.shifts || []);
 
-        const salariesRes = await fetchWithAuth('http://localhost:3000/api/manager/salaries');
+        const salariesRes = await fetchWithAuth('http://localhost:3000/api/admin/salaries');
         if (salariesRes?.ok) setStaffSalaries((await salariesRes.json()).data.salaries || []);
 
-        const analyticsRes = await fetchWithAuth('http://localhost:3000/api/manager/analytics');
+        const analyticsRes = await fetchWithAuth('http://localhost:3000/api/admin/analytics');
         if (analyticsRes?.ok) setAnalyticsData((await analyticsRes.json()).data || null);
       }
     } catch (e) {
@@ -598,7 +600,7 @@ export default function ManagerDashboard() {
     return () => clearInterval(interval);
   }, [fetchBroadcasts]);
 
-  useEffect(() => { loadManagerData(); }, [activeTab]);
+  useEffect(() => { loadAdminData(); }, [activeTab]);
 
   useEffect(() => {
     setAuditPage(1);
@@ -613,7 +615,7 @@ export default function ManagerDashboard() {
     if (activeTab === 'security_audit' && auditLive) {
       interval = setInterval(async () => {
         try {
-          const res = await fetchWithAuth(`http://localhost:3000/api/manager/audit-logs?q=${encodeURIComponent(auditSearch)}`);
+          const res = await fetchWithAuth(`http://localhost:3000/api/admin/audit-logs?q=${encodeURIComponent(auditSearch)}`);
           if (res?.ok) {
             const data = await res.json();
             setAuditLogs(data.data?.logs || []);
@@ -646,44 +648,44 @@ export default function ManagerDashboard() {
   const handleAddTicket = async (e) => {
     e.preventDefault();
     if (!newTicketForm.room_id) return alert("❌ Please select a room.");
-    const res = await fetchWithAuth('http://localhost:3000/api/manager/maintenance', {
+    const res = await fetchWithAuth('http://localhost:3000/api/admin/maintenance', {
       method: 'POST', body: JSON.stringify(newTicketForm)
     });
     if (res?.ok) {
       setIsAddTicketModalOpen(false);
       setNewTicketForm({ room_id: '', issue: '', priority: 'Medium', assigned_to: 'Unassigned' });
-      loadManagerData();
+      loadAdminData();
     } else {
       alert("❌ Failed to create ticket.");
     }
   };
 
   const handleChangeTicketStatus = async (id, status) => {
-    const res = await fetchWithAuth(`http://localhost:3000/api/manager/maintenance/${id}/status`, {
+    const res = await fetchWithAuth(`http://localhost:3000/api/admin/maintenance/${id}/status`, {
       method: 'PATCH', body: JSON.stringify({ status })
     });
-    if (res?.ok) loadManagerData();
+    if (res?.ok) loadAdminData();
   };
 
   const handleAssignTicket = async (id, assigned_to) => {
-    const res = await fetchWithAuth(`http://localhost:3000/api/manager/maintenance/${id}/assign`, {
+    const res = await fetchWithAuth(`http://localhost:3000/api/admin/maintenance/${id}/assign`, {
       method: 'PATCH', body: JSON.stringify({ assigned_to })
     });
-    if (res?.ok) loadManagerData();
+    if (res?.ok) loadAdminData();
   };
 
   const handleToggleBlock = async (roomId) => {
-    const res = await fetchWithAuth(`http://localhost:3000/api/manager/rooms/${roomId}/toggle-block`, { method: 'POST' });
-    if (res?.ok) loadManagerData();
+    const res = await fetchWithAuth(`http://localhost:3000/api/admin/rooms/${roomId}/toggle-block`, { method: 'POST' });
+    if (res?.ok) loadAdminData();
     else alert("❌ Failed to modify room block state.");
   };
 
   const handleChangeStatus = async (roomId, newStatus) => {
-    const res = await fetchWithAuth(`http://localhost:3000/api/manager/rooms/${roomId}/status`, {
+    const res = await fetchWithAuth(`http://localhost:3000/api/admin/rooms/${roomId}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status: newStatus })
     });
-    if (res?.ok) loadManagerData();
+    if (res?.ok) loadAdminData();
     else alert("❌ Failed to manually override room status.");
   };
 
@@ -696,14 +698,14 @@ export default function ManagerDashboard() {
       return alert(`❌ Duplicate Error: Room ${cleanRoomNumber} already exists.`);
     }
 
-    const res = await fetchWithAuth('http://localhost:3000/api/manager/rooms', {
+    const res = await fetchWithAuth('http://localhost:3000/api/admin/rooms', {
       method: 'POST', body: JSON.stringify({ ...newRoomForm, room_number: cleanRoomNumber })
     });
 
     if (res?.ok) {
       setIsAddRoomModalOpen(false);
       setNewRoomForm({ room_number: '', room_type_id: '' });
-      loadManagerData();
+      loadAdminData();
     } else {
       const err = await res.json();
       alert(`❌ ${err.error || "Failed to add room."}`);
@@ -712,19 +714,19 @@ export default function ManagerDashboard() {
 
   const handleDeleteRoom = async (roomId, roomNumber) => {
     if (!window.confirm(`⚠️ CRITICAL: Are you sure you want to permanently delete Room ${roomNumber}? This cannot be undone.`)) return;
-    const res = await fetchWithAuth(`http://localhost:3000/api/manager/rooms/${roomId}`, { method: 'DELETE' });
-    if (res?.ok) loadManagerData();
+    const res = await fetchWithAuth(`http://localhost:3000/api/admin/rooms/${roomId}`, { method: 'DELETE' });
+    if (res?.ok) loadAdminData();
     else alert("❌ Failed to delete room. It may have connected database records.");
   };
 
   // --- ADVANCED CONTROLS ACTIONS ---
 
   const handleSaveYieldRule = async (key, value) => {
-    const res = await fetchWithAuth('http://localhost:3000/api/manager/yield-rules', {
+    const res = await fetchWithAuth('http://localhost:3000/api/admin/yield-rules', {
       method: 'POST', body: JSON.stringify({ key, value })
     });
     if (res?.ok) {
-      const yieldRes = await fetchWithAuth('http://localhost:3000/api/manager/yield-rules');
+      const yieldRes = await fetchWithAuth('http://localhost:3000/api/admin/yield-rules');
       if (yieldRes?.ok) setYieldRules((await yieldRes.json()).data.rules || null);
     } else {
       alert("❌ Failed to update yield engine rule configuration.");
@@ -732,21 +734,21 @@ export default function ManagerDashboard() {
   };
 
   const handleSavePermissions = async (userId, data) => {
-    const res = await fetchWithAuth(`http://localhost:3000/api/manager/permissions/${userId}`, {
+    const res = await fetchWithAuth(`http://localhost:3000/api/admin/permissions/${userId}`, {
       method: 'POST', body: JSON.stringify(data)
     });
-    if (res?.ok) loadManagerData();
+    if (res?.ok) loadAdminData();
   };
 
   const handleSaveSalaryConfig = async (e) => {
     e.preventDefault();
     if (!selectedStaff) return;
-    const res = await fetchWithAuth(`http://localhost:3000/api/manager/salary/${selectedStaff.id}`, {
+    const res = await fetchWithAuth(`http://localhost:3000/api/admin/salary/${selectedStaff.id}`, {
       method: 'POST', body: JSON.stringify(salaryForm)
     });
     if (res?.ok) {
       alert("✅ Salary configuration saved successfully.");
-      loadManagerData();
+      loadAdminData();
     } else {
       alert("❌ Failed to save salary configuration.");
     }
@@ -758,21 +760,21 @@ export default function ManagerDashboard() {
       name: field === 'name' ? value : selectedStaff.name,
       email: field === 'email' ? value : selectedStaff.email
     };
-    const res = await fetchWithAuth(`http://localhost:3000/api/manager/staff/${selectedStaff.id}`, {
+    const res = await fetchWithAuth(`http://localhost:3000/api/admin/staff/${selectedStaff.id}`, {
       method: 'PATCH',
       body: JSON.stringify(payload)
     });
     if (res?.ok) {
-      loadManagerData();
+      loadAdminData();
     }
   };
 
   const handleSaveGuestFlags = async (guestId, payload) => {
-    const res = await fetchWithAuth(`http://localhost:3000/api/manager/crm/guests/${guestId}`, {
+    const res = await fetchWithAuth(`http://localhost:3000/api/admin/crm/guests/${guestId}`, {
       method: 'POST', body: JSON.stringify(payload)
     });
     if (res?.ok) {
-      const crmRes = await fetchWithAuth('http://localhost:3000/api/manager/crm/guests');
+      const crmRes = await fetchWithAuth('http://localhost:3000/api/admin/crm/guests');
       if (crmRes?.ok) setCrmGuests((await crmRes.json()).data.guests || []);
     } else {
       alert("❌ Failed to update guest relations registry.");
@@ -782,14 +784,14 @@ export default function ManagerDashboard() {
   const handleTriggerBroadcast = async (e) => {
     e.preventDefault();
     if (!broadcastForm.message.trim()) return;
-    const res = await fetchWithAuth('http://localhost:3000/api/manager/broadcast', {
+    const res = await fetchWithAuth('http://localhost:3000/api/admin/broadcast', {
       method: 'POST', body: JSON.stringify(broadcastForm)
     });
     if (res?.ok) {
       setBroadcastSuccess(true);
       setBroadcastForm({ targetDept: 'ALL', message: '' });
       setTimeout(() => setBroadcastSuccess(false), 3000);
-      const auditRes = await fetchWithAuth('http://localhost:3000/api/manager/audit-logs');
+      const auditRes = await fetchWithAuth('http://localhost:3000/api/admin/audit-logs');
       if (auditRes?.ok) setAuditLogs((await auditRes.json()).data.logs || []);
     } else {
       alert("❌ Failed to send operational broadcast alert.");
@@ -800,14 +802,14 @@ export default function ManagerDashboard() {
     e.preventDefault();
     setOnboardSuccess(null);
     setOnboardError(null);
-    const res = await fetchWithAuth('http://localhost:3000/api/manager/staff/onboard', {
+    const res = await fetchWithAuth('http://localhost:3000/api/admin/staff/onboard', {
       method: 'POST', body: JSON.stringify(onboardForm)
     });
     const json = await res.json();
     if (res?.ok) {
       setOnboardSuccess('Employee onboarded and provisioned successfully!');
       setOnboardForm({ email: '', password: '', name: '', role: 'FRONT_DESK' });
-      const permRes = await fetchWithAuth('http://localhost:3000/api/manager/permissions');
+      const permRes = await fetchWithAuth('http://localhost:3000/api/admin/permissions');
       if (permRes?.ok) setStaffPermissions((await permRes.json()).data.permissions || []);
       setTimeout(() => { setShowOnboardModal(false); setOnboardSuccess(null); }, 1800);
     } else {
@@ -817,11 +819,11 @@ export default function ManagerDashboard() {
 
   const handleHROffboard = async (userId) => {
     if (!window.confirm('⚠️ WARNING: Are you sure you want to permanently revoke credential tokens and delete this staff member? This cannot be undone.')) return;
-    const res = await fetchWithAuth(`http://localhost:3000/api/manager/staff/offboard/${userId}`, {
+    const res = await fetchWithAuth(`http://localhost:3000/api/admin/staff/offboard/${userId}`, {
       method: 'POST'
     });
     if (res?.ok) {
-      const permRes = await fetchWithAuth('http://localhost:3000/api/manager/permissions');
+      const permRes = await fetchWithAuth('http://localhost:3000/api/admin/permissions');
       if (permRes?.ok) setStaffPermissions((await permRes.json()).data.permissions || []);
     } else {
       const err = await res.json();
@@ -831,7 +833,7 @@ export default function ManagerDashboard() {
 
   const handleSearchAudits = async (e) => {
     e.preventDefault();
-    const res = await fetchWithAuth(`http://localhost:3000/api/manager/audit-logs?q=${encodeURIComponent(auditSearch)}`);
+    const res = await fetchWithAuth(`http://localhost:3000/api/admin/audit-logs?q=${encodeURIComponent(auditSearch)}`);
     if (res?.ok) setAuditLogs((await res.json()).data.logs || []);
   };
 
@@ -1144,7 +1146,7 @@ export default function ManagerDashboard() {
 
             {/* Refresh */}
             <button
-              onClick={loadManagerData}
+              onClick={loadAdminData}
               className={`p-2.5 rounded-xl border border-zinc-200/80 bg-white hover:bg-zinc-50 text-zinc-500 transition-all ${isLoading ? 'animate-spin' : ''}`}
             >
               <RefreshCw size={15} />
@@ -1152,7 +1154,7 @@ export default function ManagerDashboard() {
 
             {/* Profile Avatar Widget */}
             {(() => {
-              const staffName = localStorage.getItem('hms_name') || 'Staff';
+              const staffName = sessionStorage.getItem('hms_name') || 'Staff';
               const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
               const designation = 'Administrator';
               return (
@@ -2481,8 +2483,8 @@ export default function ManagerDashboard() {
                           className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50/60 border border-indigo-200/60 rounded-xl px-3 py-1.5 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/30 shadow-sm cursor-pointer"
                         >
                           <option value="ALL">All Roles</option>
-                          <option value="MANAGER">Manager</option>
-                          <option value="ADMIN">Admin</option>
+                          <option value="Admin">Admin</option>
+                          <option value="Admin">Admin</option>
                           <option value="FRONT_DESK">Front Desk</option>
                           <option value="HOUSEKEEPING">Housekeeping</option>
                         </select>
@@ -3153,7 +3155,7 @@ export default function ManagerDashboard() {
                     </div>
                   )}
 
-                  {/* Channel Manager Configuration */}
+                  {/* Channel Admin Configuration */}
                   {yieldRules && (
                     <div>
                       <motion.div
@@ -3174,7 +3176,7 @@ export default function ManagerDashboard() {
                             >
                               <Sliders size={20} className="text-white" />
                             </motion.div>
-                            <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Channel Manager &amp; OTA Sync</h3>
+                            <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Channel Admin &amp; OTA Sync</h3>
                           </div>
                           <div className="flex items-center gap-3 bg-white shadow-sm border-2 border-rose-100 px-4 py-2 rounded-2xl relative overflow-hidden group">
                             <div className="absolute inset-0 bg-gradient-to-r from-rose-50/70 to-orange-50/50 group-hover:from-rose-100/70 group-hover:to-orange-100/50 transition-colors pointer-events-none" />
@@ -3187,8 +3189,8 @@ export default function ManagerDashboard() {
                             <label className="relative inline-flex items-center cursor-pointer select-none z-10">
                               <input
                                 type="checkbox"
-                                checked={yieldRules.channel_manager.master_ota_toggle}
-                                onChange={e => handleSaveYieldRule('channel_manager', { ...yieldRules.channel_manager, master_ota_toggle: e.target.checked })}
+                                checked={yieldRules.channel_Admin.master_ota_toggle}
+                                onChange={e => handleSaveYieldRule('channel_Admin', { ...yieldRules.channel_Admin, master_ota_toggle: e.target.checked })}
                                 className="sr-only peer"
                               />
                               <div className="w-10 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-[#D4A373] peer-checked:to-[#B3835B] shadow-inner peer-checked:shadow-[#D4A373]/40"></div>
@@ -3216,10 +3218,10 @@ export default function ManagerDashboard() {
                               <div className="flex items-center gap-2">
                                 <input
                                   type="number"
-                                  value={yieldRules.channel_manager.allotments[channel] || 0}
+                                  value={yieldRules.channel_Admin.allotments[channel] || 0}
                                   onChange={e => {
-                                    const allotments = { ...yieldRules.channel_manager.allotments, [channel]: parseInt(e.target.value) || 0 };
-                                    handleSaveYieldRule('channel_manager', { ...yieldRules.channel_manager, allotments });
+                                    const allotments = { ...yieldRules.channel_Admin.allotments, [channel]: parseInt(e.target.value) || 0 };
+                                    handleSaveYieldRule('channel_Admin', { ...yieldRules.channel_Admin, allotments });
                                   }}
                                   className="w-full bg-white border border-amber-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30 py-2 px-3 rounded-xl text-sm font-bold text-slate-800 outline-none transition-shadow shadow-sm"
                                 />
@@ -3871,7 +3873,7 @@ export default function ManagerDashboard() {
                       { key: 'ALL', label: 'All Staff' },
                       { key: 'FRONT_DESK', label: 'Front Desk' },
                       { key: 'HOUSEKEEPING', label: 'Housekeeping' },
-                      { key: 'ADMIN', label: 'Admin' },
+                      { key: 'Admin', label: 'Admin' },
                       { key: 'FINANCE', label: 'Finance' },
                       { key: 'RESTAURANT', label: 'Dining' },
                       { key: 'SALES', label: 'Sales' },
@@ -4019,7 +4021,7 @@ export default function ManagerDashboard() {
                                 FRONT_DESK: 'from-sky-400 to-blue-500',
                                 RECEPTION: 'from-sky-400 to-blue-500',
                                 HOUSEKEEPING: 'from-amber-400 to-orange-500',
-                                ADMIN: 'from-indigo-400 to-violet-500',
+                                Admin: 'from-indigo-400 to-violet-500',
                                 FINANCE: 'from-emerald-400 to-teal-500',
                                 RESTAURANT: 'from-rose-400 to-red-500',
                                 SALES: 'from-fuchsia-400 to-purple-500',
@@ -4218,7 +4220,7 @@ export default function ManagerDashboard() {
                               <motion.div
                                 whileHover={{ scale: 1.08, rotate: -6 }}
                                 transition={{ type: 'spring', stiffness: 400, damping: 15 }}
-                                className={`w-14 h-14 shrink-0 rounded-2xl bg-gradient-to-br ${{ FRONT_DESK: 'from-sky-400 to-blue-500', HOUSEKEEPING: 'from-amber-400 to-orange-500', ADMIN: 'from-indigo-400 to-violet-500', FINANCE: 'from-emerald-400 to-teal-500', RESTAURANT: 'from-rose-400 to-red-500', SALES: 'from-fuchsia-400 to-purple-500', TRAVEL: 'from-cyan-400 to-sky-500' }[selectedStaff.role] || 'from-zinc-400 to-zinc-500'
+                                className={`w-14 h-14 shrink-0 rounded-2xl bg-gradient-to-br ${{ FRONT_DESK: 'from-sky-400 to-blue-500', HOUSEKEEPING: 'from-amber-400 to-orange-500', Admin: 'from-indigo-400 to-violet-500', FINANCE: 'from-emerald-400 to-teal-500', RESTAURANT: 'from-rose-400 to-red-500', SALES: 'from-fuchsia-400 to-purple-500', TRAVEL: 'from-cyan-400 to-sky-500' }[selectedStaff.role] || 'from-zinc-400 to-zinc-500'
                                   } flex items-center justify-center text-white text-lg font-black shadow-md hr-ring-indigo`}>
                                 {(selectedStaff.name || '').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)}
                               </motion.div>
@@ -4557,7 +4559,7 @@ export default function ManagerDashboard() {
                                     <option value="RESTAURANT">RESTAURANT (Dining)</option>
                                     <option value="SALES">SALES</option>
                                     <option value="TRAVEL">TRAVEL</option>
-                                    <option value="ADMIN">ADMIN (Manager)</option>
+                                    <option value="Admin">Admin (Admin)</option>
                                   </select>
                                 </div>
 
