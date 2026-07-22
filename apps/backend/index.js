@@ -21,7 +21,6 @@ app.use((req, res, next) => {
 // AUTHENTICATION ROUTES
 // ==========================================
 
-// 1. Register a new user
 app.post('/api/auth/register', async (req, res) => {
   const { email, password, name, role } = req.body;
 
@@ -51,34 +50,28 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-// 2. Login an existing user (Fetches directly from PostgreSQL tables)
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    // Query your users table directly for the provided email string
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email.toLowerCase().trim()]);
     const user = result.rows[0];
 
-    // Security Gate 1: If the email doesn't exist in your DB rows, deny access
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Security Gate 2: Extract the password hash from the row and compare it
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // If both pass, sign a real security token with their DB-stored role
     const token = jwt.sign(
       { userId: user.id, role: user.role.toUpperCase() },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
 
-    // Track active shift session and audit trail
     await pool.query('INSERT INTO staff_shifts (user_id) VALUES ($1)', [user.id]);
     await logAuditAction(user.id, 'Staff Login', `User logged into dashboard: ${user.email} (${user.role})`);
 
@@ -117,7 +110,6 @@ const logAuditAction = async (userId, action, details) => {
   }
 };
 
-// Universal token validation bouncer
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -135,11 +127,9 @@ const verifyToken = (req, res, next) => {
   }
 };
 
-// 3. Logout — records logout_time on the most recent active shift for this user
 app.post('/api/auth/logout', verifyToken, async (req, res) => {
   try {
     const userId = req.user.userId;
-    // Update the most recent open shift (logout_time IS NULL) for this user
     await pool.query(
       `UPDATE staff_shifts SET logout_time = NOW()
        WHERE id = (
@@ -157,7 +147,6 @@ app.post('/api/auth/logout', verifyToken, async (req, res) => {
   }
 });
 
-// Granular permission wrapper
 const requireRole = (allowedRoles) => {
   return (req, res, next) => {
     if (!allowedRoles.includes(req.user.role)) {
@@ -167,14 +156,12 @@ const requireRole = (allowedRoles) => {
   };
 };
 
-// Kept for backward compatibility with older components
 const verifyStaffToken = [verifyToken, requireRole(['ADMIN', 'RECEPTION', 'FRONT_DESK', 'HOUSEKEEPING'])];
 
 // ==========================================
 // CORE & DASHBOARD ENDPOINTS
 // ==========================================
 
-// 1. Health Check Route
 app.get('/health', async (req, res) => {
   try {
     const result = await pool.query('SELECT NOW()');
@@ -185,7 +172,6 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// 2. GET all rooms (Public Landing Page)
 app.get('/api/rooms', async (req, res) => {
   try {
     const query = `
@@ -203,7 +189,6 @@ app.get('/api/rooms', async (req, res) => {
   }
 });
 
-// 2b. GET aggregated room classes (Public Landing Page - one card per room type)
 app.get('/api/room-classes', async (req, res) => {
   try {
     const query = `
@@ -228,10 +213,8 @@ app.get('/api/room-classes', async (req, res) => {
   }
 });
 
-// 3. Front Desk Operational Overview
 app.get('/api/front-desk/overview', verifyToken, requireRole(['FRONT_DESK', 'ADMIN', 'RECEPTION']), async (req, res) => {
   try {
-    // Aggregating live metric values from relational database tables
     const statsQuery = `
       SELECT 
         (SELECT COUNT(*) FROM bookings WHERE DATE(check_in_date) = CURRENT_DATE AND status = 'CONFIRMED') as arrivals,
@@ -270,7 +253,6 @@ app.get('/api/front-desk/overview', verifyToken, requireRole(['FRONT_DESK', 'ADM
 // EXPANDED FRONT DESK OPERATIONAL ENDPOINTS
 // ==========================================
 
-// 1. DYNAMIC GUEST LOOKUP (Now uses a catch-all active status filter)
 app.get('/api/front-desk/guests/search', verifyToken, requireRole(['FRONT_DESK', 'ADMIN', 'RECEPTION']), async (req, res) => {
   const { q } = req.query;
 
@@ -278,8 +260,6 @@ app.get('/api/front-desk/guests/search', verifyToken, requireRole(['FRONT_DESK',
     let query;
     let params = [];
 
-    // LEFT JOIN ensures we get the guest even if they don't have a room.
-    // The NOT IN clause ensures we catch ALL active statuses (Booked, Pending, Checked In, etc.)
     if (!q || q.trim() === '') {
       query = `
         SELECT g.id, g.name, g.email, g.phone, r.room_number, rt.name as room_type
@@ -310,7 +290,6 @@ app.get('/api/front-desk/guests/search', verifyToken, requireRole(['FRONT_DESK',
   }
 });
 
-// 2. FETCH ACTIVE OPERATIONAL STAYS (Catch-all active filter)
 app.get('/api/front-desk/stays', verifyToken, requireRole(['FRONT_DESK', 'ADMIN', 'RECEPTION']), async (req, res) => {
   try {
     const query = `
@@ -321,7 +300,7 @@ app.get('/api/front-desk/stays', verifyToken, requireRole(['FRONT_DESK', 'ADMIN'
       JOIN guests g ON b.guest_id = g.id
       JOIN rooms r ON b.room_id = r.id
       JOIN room_types rt ON r.room_type_id = rt.id
-      WHERE b.status NOT IN ('CHECKED_OUT', 'CANCELLED') -- Automatically catches ANY active stay
+      WHERE b.status NOT IN ('CHECKED_OUT', 'CANCELLED')
       ORDER BY b.check_in_date ASC;
     `;
     const result = await pool.query(query);
@@ -331,53 +310,34 @@ app.get('/api/front-desk/stays', verifyToken, requireRole(['FRONT_DESK', 'ADMIN'
     res.status(500).json({ error: 'Failed to access reservation states' });
   }
 });
-// 3. TRANSACTION ACTION: CHECK-OUT GUEST & SET ROOM TO DIRTY
 
 app.post('/api/front-desk/bookings/:id/checkout', verifyToken, requireRole(['FRONT_DESK', 'ADMIN', 'RECEPTION']), async (req, res) => {
-  console.log(`\n🛎️ ---> CHECKOUT INITIATED FOR BOOKING ID: ${req.params.id}`);
-
   try {
     const { id } = req.params;
-
-    console.log("STEP 1: Fetching room_id connected to this booking...");
     const bookingRes = await pool.query('SELECT room_id FROM bookings WHERE id = $1', [id]);
 
     if (bookingRes.rows.length === 0) {
-      console.log("❌ ERROR: Booking not found in database.");
       return res.status(404).json({ error: 'Reservation record missing' });
     }
 
     const roomId = bookingRes.rows[0].room_id;
-    console.log(`STEP 2: Found room_id: ${roomId}. Updating booking status to CHECKED_OUT...`);
     await pool.query("UPDATE bookings SET status = 'CHECKED_OUT' WHERE id = $1", [id]);
-
-    console.log("STEP 3: Booking updated. Updating room status to DIRTY...");
     await pool.query("UPDATE rooms SET status = 'DIRTY' WHERE id = $1", [roomId]);
-
-    // Log audit trail
     await logAuditAction(req.user.userId, 'Process Check-Out', `Successfully checked out booking ID: ${id}`);
-
-    console.log("✅ STEP 4: Success! Sending response to frontend.");
     res.json({ status: 'success', message: 'Guest successfully checked out.' });
-
   } catch (err) {
-    console.error('\n🚨 *** CRITICAL BACKEND CRASH *** 🚨');
-    console.error(err);
     res.status(500).json({ error: 'Checkout failed', details: err.message });
   }
 });
 
-// 4. TRANSACTION ACTION: UPDATE ROOM LOGISTIC CHANGE
 app.patch('/api/front-desk/bookings/:id/change-room', verifyToken, requireRole(['FRONT_DESK', 'ADMIN', 'RECEPTION']), async (req, res) => {
   const { id } = req.params;
   const { new_room_id } = req.body;
 
   try {
-    // Get current room to free it back to AVAILABLE
     const currentBooking = await pool.query('SELECT room_id FROM bookings WHERE id = $1', [id]);
     const oldRoomId = currentBooking.rows[0]?.room_id;
 
-    // Swap rooms atomically
     await pool.query('UPDATE bookings SET room_id = $1 WHERE id = $2', [new_room_id, id]);
     if (oldRoomId) await pool.query("UPDATE rooms SET status = 'AVAILABLE' WHERE id = $1", [oldRoomId]);
     await pool.query("UPDATE rooms SET status = 'OCCUPIED' WHERE id = $1", [new_room_id]);
@@ -387,7 +347,7 @@ app.patch('/api/front-desk/bookings/:id/change-room', verifyToken, requireRole([
     res.status(500).json({ error: 'Failed to modify database room structural parameters' });
   }
 });
-// 5. GET AVAILABLE ROOMS FOR MANUAL BOOKING
+
 app.get('/api/front-desk/rooms/available', verifyToken, requireRole(['FRONT_DESK', 'ADMIN']), async (req, res) => {
   try {
     const query = `
@@ -407,18 +367,16 @@ app.get('/api/front-desk/rooms/available', verifyToken, requireRole(['FRONT_DESK
 // Helper function to push inventory changes to your Channel Admin
 const pushInventoryUpdateToOTA = async (roomTypeId, dateFrom, dateTo) => {
   try {
-    // 1. Calculate how many rooms of this type are left
     const countRes = await pool.query(`
       SELECT COUNT(id) as remaining FROM rooms 
       WHERE room_type_id = $1 AND status = 'AVAILABLE'
     `, [roomTypeId]);
-
     const remainingInventory = countRes.rows[0].remaining;
 
     // 2. Make an HTTP request to your Channel Admin (e.g., Channex, SiteMinder)
     /* await fetch('https://api.yourchannelAdmin.com/v1/inventory', {
       method: 'POST',
-      headers: { 'Authorization': \`Bearer \${process.env.CHANNEL_MANAGER_API_KEY}\` },
+      headers: { 'Authorization': \`Bearer \${process.env.CHANNEL_Admin_API_KEY}\` },
       body: JSON.stringify({
         room_type_id: roomTypeId,
         start_date: dateFrom,
@@ -433,12 +391,10 @@ const pushInventoryUpdateToOTA = async (roomTypeId, dateFrom, dateTo) => {
   }
 };
 
-// 6. CREATE GUEST AND BOOKING ATOMICALLY
 app.post('/api/front-desk/bookings/manual', verifyToken, requireRole(['FRONT_DESK', 'ADMIN']), async (req, res) => {
   const { guest_name, guest_email, guest_phone, guest_id_number, room_id, check_in_date, check_out_date, total_price } = req.body;
 
   try {
-    // 1. Insert Guest or get existing
     let guestRes = await pool.query('SELECT id FROM guests WHERE email = $1', [guest_email.toLowerCase().trim()]);
     let guestId;
 
@@ -450,24 +406,19 @@ app.post('/api/front-desk/bookings/manual', verifyToken, requireRole(['FRONT_DES
       guestId = newGuest.rows[0].id;
     } else {
       guestId = guestRes.rows[0].id;
-      // Update ID number if provided and not present
       if (guest_id_number) {
         await pool.query('UPDATE guests SET id_number = $1 WHERE id = $2 AND id_number IS NULL', [guest_id_number, guestId]);
       }
     }
 
-    // 2. Insert Booking
     await pool.query(
       `INSERT INTO bookings (guest_id, room_id, check_in_date, check_out_date, total_price, status) 
        VALUES ($1, $2, $3, $4, $5, 'CHECKED_IN')`,
       [guestId, room_id, check_in_date, check_out_date, total_price]
     );
 
-    // 3. Set Room to Occupied
     await pool.query("UPDATE rooms SET status = 'OCCUPIED' WHERE id = $1", [room_id]);
 
-    // 4. (NEW) Trigger background OTA Sync!
-    // We don't await this so it doesn't slow down the receptionist's UI
     const roomTypeRes = await pool.query('SELECT room_type_id FROM rooms WHERE id = $1', [room_id]);
     pushInventoryUpdateToOTA(roomTypeRes.rows[0].room_type_id, check_in_date, check_out_date);
 
@@ -478,30 +429,25 @@ app.post('/api/front-desk/bookings/manual', verifyToken, requireRole(['FRONT_DES
   }
 });
 
-// 7. TRANSACTION ACTION: EXTEND STAY & RECALCULATE PRICE
 app.patch('/api/front-desk/bookings/:id/extend', verifyToken, requireRole(['FRONT_DESK', 'ADMIN', 'RECEPTION']), async (req, res) => {
   const { id } = req.params;
   const { new_check_out_date } = req.body;
 
   try {
-    // 1. Get current booking details to recalculate the price
     const bookingRes = await pool.query('SELECT check_in_date, room_id FROM bookings WHERE id = $1', [id]);
     if (bookingRes.rows.length === 0) return res.status(404).json({ error: 'Booking not found' });
     const { check_in_date, room_id } = bookingRes.rows[0];
 
-    // 2. Get the room's base price from the database
     const roomRes = await pool.query(
       'SELECT rt.base_price FROM rooms r JOIN room_types rt ON r.room_type_id = rt.id WHERE r.id = $1',
       [room_id]
     );
     const basePrice = roomRes.rows[0].base_price;
 
-    // 3. Calculate the new total days and price
     const days = Math.ceil((new Date(new_check_out_date) - new Date(check_in_date)) / (1000 * 60 * 60 * 24));
     if (days <= 0) return res.status(400).json({ error: 'Checkout date must be after check-in date' });
     const newTotal = days * basePrice;
 
-    // 4. Atomically update the ledger
     await pool.query(
       'UPDATE bookings SET check_out_date = $1, total_price = $2 WHERE id = $3',
       [new_check_out_date, newTotal, id]
@@ -514,12 +460,10 @@ app.patch('/api/front-desk/bookings/:id/extend', verifyToken, requireRole(['FRON
   }
 });
 
-// 8. TRANSACTION ACTION: CHECK-IN GUEST & SET ROOM TO OCCUPIED
 app.post('/api/front-desk/bookings/:id/checkin', verifyToken, requireRole(['FRONT_DESK', 'ADMIN', 'RECEPTION']), async (req, res) => {
   const { id } = req.params;
 
   try {
-    // 1. Validate the booking exists and is in CONFIRMED status
     const bookingRes = await pool.query('SELECT status, room_id FROM bookings WHERE id = $1', [id]);
     if (bookingRes.rows.length === 0) {
       return res.status(404).json({ error: 'Booking not found' });
@@ -530,13 +474,9 @@ app.post('/api/front-desk/bookings/:id/checkin', verifyToken, requireRole(['FRON
       return res.status(400).json({ error: `Cannot check in a booking with status: ${status}. Only CONFIRMED bookings can be checked in.` });
     }
 
-    // 2. Update booking status to CHECKED_IN
     await pool.query("UPDATE bookings SET status = 'CHECKED_IN' WHERE id = $1", [id]);
-
-    // 3. Set room to OCCUPIED
     await pool.query("UPDATE rooms SET status = 'OCCUPIED' WHERE id = $1", [room_id]);
 
-    // Log audit trail
     await logAuditAction(req.user.userId, 'Process Check-In', `Successfully checked in booking ID: ${id}`);
 
     res.json({ status: 'success', message: 'Guest checked in successfully. Room is now occupied.' });
@@ -546,7 +486,6 @@ app.post('/api/front-desk/bookings/:id/checkin', verifyToken, requireRole(['FRON
   }
 });
 
-// 9. FETCH ALL BOOKINGS (Active + Inactive History)
 app.get('/api/front-desk/bookings/all', verifyToken, requireRole(['FRONT_DESK', 'ADMIN', 'RECEPTION']), async (req, res) => {
   const { status: statusFilter } = req.query;
 
@@ -582,7 +521,6 @@ app.get('/api/front-desk/bookings/all', verifyToken, requireRole(['FRONT_DESK', 
 // HOUSEKEEPING OPERATIONAL ENDPOINTS
 // ==========================================
 
-// 1. KANBAN BOARD — Fetch rooms grouped by housekeeping status
 app.get('/api/housekeeping/board', verifyToken, requireRole(['HOUSEKEEPING', 'ADMIN']), async (req, res) => {
   try {
     const query = `
@@ -602,10 +540,7 @@ app.get('/api/housekeeping/board', verifyToken, requireRole(['HOUSEKEEPING', 'AD
       inspecting: result.rows.filter(r => r.status === 'INSPECTING')
     };
 
-    // Stats
-    const completedTodayRes = await pool.query(
-      "SELECT COUNT(*)::int as count FROM rooms WHERE status = 'AVAILABLE'"
-    );
+    const completedTodayRes = await pool.query("SELECT COUNT(*)::int as count FROM rooms WHERE status = 'AVAILABLE'");
 
     res.json({
       status: 'success',
@@ -625,18 +560,6 @@ app.get('/api/housekeeping/board', verifyToken, requireRole(['HOUSEKEEPING', 'AD
   }
 });
 
-// Keep legacy endpoint for backward compat
-app.get('/api/housekeeping/tasks', verifyToken, requireRole(['HOUSEKEEPING', 'ADMIN']), async (req, res) => {
-  try {
-    const cleanRooms = await pool.query("SELECT room_number as room, 'Checkout Cleaning' as type, 'High' as priority, 'Pending' as status FROM rooms WHERE status = 'DIRTY'");
-    const inProgressRooms = await pool.query("SELECT room_number as room, 'Stayover Service' as type, 'Medium' as priority, 'In Progress' as status FROM rooms WHERE status = 'CLEANING'");
-    res.json({ cleaning: [...cleanRooms.rows, ...inProgressRooms.rows], inspections: [] });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to access housekeeping data.' });
-  }
-});
-
-// 2. START CLEANING — Transition: DIRTY → CLEANING
 app.patch('/api/housekeeping/rooms/:id/start-cleaning', verifyToken, requireRole(['HOUSEKEEPING', 'ADMIN']), async (req, res) => {
   const { id } = req.params;
   try {
@@ -653,7 +576,6 @@ app.patch('/api/housekeeping/rooms/:id/start-cleaning', verifyToken, requireRole
   }
 });
 
-// 3. REQUEST INSPECTION — Transition: CLEANING → INSPECTING
 app.patch('/api/housekeeping/rooms/:id/request-inspection', verifyToken, requireRole(['HOUSEKEEPING', 'ADMIN']), async (req, res) => {
   const { id } = req.params;
   try {
@@ -670,7 +592,6 @@ app.patch('/api/housekeeping/rooms/:id/request-inspection', verifyToken, require
   }
 });
 
-// 4. APPROVE INSPECTION — Transition: INSPECTING → AVAILABLE
 app.patch('/api/housekeeping/rooms/:id/approve-inspection', verifyToken, requireRole(['HOUSEKEEPING', 'ADMIN']), async (req, res) => {
   const { id } = req.params;
   try {
@@ -687,10 +608,9 @@ app.patch('/api/housekeeping/rooms/:id/approve-inspection', verifyToken, require
   }
 });
 
-// 5. LOG AMENITY EXPENSES — Insert restocking items into room_expenses
 app.post('/api/housekeeping/rooms/:id/expenses', verifyToken, requireRole(['HOUSEKEEPING', 'ADMIN']), async (req, res) => {
   const { id } = req.params;
-  const { items } = req.body; // Array of { item_name, quantity, unit_cost }
+  const { items } = req.body;
 
   if (!items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Items array is required' });
@@ -713,7 +633,6 @@ app.post('/api/housekeeping/rooms/:id/expenses', verifyToken, requireRole(['HOUS
   }
 });
 
-// 6. REPORT DAMAGE — Engineering Hot-Link (Maintenance Ticket + Room → MAINTENANCE)
 app.post('/api/housekeeping/rooms/:id/report-damage', verifyToken, requireRole(['HOUSEKEEPING', 'ADMIN']), async (req, res) => {
   const { id } = req.params;
   const { issue, priority } = req.body;
@@ -723,13 +642,11 @@ app.post('/api/housekeeping/rooms/:id/report-damage', verifyToken, requireRole([
   try {
     await pool.query('BEGIN');
 
-    // 1. Create maintenance ticket
     await pool.query(
       'INSERT INTO maintenance_tickets (room_id, issue, priority, status, assigned_to) VALUES ($1, $2, $3, $4, $5)',
       [id, issue, priority || 'High', 'Pending', 'Unassigned']
     );
 
-    // 2. Flip room to MAINTENANCE and block it
     await pool.query(
       "UPDATE rooms SET status = 'MAINTENANCE', room_blocked = true WHERE id = $1",
       [id]
@@ -745,6 +662,23 @@ app.post('/api/housekeeping/rooms/:id/report-damage', verifyToken, requireRole([
 });
 
 // 5. Finance & Revenue Reconciliation Logs
+app.get('/api/finance/overview', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
+  try {
+    const revenueRes = await pool.query("SELECT COALESCE(SUM(total_price), 0) as total FROM bookings WHERE created_at >= CURRENT_DATE");
+
+    res.json({
+      metrics: [
+        { label: "Today's Revenue", value: `₹${revenueRes.rows[0].total}`, trend: "+14.2%", isPositive: true },
+        { label: "Pending Receivables", value: "₹12,400", trend: "-1.1%", isPositive: false }
+      ],
+      transactions: [
+        { id: 'TXN-9901', guest: 'System Walk-in', room: '101', amount: '₹14,000', method: 'Digital Gateway', status: 'Settled', date: 'Today' }
+      ]
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Unable to stream general ledger array metrics.' });
+  }
+});
 
 
 // ==========================================
@@ -752,7 +686,6 @@ app.post('/api/housekeeping/rooms/:id/report-damage', verifyToken, requireRole([
 // ==========================================
 const requireTravel = requireRole(['TRAVEL', 'ADMIN']);
 
-// 1. Overview: KPIs, 7-day booking trend, package popularity split, recent bookings
 app.get('/api/travel/overview', verifyToken, requireTravel, async (req, res) => {
   try {
     const kpiRes = await pool.query(`
@@ -806,7 +739,6 @@ app.get('/api/travel/overview', verifyToken, requireTravel, async (req, res) => 
   }
 });
 
-// 2. Package catalog — list with computed bookings/revenue
 app.get('/api/travel/packages', verifyToken, requireTravel, async (req, res) => {
   try {
     const result = await pool.query(`
@@ -824,7 +756,6 @@ app.get('/api/travel/packages', verifyToken, requireTravel, async (req, res) => 
   }
 });
 
-// 3. Create a new package
 app.post('/api/travel/packages', verifyToken, requireTravel, async (req, res) => {
   const { name, destination, description, category, price, duration_days, max_travelers } = req.body;
   if (!name || !destination || !price) {
@@ -844,7 +775,6 @@ app.post('/api/travel/packages', verifyToken, requireTravel, async (req, res) =>
   }
 });
 
-// 4. Toggle a package's active status
 app.patch('/api/travel/packages/:id/toggle-active', verifyToken, requireTravel, async (req, res) => {
   try {
     const result = await pool.query(
@@ -859,7 +789,6 @@ app.patch('/api/travel/packages/:id/toggle-active', verifyToken, requireTravel, 
   }
 });
 
-// 5. Bookings / purchases — list with filters
 app.get('/api/travel/bookings', verifyToken, requireTravel, async (req, res) => {
   const { status, search } = req.query;
   try {
@@ -888,7 +817,6 @@ app.get('/api/travel/bookings', verifyToken, requireTravel, async (req, res) => 
   }
 });
 
-// 6. Create a new booking (purchase) against a package
 app.post('/api/travel/bookings', verifyToken, requireTravel, async (req, res) => {
   const { package_id, guest_name, guest_email, guest_phone, travelers_count, travel_date, payment_status } = req.body;
   if (!package_id || !guest_name || !travel_date) {
@@ -912,7 +840,6 @@ app.post('/api/travel/bookings', verifyToken, requireTravel, async (req, res) =>
   }
 });
 
-// 7. Update a booking's status (payment or booking lifecycle)
 app.patch('/api/travel/bookings/:id/status', verifyToken, requireTravel, async (req, res) => {
   const { payment_status, booking_status } = req.body;
   try {
@@ -931,7 +858,6 @@ app.patch('/api/travel/bookings/:id/status', verifyToken, requireTravel, async (
   }
 });
 
-// 8. Customers — aggregated purchase history per guest
 app.get('/api/travel/customers', verifyToken, requireTravel, async (req, res) => {
   try {
     const result = await pool.query(`
@@ -950,15 +876,13 @@ app.get('/api/travel/customers', verifyToken, requireTravel, async (req, res) =>
   }
 });
 
-
 // ==========================================
-// Admin (Admin) AdminISTRATIVE ENDPOINTS
+// Admin (ADMIN) ADMINISTRATIVE ENDPOINTS
 // ==========================================
 
 // 1. COMPREHENSIVE LIVE OPERATIONS DASHBOARD ENDPOINT
-app.get('/api/admin/live-operations', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/live-operations', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
-    // === KPIs ===
     const totalRoomsRes = await pool.query("SELECT COUNT(*) FROM rooms;");
     const occupiedRoomsRes = await pool.query("SELECT COUNT(*) FROM rooms WHERE status = 'OCCUPIED';");
     const maintenanceRoomsRes = await pool.query("SELECT COUNT(*) FROM rooms WHERE status = 'MAINTENANCE';");
@@ -973,128 +897,68 @@ app.get('/api/admin/live-operations', verifyToken, requireRole(['ADMIN']), async
     const occupancyRate = salableRooms > 0 ? Math.round((occupiedRooms / salableRooms) * 100) : 0;
     const todaysRevenue = parseFloat(todaysRevenueRes.rows[0].total) || 0;
 
-    // === ROOM STATUS DISTRIBUTION (Donut Chart) ===
-    const statusDistRes = await pool.query(
-      "SELECT status, COUNT(*)::int as count FROM rooms GROUP BY status ORDER BY status"
-    );
+    const statusDistRes = await pool.query("SELECT status, COUNT(*)::int as count FROM rooms GROUP BY status ORDER BY status");
     const roomStatusDistribution = {};
     statusDistRes.rows.forEach(r => { roomStatusDistribution[r.status] = r.count; });
 
-    // === 7-DAY OCCUPANCY TREND (3 days back + today + 3 days forward) ===
     const occupancyTrendRes = await pool.query(`
-      SELECT d::date as date,
-        COUNT(b.id)::int as occupied_count
+      SELECT d::date as date, COUNT(b.id)::int as occupied_count
       FROM generate_series(CURRENT_DATE - INTERVAL '3 days', CURRENT_DATE + INTERVAL '3 days', '1 day') d
-      LEFT JOIN bookings b ON b.check_in_date <= d::date AND b.check_out_date > d::date 
-        AND b.status IN ('CONFIRMED', 'CHECKED_IN')
-      GROUP BY d::date
-      ORDER BY d::date ASC
+      LEFT JOIN bookings b ON b.check_in_date <= d::date AND b.check_out_date > d::date AND b.status IN ('CONFIRMED', 'CHECKED_IN')
+      GROUP BY d::date ORDER BY d::date ASC
     `);
-    const occupancyTrend = occupancyTrendRes.rows.map(r => ({
-      date: r.date,
-      occupied: r.occupied_count,
-      total: totalRooms
-    }));
+    const occupancyTrend = occupancyTrendRes.rows.map(r => ({ date: r.date, occupied: r.occupied_count, total: totalRooms }));
 
-    // === ARRIVALS & DEPARTURES TODAY ===
-    const arrivalsRes = await pool.query(
-      "SELECT COUNT(*)::int as count FROM bookings WHERE check_in_date = CURRENT_DATE AND status IN ('CONFIRMED', 'CHECKED_IN')"
-    );
-    const departuresRes = await pool.query(
-      "SELECT COUNT(*)::int as count FROM bookings WHERE check_out_date = CURRENT_DATE AND status IN ('CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT')"
-    );
+    const arrivalsRes = await pool.query("SELECT COUNT(*)::int as count FROM bookings WHERE check_in_date = CURRENT_DATE AND status IN ('CONFIRMED', 'CHECKED_IN')");
+    const departuresRes = await pool.query("SELECT COUNT(*)::int as count FROM bookings WHERE check_out_date = CURRENT_DATE AND status IN ('CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT')");
 
-    // === DEPARTMENTAL SNAPSHOTS ===
-
-    // Front Desk: Pending check-ins (confirmed but not yet checked in, arriving today)
     const pendingCheckinsRes = await pool.query(`
       SELECT b.id, g.name as guest_name, r.room_number, rt.name as room_type, b.check_in_date
-      FROM bookings b
-      JOIN guests g ON b.guest_id = g.id
-      JOIN rooms r ON b.room_id = r.id
-      JOIN room_types rt ON r.room_type_id = rt.id
+      FROM bookings b JOIN guests g ON b.guest_id = g.id JOIN rooms r ON b.room_id = r.id JOIN room_types rt ON r.room_type_id = rt.id
       WHERE b.status = 'CONFIRMED' AND b.check_in_date <= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
       ORDER BY b.check_in_date ASC LIMIT 8
     `);
 
-    // Front Desk: Overstay warnings (checked in but past checkout date)
     const overstaysRes = await pool.query(`
       SELECT b.id, g.name as guest_name, r.room_number, b.check_out_date
-      FROM bookings b
-      JOIN guests g ON b.guest_id = g.id
-      JOIN rooms r ON b.room_id = r.id
+      FROM bookings b JOIN guests g ON b.guest_id = g.id JOIN rooms r ON b.room_id = r.id
       WHERE b.status = 'CHECKED_IN' AND (
         b.check_out_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date 
-        OR (
-          b.check_out_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date 
-          AND EXTRACT(HOUR FROM CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata') >= 11
-        )
-      )
-      ORDER BY b.check_out_date ASC LIMIT 5
+        OR (b.check_out_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date AND EXTRACT(HOUR FROM CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata') >= 11)
+      ) ORDER BY b.check_out_date ASC LIMIT 5
     `);
 
-    // Housekeeping: Dirty rooms (prioritize premium types)
     const dirtyRoomsRes = await pool.query(`
       SELECT r.room_number, rt.name as room_type, rt.base_price
-      FROM rooms r
-      JOIN room_types rt ON r.room_type_id = rt.id
-      WHERE r.status IN ('DIRTY', 'CLEANING')
-      ORDER BY rt.base_price DESC LIMIT 6
+      FROM rooms r JOIN room_types rt ON r.room_type_id = rt.id
+      WHERE r.status IN ('DIRTY', 'CLEANING') ORDER BY rt.base_price DESC LIMIT 6
     `);
 
-    // Engineering: High priority maintenance (from maintenance_tickets table if it exists, fallback to rooms)
     let highPriorityTickets = [];
     try {
       const ticketsRes = await pool.query(`
         SELECT m.id, m.issue, m.priority, m.status, m.assigned_to, r.room_number
-        FROM maintenance_tickets m
-        JOIN rooms r ON m.room_id = r.id
-        WHERE m.status != 'Resolved'
-        ORDER BY 
-          CASE m.priority WHEN 'High' THEN 1 WHEN 'Medium' THEN 2 ELSE 3 END ASC
-        LIMIT 5
+        FROM maintenance_tickets m JOIN rooms r ON m.room_id = r.id
+        WHERE m.status != 'Resolved' ORDER BY CASE m.priority WHEN 'High' THEN 1 WHEN 'Medium' THEN 2 ELSE 3 END ASC LIMIT 5
       `);
       highPriorityTickets = ticketsRes.rows;
     } catch (e) {
-      // maintenance_tickets table may not exist yet
-      const mRooms = await pool.query(
-        "SELECT id, room_number, 'System Maintenance' as issue, 'Medium' as priority, 'Pending' as status, 'Unassigned' as assigned_to FROM rooms WHERE status = 'MAINTENANCE' LIMIT 5"
-      );
+      const mRooms = await pool.query("SELECT id, room_number, 'System Maintenance' as issue, 'Medium' as priority, 'Pending' as status, 'Unassigned' as assigned_to FROM rooms WHERE status = 'MAINTENANCE' LIMIT 5");
       highPriorityTickets = mRooms.rows;
     }
 
-    // === ACTIVITY FEED (Recent booking transactions) ===
     const activityRes = await pool.query(`
-      SELECT b.id, b.status as action, b.created_at, b.check_in_date, b.check_out_date,
-             g.name as guest_name, r.room_number, rt.name as room_type
-      FROM bookings b
-      JOIN guests g ON b.guest_id = g.id
-      JOIN rooms r ON b.room_id = r.id
-      JOIN room_types rt ON r.room_type_id = rt.id
+      SELECT b.id, b.status as action, b.created_at, b.check_in_date, b.check_out_date, g.name as guest_name, r.room_number, rt.name as room_type
+      FROM bookings b JOIN guests g ON b.guest_id = g.id JOIN rooms r ON b.room_id = r.id JOIN room_types rt ON r.room_type_id = rt.id
       ORDER BY b.created_at DESC LIMIT 15
     `);
 
     res.json({
       status: 'success',
       data: {
-        kpis: {
-          occupancyRate,
-          activeStays: occupiedRooms,
-          outOfOrderAssets: maintenanceRooms,
-          todaysRevenue,
-          totalRooms,
-          salableRooms
-        },
-        roomStatusDistribution,
-        occupancyTrend,
-        arrivalsToday: arrivalsRes.rows[0].count,
-        departuresToday: departuresRes.rows[0].count,
-        departmental: {
-          pendingCheckins: pendingCheckinsRes.rows,
-          overstays: overstaysRes.rows,
-          dirtyRooms: dirtyRoomsRes.rows,
-          highPriorityTickets
-        },
+        kpis: { occupancyRate, activeStays: occupiedRooms, outOfOrderAssets: maintenanceRooms, todaysRevenue, totalRooms, salableRooms },
+        roomStatusDistribution, occupancyTrend, arrivalsToday: arrivalsRes.rows[0].count, departuresToday: departuresRes.rows[0].count,
+        departmental: { pendingCheckins: pendingCheckinsRes.rows, overstays: overstaysRes.rows, dirtyRooms: dirtyRoomsRes.rows, highPriorityTickets },
         activityFeed: activityRes.rows
       }
     });
@@ -1104,17 +968,13 @@ app.get('/api/admin/live-operations', verifyToken, requireRole(['ADMIN']), async
   }
 });
 
-// 2. GET ALL ROOMS CONFIGURATION LIST FOR Admin MANAGEMENT
+// 2. GET ALL ROOMS CONFIGURATION LIST FOR ADMIN MANAGEMENT
 // FETCH ALL ROOMS FOR INVENTORY GRID (Updated for Hierarchical Grouping)
-app.get('/api/admin/rooms', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/rooms', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const query = `
-      SELECT 
-        r.id, r.room_number, r.status, r.room_blocked, 
-        r.room_type_id, rt.name as room_type, rt.base_price
-      FROM rooms r
-      JOIN room_types rt ON r.room_type_id = rt.id
-      ORDER BY r.room_number ASC;
+      SELECT r.id, r.room_number, r.status, r.room_blocked, r.room_type_id, rt.name as room_type, rt.base_price
+      FROM rooms r JOIN room_types rt ON r.room_type_id = rt.id ORDER BY r.room_number ASC;
     `;
     const result = await pool.query(query);
     res.json({ status: 'success', data: { rooms: result.rows } });
@@ -1123,36 +983,24 @@ app.get('/api/admin/rooms', verifyToken, requireRole(['ADMIN']), async (req, res
   }
 });
 
-// 3. ACTION TRIGGER: TOGGLE AdminISTRATIVE ROOM BLOCK (Out of Order)
-app.post('/api/admin/rooms/:id/toggle-block', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+// 3. ACTION TRIGGER: TOGGLE ADMINISTRATIVE ROOM BLOCK (Out of Order)
+app.post('/api/Admin/rooms/:id/toggle-block', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { id } = req.params;
   try {
-    // 1. Check current status
     const roomCheck = await pool.query('SELECT room_blocked, status FROM rooms WHERE id = $1', [id]);
     if (roomCheck.rows.length === 0) return res.status(404).json({ error: 'Room not found' });
-
     const currentBlockState = roomCheck.rows[0].room_blocked;
     const newBlockState = !currentBlockState;
     const newRoomStatus = newBlockState ? 'MAINTENANCE' : 'AVAILABLE';
-
-    // 2. Atomically alter the operational state of the room asset
-    await pool.query(
-      'UPDATE rooms SET room_blocked = $1, status = $2 WHERE id = $3',
-      [newBlockState, newRoomStatus, id]
-    );
-
-    res.json({
-      status: 'success',
-      message: `Room status updated successfully to ${newRoomStatus}`,
-      data: { room_blocked: newBlockState, status: newRoomStatus }
-    });
+    await pool.query('UPDATE rooms SET room_blocked = $1, status = $2 WHERE id = $3', [newBlockState, newRoomStatus, id]);
+    res.json({ status: 'success', message: `Room status updated successfully to ${newRoomStatus}`, data: { room_blocked: newBlockState, status: newRoomStatus } });
   } catch (err) {
     res.status(500).json({ error: 'Failed to process structural room state alter mutation' });
   }
 });
 
 // 4. GET ROOM TYPES (For the Add Room Dropdown)
-app.get('/api/admin/room-types', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/room-types', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const result = await pool.query('SELECT id, name, base_price FROM room_types ORDER BY base_price ASC');
     res.json({ status: 'success', data: { roomTypes: result.rows } });
@@ -1162,168 +1010,112 @@ app.get('/api/admin/room-types', verifyToken, requireRole(['ADMIN']), async (req
 });
 
 // 5. ADD NEW ROOM TO INVENTORY
-app.post('/api/admin/rooms', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/Admin/rooms', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { room_number, room_type_id } = req.body;
   try {
-    // Check if room number already exists
     const check = await pool.query('SELECT id FROM rooms WHERE room_number = $1', [room_number]);
     if (check.rows.length > 0) return res.status(400).json({ error: 'Room number already exists in inventory.' });
-
-    await pool.query(
-      "INSERT INTO rooms (room_number, room_type_id, status, room_blocked) VALUES ($1, $2, 'AVAILABLE', false)",
-      [room_number, room_type_id]
-    );
+    await pool.query("INSERT INTO rooms (room_number, room_type_id, status, room_blocked) VALUES ($1, $2, 'AVAILABLE', false)", [room_number, room_type_id]);
     res.json({ status: 'success', message: 'Room added to inventory.' });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: 'Failed to add room to database.' });
   }
 });
 
 // 6. REMOVE ROOM FROM INVENTORY (Force Delete connected records)
-app.delete('/api/admin/rooms/:id', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.delete('/api/Admin/rooms/:id', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { id } = req.params;
-
   try {
-    // Step 1: Delete any existing bookings attached to this room so the database doesn't block us
     await pool.query('DELETE FROM bookings WHERE room_id = $1', [id]);
-
-    // Step 2: Now that the room is cleanly detached, delete the room itself
     await pool.query('DELETE FROM rooms WHERE id = $1', [id]);
-
     res.json({ status: 'success', message: 'Room removed from inventory.' });
   } catch (err) {
-    console.error('Room Deletion Error:', err);
     res.status(500).json({ error: 'Database rejected the deletion. Check terminal for details.' });
   }
 });
 
 // 7. GET MAINTENANCE TICKETS
-app.get('/api/admin/maintenance', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/maintenance', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const query = `
       SELECT m.id, m.issue, m.assigned_to, m.priority, m.status, m.created_at, m.room_id, r.room_number, r.room_blocked 
-      FROM maintenance_tickets m
-      JOIN rooms r ON m.room_id = r.id
-      ORDER BY m.created_at DESC;
+      FROM maintenance_tickets m JOIN rooms r ON m.room_id = r.id ORDER BY m.created_at DESC;
     `;
     const result = await pool.query(query);
     res.json({ status: 'success', data: { tickets: result.rows } });
   } catch (err) {
-    console.error('Fetch tickets error:', err);
     res.status(500).json({ error: 'Failed to fetch engineering tickets' });
   }
 });
 
 // 8. CREATE MAINTENANCE TICKET
-app.post('/api/admin/maintenance', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/Admin/maintenance', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { room_id, issue, priority, assigned_to } = req.body;
   try {
     await pool.query('BEGIN');
-
-    // Create the ticket
-    await pool.query(
-      'INSERT INTO maintenance_tickets (room_id, issue, priority, status, assigned_to) VALUES ($1, $2, $3, $4, $5)',
-      [room_id, issue, priority || 'Medium', 'Pending', assigned_to || 'Unassigned']
-    );
-
-    // Automatically set the room status to MAINTENANCE and block it from guests
-    await pool.query(
-      "UPDATE rooms SET status = 'MAINTENANCE', room_blocked = true WHERE id = $1",
-      [room_id]
-    );
-
+    await pool.query('INSERT INTO maintenance_tickets (room_id, issue, priority, status, assigned_to) VALUES ($1, $2, $3, $4, $5)', [room_id, issue, priority || 'Medium', 'Pending', assigned_to || 'Unassigned']);
+    await pool.query("UPDATE rooms SET status = 'MAINTENANCE', room_blocked = true WHERE id = $1", [room_id]);
     await pool.query('COMMIT');
     res.json({ status: 'success', message: 'Ticket deployed successfully.' });
   } catch (err) {
     await pool.query('ROLLBACK');
-    console.error('Create ticket error:', err);
     res.status(500).json({ error: 'Failed to create ticket' });
   }
 });
 
 // 9. UPDATE TICKET STATUS
-app.patch('/api/admin/maintenance/:id/status', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.patch('/api/Admin/maintenance/:id/status', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
   try {
     await pool.query('BEGIN');
-
-    // Update ticket status
-    const ticketRes = await pool.query(
-      'UPDATE maintenance_tickets SET status = $1 WHERE id = $2 RETURNING room_id',
-      [status, id]
-    );
-
-    // If ticket is resolved, automatically release the room inventory
+    const ticketRes = await pool.query('UPDATE maintenance_tickets SET status = $1 WHERE id = $2 RETURNING room_id', [status, id]);
     if (status === 'Resolved' && ticketRes.rows.length > 0) {
       const roomId = ticketRes.rows[0].room_id;
-      await pool.query(
-        "UPDATE rooms SET status = 'AVAILABLE', room_blocked = false WHERE id = $1",
-        [roomId]
-      );
+      await pool.query("UPDATE rooms SET status = 'AVAILABLE', room_blocked = false WHERE id = $1", [roomId]);
     }
-
     await pool.query('COMMIT');
     res.json({ status: 'success', message: 'Ticket status advanced.' });
   } catch (err) {
     await pool.query('ROLLBACK');
-    console.error('Update status error:', err);
     res.status(500).json({ error: 'Failed to update ticket status' });
   }
 });
 
 // 10. DYNAMIC STAFF ASSIGNMENT
-app.patch('/api/admin/maintenance/:id/assign', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.patch('/api/Admin/maintenance/:id/assign', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { id } = req.params;
   const { assigned_to } = req.body;
   try {
-    // If it was Pending, we should probably move it to In Progress when assigned
     const checkRes = await pool.query('SELECT status FROM maintenance_tickets WHERE id = $1', [id]);
     let newStatus = checkRes.rows[0]?.status;
     if (newStatus === 'Pending') newStatus = 'In Progress';
-
-    await pool.query(
-      'UPDATE maintenance_tickets SET assigned_to = $1, status = $2 WHERE id = $3',
-      [assigned_to, newStatus, id]
-    );
+    await pool.query('UPDATE maintenance_tickets SET assigned_to = $1, status = $2 WHERE id = $3', [assigned_to, newStatus, id]);
     res.json({ status: 'success', message: 'Staff assigned to ticket.', data: { newStatus } });
   } catch (err) {
-    console.error('Assign staff error:', err);
     res.status(500).json({ error: 'Failed to assign ticket' });
   }
 });
 
-app.patch('/api/admin/rooms/:id/status', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.patch('/api/Admin/rooms/:id/status', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
-
-  // Allow all valid room statuses (including housekeeping workflow states)
   const validStatuses = ['AVAILABLE', 'OCCUPIED', 'DIRTY', 'CLEANING', 'INSPECTING', 'MAINTENANCE'];
-
-  if (!validStatuses.includes(status?.toUpperCase())) {
-    return res.status(400).json({ error: 'Invalid room status override.' });
-  }
-
+  if (!validStatuses.includes(status?.toUpperCase())) return res.status(400).json({ error: 'Invalid room status override.' });
   try {
     await pool.query('UPDATE rooms SET status = $1 WHERE id = $2', [status.toUpperCase(), id]);
     res.json({ status: 'success', message: 'Room operational status updated successfully.' });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: 'Failed to execute status override in database.' });
   }
 });
 
-// 7. GET/POST/PATCH Booking Records Actions
 app.get('/api/bookings', verifyStaffToken, async (req, res) => {
   try {
     const query = `
       SELECT b.id AS booking_id, b.check_in_date, b.check_out_date, b.status AS booking_status,
              b.total_price, g.name AS guest_name, g.email AS guest_email, r.room_number, rt.name AS room_type
-      FROM bookings b
-      JOIN guests g ON b.guest_id = g.id
-      JOIN rooms r ON b.room_id = r.id
-      JOIN room_types rt ON r.room_type_id = rt.id
+      FROM bookings b JOIN guests g ON b.guest_id = g.id JOIN rooms r ON b.room_id = r.id JOIN room_types rt ON r.room_type_id = rt.id
       ORDER BY b.created_at DESC;
     `;
     const result = await pool.query(query);
@@ -1347,63 +1139,32 @@ app.patch('/api/bookings/:id/cancel', verifyStaffToken, async (req, res) => {
 app.post('/api/bookings', async (req, res) => {
   const { guest_id, guest_name, guest_email, guest_phone, guest_id_number, room_id, room_type_id, check_in_date, check_out_date, total_price, source = 'DIRECT' } = req.body;
 
-  if (!check_in_date || !check_out_date || total_price === undefined) {
-    return res.status(400).json({ status: 'error', message: 'Missing required booking fields' });
-  }
-  if (!room_id && !room_type_id) {
-    return res.status(400).json({ status: 'error', message: 'Either room_id or room_type_id is required' });
-  }
+  if (!check_in_date || !check_out_date || total_price === undefined) return res.status(400).json({ status: 'error', message: 'Missing required booking fields' });
+  if (!room_id && !room_type_id) return res.status(400).json({ status: 'error', message: 'Either room_id or room_type_id is required' });
 
   try {
     let finalGuestId = guest_id;
-
-    // If no guest_id provided, create or find guest by email/phone
     if (!finalGuestId) {
-      if (!guest_name || (!guest_email && !guest_phone)) {
-        return res.status(400).json({ status: 'error', message: 'Guest name and email/phone are required if guest_id is not provided' });
-      }
-
-      // Check if guest exists by email
+      if (!guest_name || (!guest_email && !guest_phone)) return res.status(400).json({ status: 'error', message: 'Guest name and email/phone are required if guest_id is not provided' });
       let guestResult;
-      if (guest_email) {
-        guestResult = await pool.query('SELECT id, id_number FROM guests WHERE email = $1', [guest_email]);
-      }
-
+      if (guest_email) guestResult = await pool.query('SELECT id, id_number FROM guests WHERE email = $1', [guest_email]);
       if (guestResult && guestResult.rows.length > 0) {
         finalGuestId = guestResult.rows[0].id;
-        // Update id_number if it's missing and provided
-        if (guest_id_number && !guestResult.rows[0].id_number) {
-          await pool.query('UPDATE guests SET id_number = $1 WHERE id = $2', [guest_id_number, finalGuestId]);
-        }
+        if (guest_id_number && !guestResult.rows[0].id_number) await pool.query('UPDATE guests SET id_number = $1 WHERE id = $2', [guest_id_number, finalGuestId]);
       } else {
-        // Create new guest
-        const newGuest = await pool.query(
-          'INSERT INTO guests (name, email, phone, id_number) VALUES ($1, $2, $3, $4) RETURNING id',
-          [guest_name, guest_email, guest_phone, guest_id_number || null]
-        );
+        const newGuest = await pool.query('INSERT INTO guests (name, email, phone, id_number) VALUES ($1, $2, $3, $4) RETURNING id', [guest_name, guest_email, guest_phone, guest_id_number || null]);
         finalGuestId = newGuest.rows[0].id;
       }
     }
 
     let assignedRoomId = room_id;
-
-    // Auto-assign an available room if booking by room type
     if (!assignedRoomId && room_type_id) {
       const availableRoom = await pool.query(
-        `SELECT r.id FROM rooms r 
-         WHERE r.room_type_id = $1 
-         AND r.status != 'MAINTENANCE'
-         AND r.id NOT IN (
-             SELECT room_id FROM bookings 
-             WHERE status IN ('CONFIRMED', 'CHECKED_IN')
-             AND daterange(check_in_date, check_out_date, '[)') && daterange($2::date, $3::date, '[)')
-         )
-         ORDER BY r.room_number ASC LIMIT 1`,
-        [room_type_id, check_in_date, check_out_date]
+        `SELECT r.id FROM rooms r WHERE r.room_type_id = $1 AND r.status != 'MAINTENANCE' AND r.id NOT IN (
+             SELECT room_id FROM bookings WHERE status IN ('CONFIRMED', 'CHECKED_IN') AND daterange(check_in_date, check_out_date, '[)') && daterange($2::date, $3::date, '[)')
+         ) ORDER BY r.room_number ASC LIMIT 1`, [room_type_id, check_in_date, check_out_date]
       );
-      if (availableRoom.rows.length === 0) {
-        return res.status(409).json({ status: 'error', message: 'No available rooms of this type for the selected dates. All rooms are fully booked.' });
-      }
+      if (availableRoom.rows.length === 0) return res.status(409).json({ status: 'error', message: 'No available rooms of this type for the selected dates. All rooms are fully booked.' });
       assignedRoomId = availableRoom.rows[0].id;
     }
 
@@ -1411,10 +1172,7 @@ app.post('/api/bookings', async (req, res) => {
     const result = await pool.query(query, [finalGuestId, assignedRoomId, check_in_date, check_out_date, total_price, source]);
     res.status(201).json({ status: 'success', data: { booking: result.rows[0] } });
   } catch (err) {
-    if (err.constraint === 'no_overlapping_bookings') {
-      return res.status(409).json({ status: 'error', message: 'This room is already booked for the selected dates.' });
-    }
-    console.error('Booking error:', err);
+    if (err.constraint === 'no_overlapping_bookings') return res.status(409).json({ status: 'error', message: 'This room is already booked for the selected dates.' });
     res.status(500).json({ status: 'error', message: 'Internal server error while processing booking' });
   }
 });
@@ -1424,113 +1182,58 @@ app.post('/api/bookings', async (req, res) => {
 // ==========================================
 
 // Helper: Secure Channel Admin Webhook Endpoint
-app.post('/api/channel-manager/webhook', async (req, res) => {
+app.post('/api/channel-Admin/webhook', async (req, res) => {
   // 1. SECURITY: Verify Channel Admin Secret Key
   const apiKey = req.headers['x-channel-api-key'];
-  if (apiKey !== (process.env.CHANNEL_MANAGER_SECRET || 'fallback_secret_key_123')) {
-    return res.status(403).json({ error: 'Unauthorized OTA payload' });
-  }
+  if (apiKey !== (process.env.CHANNEL_Admin_SECRET || 'fallback_secret_key_123')) return res.status(403).json({ error: 'Unauthorized OTA payload' });
 
-  const {
-    event_type, // 'CREATE', 'CANCEL', 'MODIFY'
-    ota_reference,
-    guest_name,
-    guest_email,
-    guest_phone,
-    room_type_id,
-    check_in_date,
-    check_out_date,
-    total_price,
-    commission_amount // Usually provided by OTA payloads
-  } = req.body;
-
-  if (!ota_reference || !event_type) {
-    return res.status(400).json({ error: 'Missing ota_reference or event_type' });
-  }
+  const { event_type, ota_reference, guest_name, guest_email, guest_phone, room_type_id, check_in_date, check_out_date, total_price, commission_amount } = req.body;
+  if (!ota_reference || !event_type) return res.status(400).json({ error: 'Missing ota_reference or event_type' });
 
   try {
     await pool.query('BEGIN');
-
-    // === HANDLE CANCELLATIONS ===
     if (event_type === 'CANCEL') {
-      const cancelRes = await pool.query(
-        "UPDATE bookings SET status = 'CANCELLED' WHERE ota_reference = $1 RETURNING id, room_id",
-        [ota_reference]
-      );
-      if (cancelRes.rows.length > 0) {
-        // Free up the room
-        await pool.query("UPDATE rooms SET status = 'AVAILABLE' WHERE id = $1", [cancelRes.rows[0].room_id]);
-      }
+      const cancelRes = await pool.query("UPDATE bookings SET status = 'CANCELLED' WHERE ota_reference = $1 RETURNING id, room_id", [ota_reference]);
+      if (cancelRes.rows.length > 0) await pool.query("UPDATE rooms SET status = 'AVAILABLE' WHERE id = $1", [cancelRes.rows[0].room_id]);
       await pool.query('COMMIT');
       return res.json({ status: 'success', message: 'OTA Cancellation processed' });
     }
 
-    // === HANDLE NEW BOOKINGS (CREATE) ===
     if (event_type === 'CREATE') {
-      // 1. Find or create guest
       let guestId;
       if (guest_email) {
         const guestResult = await pool.query('SELECT id FROM guests WHERE email = $1', [guest_email]);
         if (guestResult.rows.length > 0) guestId = guestResult.rows[0].id;
       }
       if (!guestId) {
-        const newGuest = await pool.query(
-          'INSERT INTO guests (name, email, phone) VALUES ($1, $2, $3) RETURNING id',
-          [guest_name, guest_email, guest_phone]
-        );
+        const newGuest = await pool.query('INSERT INTO guests (name, email, phone) VALUES ($1, $2, $3) RETURNING id', [guest_name, guest_email, guest_phone]);
         guestId = newGuest.rows[0].id;
       }
 
-      // 2. Assign room (using your existing anti-overlap logic)
       const availableRoom = await pool.query(
-        `SELECT r.id FROM rooms r 
-         WHERE r.room_type_id = $1 AND r.status != 'MAINTENANCE'
-         AND r.id NOT IN (
-             SELECT room_id FROM bookings 
-             WHERE status IN ('CONFIRMED', 'CHECKED_IN')
-             AND daterange(check_in_date, check_out_date, '[)') && daterange($2::date, $3::date, '[)')
-         ) ORDER BY r.room_number ASC LIMIT 1`,
-        [room_type_id, check_in_date, check_out_date]
+        `SELECT r.id FROM rooms r WHERE r.room_type_id = $1 AND r.status != 'MAINTENANCE' AND r.id NOT IN (
+             SELECT room_id FROM bookings WHERE status IN ('CONFIRMED', 'CHECKED_IN') AND daterange(check_in_date, check_out_date, '[)') && daterange($2::date, $3::date, '[)')
+         ) ORDER BY r.room_number ASC LIMIT 1`, [room_type_id, check_in_date, check_out_date]
       );
-
-      if (availableRoom.rows.length === 0) {
-        throw new Error('No available rooms of this type for the selected dates');
-      }
+      if (availableRoom.rows.length === 0) throw new Error('No available rooms of this type for the selected dates');
       const assignedRoomId = availableRoom.rows[0].id;
 
-      // 3. Create booking
       const bRes = await pool.query(
-        `INSERT INTO bookings (guest_id, room_id, check_in_date, check_out_date, total_price, status, source, ota_reference) 
-         VALUES ($1, $2, $3, $4, $5, 'CONFIRMED', 'OTA', $6) RETURNING id;`,
+        `INSERT INTO bookings (guest_id, room_id, check_in_date, check_out_date, total_price, status, source, ota_reference) VALUES ($1, $2, $3, $4, $5, 'CONFIRMED', 'OTA', $6) RETURNING id;`,
         [guestId, assignedRoomId, check_in_date, check_out_date, total_price, ota_reference]
       );
-
-      const newBookingId = bRes.rows[0].id;
-
-      // 4. (NEW) Finance Integration: Log the expected commission for the Finance Dashboard
       if (commission_amount) {
-        // Requires ledger_transactions table (make sure this exists from your SQL setup)
-        await pool.query(`
-          INSERT INTO ledger_transactions (booking_id, amount, transaction_type, status)
-          VALUES ($1, $2, 'OTA_COMMISSION', 'PENDING_PAYMENT')
-        `, [newBookingId, commission_amount]);
+        await pool.query(`INSERT INTO ledger_transactions (booking_id, amount, transaction_type, status) VALUES ($1, $2, 'OTA_COMMISSION', 'PENDING_PAYMENT')`, [bRes.rows[0].id, commission_amount]);
       }
-
       await pool.query('COMMIT');
       return res.status(201).json({ status: 'success', message: 'OTA Booking created' });
     }
 
-    // === HANDLE MODIFICATIONS ===
     if (event_type === 'MODIFY') {
-      // Logic to update dates or prices based on ota_reference
-      await pool.query(
-        'UPDATE bookings SET check_in_date = $1, check_out_date = $2, total_price = $3 WHERE ota_reference = $4',
-        [check_in_date, check_out_date, total_price, ota_reference]
-      );
+      await pool.query('UPDATE bookings SET check_in_date = $1, check_out_date = $2, total_price = $3 WHERE ota_reference = $4', [check_in_date, check_out_date, total_price, ota_reference]);
       await pool.query('COMMIT');
       return res.json({ status: 'success', message: 'OTA Modification processed' });
     }
-
   } catch (err) {
     await pool.query('ROLLBACK');
     console.error('Channel Admin Webhook Error:', err);
@@ -1547,10 +1250,7 @@ app.patch('/api/rooms/:id/status', verifyStaffToken, async (req, res) => {
   try {
     const result = await pool.query('UPDATE rooms SET status = $1 WHERE id = $2 RETURNING *;', [status, id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Room not found' });
-
-    // Log audit trail
     await logAuditAction(req.user.userId, 'Room Status Changed', `Room ${result.rows[0].room_number} status updated to ${status}`);
-
     res.json({ status: 'success', data: { room: result.rows[0] } });
   } catch (err) {
     res.status(500).json({ error: 'Database error while updating status' });
@@ -1558,11 +1258,11 @@ app.patch('/api/rooms/:id/status', verifyStaffToken, async (req, res) => {
 });
 
 // =========================================================================
-// Admin / Admin COMMAND CENTER EXTENDED ENDPOINTS
+// Admin / ADMIN COMMAND CENTER EXTENDED ENDPOINTS
 // =========================================================================
 
 // 1. DYNAMIC PRICING & YIELD MANAGEMENT: Fetch All Rules
-app.get('/api/admin/yield-rules', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/yield-rules', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const rules = await pool.query('SELECT * FROM yield_rules;');
     const rulesObj = {
@@ -1576,209 +1276,155 @@ app.get('/api/admin/yield-rules', verifyToken, requireRole(['ADMIN']), async (re
     rules.rows.forEach(r => { rulesObj[r.key] = r.value; });
     res.json({ status: 'success', data: { rules: rulesObj } });
   } catch (err) {
-    console.error('Yield rules fetch error:', err);
     res.status(500).json({ error: 'Database error while fetching yield rules' });
   }
 });
 
 // 2. DYNAMIC PRICING & YIELD MANAGEMENT: Update Yield Rule
-app.post('/api/admin/yield-rules', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/Admin/yield-rules', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { key, value } = req.body;
   if (!key || value === undefined) return res.status(400).json({ error: 'Key and value are required' });
-
   try {
-    await pool.query(
-      'INSERT INTO yield_rules (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;',
-      [key, value]
-    );
+    await pool.query('INSERT INTO yield_rules (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;', [key, value]);
     await logAuditAction(req.user.userId, 'Update Yield Rule', `Updated configuration for rule: ${key}`);
     res.json({ status: 'success', message: `Rule ${key} updated successfully` });
   } catch (err) {
-    console.error('Yield rule save error:', err);
     res.status(500).json({ error: 'Failed to update yield rule configuration' });
   }
 });
 
 // 3. SYSTEM WATCHDOG: Fetch Immutable Audit Trail
-app.get('/api/admin/audit-logs', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/audit-logs', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { q } = req.query;
   try {
     let query = 'SELECT * FROM system_audit_logs ORDER BY created_at DESC LIMIT 100;';
     let params = [];
     if (q && q.trim() !== '') {
-      query = `
-        SELECT * FROM system_audit_logs 
-        WHERE user_name ILIKE $1 OR user_role ILIKE $1 OR action ILIKE $1 OR details ILIKE $1
-        ORDER BY created_at DESC LIMIT 100;
-      `;
+      query = `SELECT * FROM system_audit_logs WHERE user_name ILIKE $1 OR user_role ILIKE $1 OR action ILIKE $1 OR details ILIKE $1 ORDER BY created_at DESC LIMIT 100;`;
       params = [`%${q}%`];
     }
     const logs = await pool.query(query, params);
     res.json({ status: 'success', data: { logs: logs.rows } });
   } catch (err) {
-    console.error('Audit trail query error:', err);
     res.status(500).json({ error: 'Failed to query system watchdog audits' });
   }
 });
 
 // 4. ACCESS CONTROL: Fetch All User Roles & Custom Permissions
-app.get('/api/admin/permissions', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/permissions', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const permQuery = `
-      SELECT u.id, u.name, u.email, u.role, 
-             COALESCE(p.can_process_refunds, false) as can_process_refunds,
-             COALESCE(p.can_apply_discounts, false) as can_apply_discounts,
-             COALESCE(p.can_overbook, false) as can_overbook
-      FROM users u
-      LEFT JOIN user_permissions p ON u.id = p.user_id
-      ORDER BY u.role, u.name;
+      SELECT u.id, u.name, u.email, u.role, COALESCE(p.can_process_refunds, false) as can_process_refunds, COALESCE(p.can_apply_discounts, false) as can_apply_discounts, COALESCE(p.can_overbook, false) as can_overbook
+      FROM users u LEFT JOIN user_permissions p ON u.id = p.user_id ORDER BY u.role, u.name;
     `;
     const usersPerm = await pool.query(permQuery);
     res.json({ status: 'success', data: { permissions: usersPerm.rows } });
   } catch (err) {
-    console.error('Permissions fetch error:', err);
     res.status(500).json({ error: 'Failed to retrieve access control matrix' });
   }
 });
 
 // 5. ACCESS CONTROL: Save Specific User Permissions
-app.post('/api/admin/permissions/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/Admin/permissions/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { userId } = req.params;
   const { role, can_process_refunds, can_apply_discounts, can_overbook } = req.body;
-
   try {
     await pool.query('BEGIN');
-
-    // Update user role
     await pool.query('UPDATE users SET role = $1 WHERE id = $2', [role, userId]);
-
-    // Update or insert granular permissions
     await pool.query(`
-      INSERT INTO user_permissions (user_id, can_process_refunds, can_apply_discounts, can_overbook)
-      VALUES ($1, $2, $3, $4)
-      ON CONFLICT (user_id) DO UPDATE SET 
-        can_process_refunds = EXCLUDED.can_process_refunds,
-        can_apply_discounts = EXCLUDED.can_apply_discounts,
-        can_overbook = EXCLUDED.can_overbook;
+      INSERT INTO user_permissions (user_id, can_process_refunds, can_apply_discounts, can_overbook) VALUES ($1, $2, $3, $4)
+      ON CONFLICT (user_id) DO UPDATE SET can_process_refunds = EXCLUDED.can_process_refunds, can_apply_discounts = EXCLUDED.can_apply_discounts, can_overbook = EXCLUDED.can_overbook;
     `, [userId, can_process_refunds, can_apply_discounts, can_overbook]);
-
     await pool.query('COMMIT');
     await logAuditAction(req.user.userId, 'Modify Access Matrix', `Updated permissions and role for user ID: ${userId}`);
     res.json({ status: 'success', message: 'User access levels saved successfully' });
   } catch (err) {
     await pool.query('ROLLBACK');
-    console.error('Save permissions error:', err);
     res.status(500).json({ error: 'Database error saving user access matrix' });
   }
 });
 
 // 6. SHIFT & ACTIVE STAFF SESSION MONITORING
-app.get('/api/admin/shifts', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/shifts', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const shiftQuery = `
-      SELECT s.id, u.id as user_id, u.name, u.email, u.role, s.login_time, s.logout_time,
-             (CASE WHEN s.logout_time IS NULL THEN true ELSE false END) as is_active,
-             ROUND(
-               EXTRACT(EPOCH FROM (COALESCE(s.logout_time, NOW()) - s.login_time)) / 60
-             )::int AS duration_minutes
-      FROM staff_shifts s
-      JOIN users u ON s.user_id = u.id
-      ORDER BY s.login_time DESC LIMIT 60;
+      SELECT s.id, u.id as user_id, u.name, u.email, u.role, s.login_time, s.logout_time, (CASE WHEN s.logout_time IS NULL THEN true ELSE false END) as is_active, ROUND(EXTRACT(EPOCH FROM (COALESCE(s.logout_time, NOW()) - s.login_time)) / 60)::int AS duration_minutes
+      FROM staff_shifts s JOIN users u ON s.user_id = u.id ORDER BY s.login_time DESC LIMIT 60;
     `;
     const shifts = await pool.query(shiftQuery);
     res.json({ status: 'success', data: { shifts: shifts.rows } });
   } catch (err) {
-    console.error('Shifts fetch error:', err);
     res.status(500).json({ error: 'Failed to access active staff logs' });
   }
 });
 
 // 6b. STAFF SALARY CONFIGURATION
-app.get('/api/admin/salaries', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/salaries', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM staff_salaries');
     res.json({ status: 'success', data: { salaries: result.rows } });
   } catch (err) {
-    console.error('Salaries fetch error:', err);
     res.status(500).json({ error: 'Failed to access salary configurations' });
   }
 });
 
-app.get('/api/admin/salary/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/salary/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const { userId } = req.params;
     const result = await pool.query('SELECT * FROM staff_salaries WHERE user_id = $1', [userId]);
-    if (result.rows.length === 0) {
-      // Return default if none found
-      return res.json({ status: 'success', data: { salaryConfig: { base_salary_monthly: 0, daily_deduction: 0 } } });
-    }
+    if (result.rows.length === 0) return res.json({ status: 'success', data: { salaryConfig: { base_salary_monthly: 0, daily_deduction: 0 } } });
     res.json({ status: 'success', data: { salaryConfig: result.rows[0] } });
   } catch (err) {
-    console.error('Salary config fetch error:', err);
     res.status(500).json({ error: 'Failed to access salary configuration' });
   }
 });
 
-app.post('/api/admin/salary/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/Admin/salary/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const { userId } = req.params;
     const { base_salary_monthly, daily_deduction } = req.body;
 
     await pool.query(`
-      INSERT INTO staff_salaries (user_id, base_salary_monthly, daily_deduction)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (user_id) 
-      DO UPDATE SET base_salary_monthly = EXCLUDED.base_salary_monthly, daily_deduction = EXCLUDED.daily_deduction, updated_at = NOW()
+      INSERT INTO staff_salaries (user_id, base_salary_monthly, daily_deduction) VALUES ($1, $2, $3)
+      ON CONFLICT (user_id) DO UPDATE SET base_salary_monthly = EXCLUDED.base_salary_monthly, daily_deduction = EXCLUDED.daily_deduction, updated_at = NOW()
     `, [userId, base_salary_monthly, daily_deduction]);
 
     await logAuditAction(req.user.userId, 'Salary Config Updated', `Updated salary rules for user ID ${userId}`);
     res.json({ status: 'success', message: 'Salary configuration saved successfully' });
   } catch (err) {
-    console.error('Salary config update error:', err);
     res.status(500).json({ error: 'Failed to update salary configuration' });
   }
 });
 
 // 7. CRM / GUEST REGISTRY: VIP & Blacklist Controls
-app.get('/api/admin/crm/guests', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/crm/guests', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const guests = await pool.query('SELECT * FROM guests ORDER BY is_vip DESC, is_blacklisted DESC, name ASC;');
     res.json({ status: 'success', data: { guests: guests.rows } });
   } catch (err) {
-    console.error('CRM guests fetch error:', err);
     res.status(500).json({ error: 'Database error while fetching CRM guest registry' });
   }
 });
 
-app.post('/api/admin/crm/guests/:id', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/Admin/crm/guests/:id', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { id } = req.params;
   const { is_vip, is_blacklisted } = req.body;
-
   try {
-    await pool.query(
-      'UPDATE guests SET is_vip = $1, is_blacklisted = $2 WHERE id = $3 RETURNING *;',
-      [!!is_vip, !!is_blacklisted, id]
-    );
-    await logAuditAction(
-      req.user.userId,
-      'Modify Guest CRM Flag',
-      `Updated guest CRM configuration (VIP: ${!!is_vip}, Blacklist: ${!!is_blacklisted})`
-    );
+    await pool.query('UPDATE guests SET is_vip = $1, is_blacklisted = $2 WHERE id = $3 RETURNING *;', [!!is_vip, !!is_blacklisted, id]);
+    await logAuditAction(req.user.userId, 'Modify Guest CRM Flag', `Updated guest CRM configuration (VIP: ${!!is_vip}, Blacklist: ${!!is_blacklisted})`);
     res.json({ status: 'success', message: 'Guest registry flags updated' });
   } catch (err) {
-    console.error('Update guest flags error:', err);
     res.status(500).json({ error: 'Failed to modify guest configuration parameters' });
   }
 });
 
 // 8. DEPARTMENTAL BROADCASTING
-app.post('/api/admin/broadcast', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/Admin/broadcast', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { targetDept, message } = req.body;
   if (!message) return res.status(400).json({ error: 'Message content is required' });
-
   try {
     const senderName = await pool.query('SELECT name FROM users WHERE id = $1', [req.user.userId]);
-    const name = senderName.rows.length > 0 ? senderName.rows[0].name : 'ADMIN';
+    const name = senderName.rows.length > 0 ? senderName.rows[0].name : 'Admin';
 
     await pool.query(
       `INSERT INTO broadcasts (target_dept, message, sender_id, sender_name, expires_at)
@@ -1793,139 +1439,237 @@ app.post('/api/admin/broadcast', verifyToken, requireRole(['ADMIN']), async (req
     );
     res.json({ status: 'success', message: 'Operational broadcast transmitted successfully' });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: 'Failed to process broadcasting task' });
   }
 });
 
-// 8b. Fetch Active Broadcasts
 app.get('/api/broadcasts', verifyToken, async (req, res) => {
   try {
     const userRes = await pool.query('SELECT role FROM users WHERE id = $1', [req.user.userId]);
     const userRole = userRes.rows.length > 0 ? userRes.rows[0].role : 'NONE';
-
-    const result = await pool.query(
-      `SELECT id, target_dept, message, sender_name, created_at, expires_at 
-       FROM broadcasts 
-       WHERE (target_dept = 'ALL' OR UPPER(target_dept) = UPPER($1) OR $1 = 'ADMIN')
-       ORDER BY created_at DESC`,
-      [userRole]
-    );
+    const result = await pool.query(`SELECT id, target_dept, message, sender_name, created_at, expires_at FROM broadcasts WHERE (target_dept = 'ALL' OR UPPER(target_dept) = UPPER($1) OR $1 = 'ADMIN') ORDER BY created_at DESC`, [userRole]);
     res.json({ status: 'success', data: { broadcasts: result.rows } });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: 'Failed to fetch broadcasts' });
   }
 });
 
 // 9. HR lifecycle: Onboard Employee
-app.post('/api/admin/staff/onboard', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/Admin/staff/onboard', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { email, password, name, role } = req.body;
   if (!email || !password || !name) return res.status(400).json({ error: 'All fields are required' });
-
   try {
     await pool.query('BEGIN');
     const hash = await bcrypt.hash(password, 10);
-    const newUser = await pool.query(
-      'INSERT INTO users (email, password_hash, name, role) VALUES ($1, $2, $3, $4) RETURNING id, email, name, role;',
-      [email.toLowerCase().trim(), hash, name, role || 'FRONT_DESK']
-    );
-
-    // Create initial permissions record
-    await pool.query(
-      'INSERT INTO user_permissions (user_id, can_process_refunds, can_apply_discounts, can_overbook) VALUES ($1, true, true, true)',
-      [newUser.rows[0].id]
-    );
-
+    const newUser = await pool.query('INSERT INTO users (email, password_hash, name, role) VALUES ($1, $2, $3, $4) RETURNING id, email, name, role;', [email.toLowerCase().trim(), hash, name, role || 'FRONT_DESK']);
+    await pool.query('INSERT INTO user_permissions (user_id, can_process_refunds, can_apply_discounts, can_overbook) VALUES ($1, true, true, true)', [newUser.rows[0].id]);
     await pool.query('COMMIT');
     await logAuditAction(req.user.userId, 'Onboard Staff Member', `Provisioned new staff user profile: ${email} (${role})`);
     res.json({ status: 'success', data: { user: newUser.rows[0] } });
   } catch (err) {
     await pool.query('ROLLBACK');
-    console.error('Staff onboarding error:', err);
     if (err.code === '23505') return res.status(400).json({ error: 'An account with this email address already exists' });
     res.status(500).json({ error: 'Failed to complete employee provisioning process' });
   }
 });
 
 // 10. HR lifecycle: Update Employee Details
-app.patch('/api/admin/staff/:id', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.patch('/api/Admin/staff/:id', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { id } = req.params;
   const { name, email } = req.body;
   if (!name || !email) return res.status(400).json({ error: 'Name and email are required' });
-
   try {
-    const updated = await pool.query(
-      'UPDATE users SET name = $1, email = $2 WHERE id = $3 RETURNING id, email, name, role;',
-      [name, email.toLowerCase().trim(), id]
-    );
+    const updated = await pool.query('UPDATE users SET name = $1, email = $2 WHERE id = $3 RETURNING id, email, name, role;', [name, email.toLowerCase().trim(), id]);
     if (updated.rows.length === 0) return res.status(404).json({ error: 'User not found' });
     await logAuditAction(req.user.userId, 'Update Staff Member', `Updated profile for ${email}`);
     res.json({ status: 'success', data: { user: updated.rows[0] } });
   } catch (err) {
-    console.error('Staff update error:', err);
     res.status(500).json({ error: 'Failed to update employee details' });
   }
 });
 
 // 11. HR lifecycle: Offboard Employee
-app.post('/api/admin/staff/offboard/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/Admin/staff/offboard/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   const { userId } = req.params;
-  if (userId === req.user.userId) return res.status(400).json({ error: 'You cannot offboard your own Administrator account' });
+  if (userId === req.user.userId) return res.status(400).json({ error: 'You cannot offboard your own administrator account' });
 
   try {
     const userRes = await pool.query('SELECT email FROM users WHERE id = $1', [userId]);
     if (userRes.rows.length === 0) return res.status(404).json({ error: 'Employee profile not found' });
-
     await pool.query('DELETE FROM users WHERE id = $1', [userId]);
     await logAuditAction(req.user.userId, 'Offboard Staff Member', `Revoked all operational access and deleted user account: ${userRes.rows[0].email}`);
     res.json({ status: 'success', message: 'Employee offboarded and credential tokens disabled' });
   } catch (err) {
-    console.error('Staff offboarding error:', err);
     res.status(500).json({ error: 'Failed to complete employee termination protocol' });
   }
 });
 
 // 11. PREDICTIVE ANALYTICS & STATS PACE ENGINE
-app.get('/api/admin/analytics', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/analytics', verifyToken, requireRole(['ADMIN']), async (req, res) => {
   try {
-    // A. Pace Report: Simulated comparison series (booking pace this month vs last year)
-    const currentMonthPace = [
-      { day: 1, velocity: 12 }, { day: 5, velocity: 18 }, { day: 10, velocity: 26 },
-      { day: 15, velocity: 38 }, { day: 20, velocity: 49 }, { day: 25, velocity: 63 }, { day: 30, velocity: 74 }
-    ];
-    const lastYearMonthPace = [
-      { day: 1, velocity: 8 }, { day: 5, velocity: 14 }, { day: 10, velocity: 22 },
-      { day: 15, velocity: 30 }, { day: 20, velocity: 41 }, { day: 25, velocity: 52 }, { day: 30, velocity: 61 }
-    ];
+    const currentMonthPace = [{ day: 1, velocity: 12 }, { day: 5, velocity: 18 }, { day: 10, velocity: 26 }, { day: 15, velocity: 38 }, { day: 20, velocity: 49 }, { day: 25, velocity: 63 }, { day: 30, velocity: 74 }];
+    const lastYearMonthPace = [{ day: 1, velocity: 8 }, { day: 5, velocity: 14 }, { day: 10, velocity: 22 }, { day: 15, velocity: 30 }, { day: 20, velocity: 41 }, { day: 25, velocity: 52 }, { day: 30, velocity: 61 }];
+    const cancellationRates = [{ category: 'Suite (Expedia)', rate: 28 }, { category: 'Deluxe (Expedia)', rate: 19 }, { category: 'Standard (Booking.com)', rate: 24 }, { category: 'Suite (Booking.com)', rate: 15 }, { category: 'Deluxe (Agoda)', rate: 22 }, { category: 'Standard (Direct Booking)', rate: 4 }];
+    const staffKPIs = [{ name: 'Rajnish (Housekeeper)', metric: '26 mins avg clean time', status: 'Optimal' }, { name: 'Amit Sharma (Front Desk)', metric: '84% upsell booking rate', status: 'Exceptional' }, { name: 'John (Engineer)', metric: '1.2 hrs ticket resolution', status: 'Optimal' }];
+    res.json({ status: 'success', data: { pace: { current: currentMonthPace, lastYear: lastYearMonthPace }, cancellationHeatmap: cancellationRates, staffKPIs } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to calculate booking pace metrics' });
+  }
+});
 
-    // B. Cancellation Heatmap: Rates by room type and booking channel
-    const cancellationRates = [
-      { category: 'Suite (Expedia)', rate: 28 },
-      { category: 'Deluxe (Expedia)', rate: 19 },
-      { category: 'Standard (Booking.com)', rate: 24 },
-      { category: 'Suite (Booking.com)', rate: 15 },
-      { category: 'Deluxe (Agoda)', rate: 22 },
-      { category: 'Standard (Direct Booking)', rate: 4 }
-    ];
+// ==========================================
+// DINING MODULE ENDPOINTS
+// ==========================================
+const requireDining = requireRole(['RESTAURANT', 'ADMIN']);
 
-    // C. Staff Performance metrics
-    const staffKPIs = [
-      { name: 'Rajnish (Housekeeper)', metric: '26 mins avg clean time', status: 'Optimal' },
-      { name: 'Amit Sharma (Front Desk)', metric: '84% upsell booking rate', status: 'Exceptional' },
-      { name: 'John (Engineer)', metric: '1.2 hrs ticket resolution', status: 'Optimal' }
-    ];
+app.get('/api/dining/kots', verifyToken, requireDining, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM dining_kots ORDER BY created_at DESC');
+    res.json({ status: 'success', data: result.rows });
+  } catch (err) { res.status(500).json({ error: 'Failed to fetch KOTs' }); }
+});
+
+app.post('/api/dining/kots', verifyToken, requireDining, async (req, res) => {
+  const { table, items, type } = req.body;
+  try {
+    const result = await pool.query('INSERT INTO dining_kots (table_number, items, type) VALUES ($1, $2, $3) RETURNING *', [table, items, type || 'Dine-in']);
+    res.status(201).json({ status: 'success', data: result.rows[0] });
+  } catch (err) { res.status(500).json({ error: 'Failed to create KOT' }); }
+});
+
+app.get('/api/dining/tables', verifyToken, requireDining, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM dining_tables ORDER BY id ASC');
+    res.json({ status: 'success', data: result.rows });
+  } catch (err) { res.status(500).json({ error: 'Failed to fetch tables' }); }
+});
+
+app.get('/api/dining/menu', verifyToken, requireDining, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM dining_menu ORDER BY orders DESC');
+    res.json({ status: 'success', data: result.rows });
+  } catch (err) { res.status(500).json({ error: 'Failed to fetch menu' }); }
+});
+
+app.get('/api/dining/overview', verifyToken, requireDining, async (req, res) => {
+  try {
+    const activeKotsRes = await pool.query("SELECT COUNT(*) FROM dining_kots WHERE status != 'Served'");
+    const occupiedTablesRes = await pool.query("SELECT COUNT(*) FROM dining_tables WHERE status = 'Occupied'");
+    const totalTablesRes = await pool.query("SELECT COUNT(*) FROM dining_tables");
+
+    const activeKots = parseInt(activeKotsRes.rows[0].count);
+    const occupiedTables = parseInt(occupiedTablesRes.rows[0].count);
+    const totalTables = parseInt(totalTablesRes.rows[0].count);
 
     res.json({
       status: 'success',
       data: {
-        pace: { current: currentMonthPace, lastYear: lastYearMonthPace },
-        cancellationHeatmap: cancellationRates,
-        staffKPIs
+        metrics: [
+          { label: "Today's Revenue", value: "₹42,500", sub: "Rooms & Walk-ins", iconName: 'Receipt', theme: '#D4A373' },
+          { label: "Active KOTs", value: activeKots.toString(), sub: "Orders preparing in kitchen", iconName: 'Flame', theme: 'rose' },
+          { label: "Avg Prep Time", value: "18m", sub: "-2m compared to yesterday", iconName: 'Clock', theme: '#D4A373' },
+          { label: "Tables Occupied", value: `${occupiedTables}/${totalTables}`, sub: `${Math.round((occupiedTables / totalTables) * 100 || 0)}% current seating capacity`, iconName: 'Users', theme: 'indigo' },
+        ],
+        orderTrend: [
+          { label: 'Mon', value: 84 }, { label: 'Tue', value: 92 }, { label: 'Wed', value: 110 },
+          { label: 'Thu', value: 105 }, { label: 'Fri', value: 135 }, { label: 'Sat', value: 156 },
+          { label: 'Today', value: 88, isToday: true },
+        ],
+        salesSplit: [
+          { label: 'In-Room Dining', value: 45, color: '#0ea5e9' },
+          { label: 'Restaurant Dine-in', value: 30, color: '#f59e0b' },
+          { label: 'Bar & Lounge', value: 13, color: '#ec4899' },
+        ]
       }
     });
+  } catch (err) { res.status(500).json({ error: 'Failed to fetch overview' }); }
+});
+
+// ==========================================
+// Sales ENDPOINTS
+// ==========================================
+const requireSales = requireRole(['SALES', 'ADMIN']);
+
+app.get('/api/sales/leads', verifyToken, requireSales, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM sales_leads ORDER BY created_at DESC');
+    res.json({ status: 'success', data: result.rows });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to calculate booking pace metrics' });
+    res.status(500).json({ error: 'Failed to fetch leads' });
+  }
+});
+
+app.post('/api/sales/leads', verifyToken, requireSales, async (req, res) => {
+  const { company, deal_name, value, stage, source, contact_name, contact_email, contact_phone } = req.body;
+  try {
+    const result = await pool.query(
+      `INSERT INTO sales_leads (company, deal_name, value, stage, source, contact_name, contact_email, contact_phone) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [company, deal_name, value || 0, stage || 'New', source, contact_name, contact_email, contact_phone]
+    );
+    res.status(201).json({ status: 'success', data: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create lead' });
+  }
+});
+
+app.patch('/api/sales/leads/:id/stage', verifyToken, requireSales, async (req, res) => {
+  const { stage } = req.body;
+  const { id } = req.params;
+  try {
+    const result = await pool.query('UPDATE sales_leads SET stage = $1 WHERE id = $2 RETURNING *', [stage, id]);
+    res.json({ status: 'success', data: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update lead stage' });
+  }
+});
+
+app.get('/api/sales/accounts', verifyToken, requireSales, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM sales_accounts ORDER BY ytd_revenue DESC');
+    res.json({ status: 'success', data: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch accounts' });
+  }
+});
+
+app.post('/api/sales/accounts', verifyToken, requireSales, async (req, res) => {
+  const { name, industry, rate, ytd_revenue, status } = req.body;
+  try {
+    const result = await pool.query(
+      `INSERT INTO sales_accounts (name, industry, rate, ytd_revenue, status) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [name, industry, rate || 0, ytd_revenue || 0, status || 'Onboarding']
+    );
+    res.status(201).json({ status: 'success', data: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create account' });
+  }
+});
+
+app.get('/api/sales/tasks', verifyToken, requireSales, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM sales_tasks ORDER BY deadline ASC');
+    res.json({ status: 'success', data: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch tasks' });
+  }
+});
+
+app.get('/api/sales/ota', verifyToken, requireSales, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM ota_performance ORDER BY gross_revenue DESC');
+    res.json({ status: 'success', data: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch OTA data' });
+  }
+});
+
+app.get('/api/sales/booking-modes', verifyToken, requireSales, async (req, res) => {
+  try {
+    const result = await pool.query(`SELECT source as label, SUM(total_price) as value FROM bookings WHERE status != 'CANCELLED' GROUP BY source`);
+    res.json({ status: 'success', data: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch booking modes' });
   }
 });
 
@@ -1934,15 +1678,115 @@ app.get('/api/admin/analytics', verifyToken, requireRole(['ADMIN']), async (req,
 // ==========================================
 async function runMigrations() {
   try {
-    // 1. Add INSPECTING to room_status ENUM if not present
-    const enumCheck = await pool.query(
-      "SELECT 1 FROM pg_enum WHERE enumlabel = 'INSPECTING' AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'room_status')"
-    );
+    const enumCheck = await pool.query("SELECT 1 FROM pg_enum WHERE enumlabel = 'INSPECTING' AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'room_status')");
     if (enumCheck.rows.length === 0) {
       await pool.query("ALTER TYPE room_status ADD VALUE IF NOT EXISTS 'INSPECTING'");
     }
 
-    // 2. Create room_expenses table if not exists
+    // DINING MODULE TABLES
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS dining_kots (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        table_number VARCHAR(50) NOT NULL,
+        items TEXT NOT NULL,
+        status VARCHAR(50) NOT NULL DEFAULT 'New',
+        type VARCHAR(50) NOT NULL DEFAULT 'Dine-in',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS dining_tables (
+        id VARCHAR(10) PRIMARY KEY,
+        capacity INT DEFAULT 2,
+        status VARCHAR(50) DEFAULT 'Available',
+        time VARCHAR(50)
+      );
+
+      CREATE TABLE IF NOT EXISTS dining_menu (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        item VARCHAR(255) NOT NULL,
+        category VARCHAR(100),
+        orders INT DEFAULT 0,
+        revenue DECIMAL(12,2) DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'In Stock'
+      );
+    `);
+
+    // Seed dining data
+    const tablesCount = await pool.query('SELECT COUNT(*) FROM dining_tables');
+    if (parseInt(tablesCount.rows[0].count) === 0) {
+      const tables = [
+        ['T1', 2, 'Available', null], ['T2', 4, 'Occupied', '45m'],
+        ['T3', 4, 'Dirty', null], ['T4', 6, 'Occupied', '15m'],
+        ['T5', 2, 'Available', null], ['T6', 8, 'Reserved', '8:00 PM'],
+        ['T7', 4, 'Available', null], ['T8', 4, 'Occupied', '55m'],
+      ];
+      for (const t of tables) {
+        await pool.query('INSERT INTO dining_tables (id, capacity, status, time) VALUES ($1, $2, $3, $4)', t);
+      }
+    }
+
+    const menuCount = await pool.query('SELECT COUNT(*) FROM dining_menu');
+    if (parseInt(menuCount.rows[0].count) === 0) {
+      const menu = [
+        ['Butter Chicken', 'Main Course', 145, 65250, 'In Stock'],
+        ['Club Sandwich', 'Snacks', 98, 24500, 'In Stock'],
+        ['Paneer Tikka', 'Starters', 84, 26880, 'Low Stock'],
+        ['Fresh Lime Soda', 'Beverages', 112, 16800, 'In Stock'],
+      ];
+      for (const m of menu) {
+        await pool.query('INSERT INTO dining_menu (item, category, orders, revenue, status) VALUES ($1, $2, $3, $4, $5)', m);
+      }
+    }
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS sales_leads (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company VARCHAR(255) NOT NULL,
+        deal_name VARCHAR(255) NOT NULL,
+        value DECIMAL(12, 2) NOT NULL DEFAULT 0,
+        stage VARCHAR(50) NOT NULL DEFAULT 'New',
+        source VARCHAR(100),
+        contact_name VARCHAR(255),
+        contact_email VARCHAR(255),
+        contact_phone VARCHAR(50),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS sales_accounts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL,
+        industry VARCHAR(100),
+        rate DECIMAL(10, 2) DEFAULT 0,
+        ytd_revenue DECIMAL(15, 2) DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'Active',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS sales_tasks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        title VARCHAR(255) NOT NULL,
+        type VARCHAR(50),
+        deadline TIMESTAMP WITH TIME ZONE,
+        status VARCHAR(50) DEFAULT 'Pending',
+        priority VARCHAR(50) DEFAULT 'Medium',
+        client VARCHAR(255),
+        assigner VARCHAR(255),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS ota_performance (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(100) NOT NULL,
+        color VARCHAR(20),
+        bookings INT DEFAULT 0,
+        room_nights INT DEFAULT 0,
+        gross_revenue DECIMAL(15,2) DEFAULT 0,
+        commission_rate DECIMAL(5,2) DEFAULT 0,
+        cancel_rate DECIMAL(5,2) DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'Active'
+      );
+    `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS room_expenses (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1955,24 +1799,19 @@ async function runMigrations() {
       )
     `);
 
-    // 3. Seed default yield_rules if they do not exist yet
     const seedRules = [
       { key: 'pricing_surges', value: { enabled: false, surge_percentage: 20, occupancy_threshold: 80 } },
       { key: 'los_discount', value: { enabled: false, min_nights: 5, discount_percentage: 10 } },
       { key: 'seasonal_multiplier', value: [] },
-      { key: 'channel_manager', value: { master_ota_toggle: false, allotments: { agoda: 5, direct: 10, expedia: 5, booking_com: 5 } } },
+      { key: 'channel_Admin', value: { master_ota_toggle: false, allotments: { agoda: 5, direct: 10, expedia: 5, booking_com: 5 } } },
       { key: 'crm_triggers', value: { pre_arrival_upsell: false, post_checkout_feedback: false } },
       { key: 'maintenance_automation', value: { ac_servicing_days: 90, backup_contractor: 'QuickFix Hospitality Group', auto_route_contractor: false, generator_check_days: 30 } }
     ];
 
     for (const rule of seedRules) {
-      await pool.query(
-        'INSERT INTO yield_rules (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING;',
-        [rule.key, JSON.stringify(rule.value)]
-      );
+      await pool.query('INSERT INTO yield_rules (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING;', [rule.key, JSON.stringify(rule.value)]);
     }
 
-    // 4. Merge migrate.js logic
     await pool.query(`
       CREATE TABLE IF NOT EXISTS ledger_transactions (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -2004,7 +1843,6 @@ async function runMigrations() {
 
     console.log('✅ Auto-migrations completed successfully.');
 
-    // Add columns dynamically (ignore error if they already exist)
     const columnsToAdd = [
       "ALTER TABLE bookings ADD COLUMN source VARCHAR(50) DEFAULT 'DIRECT'",
       "ALTER TABLE bookings ADD COLUMN ota_reference VARCHAR(255)",
@@ -2015,20 +1853,12 @@ async function runMigrations() {
       try {
         await pool.query(query);
       } catch (err) {
-        // Postgres error code 42701 is "duplicate_column"
-        if (err.code !== '42701') {
-          console.error(`⚠️ Migration: Error executing ${query}`, err.message);
-        }
+        if (err.code !== '42701') console.error(`⚠️ Migration: Error executing ${query}`, err.message);
       }
     }
 
-    // 5. TRAVEL DESK MODULE — enum value, tables, seed data, seed login
-    const travelRoleCheck = await pool.query(
-      "SELECT 1 FROM pg_enum WHERE enumlabel = 'TRAVEL' AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'user_role')"
-    );
-    if (travelRoleCheck.rows.length === 0) {
-      await pool.query("ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'TRAVEL'");
-    }
+    const travelRoleCheck = await pool.query("SELECT 1 FROM pg_enum WHERE enumlabel = 'TRAVEL' AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'user_role')");
+    if (travelRoleCheck.rows.length === 0) await pool.query("ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'TRAVEL'");
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS travel_packages (
@@ -2062,7 +1892,6 @@ async function runMigrations() {
       );
     `);
 
-    // Seed sample packages if the catalog is empty
     const pkgCountRes = await pool.query('SELECT COUNT(*) FROM travel_packages');
     if (parseInt(pkgCountRes.rows[0].count, 10) === 0) {
       const packages = [
@@ -2074,40 +1903,10 @@ async function runMigrations() {
         ['Maldives Honeymoon Special', 'Maldives', 'Overwater villa stay with private dinners, snorkeling and spa credits.', 'Honeymoon', 125000, 5, 2],
       ];
       for (const p of packages) {
-        await pool.query(
-          `INSERT INTO travel_packages (name, destination, description, category, price, duration_days, max_travelers)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          p
-        );
-      }
-
-      // Seed a handful of bookings against the freshly created packages
-      const seededPackages = await pool.query('SELECT id, price, name FROM travel_packages');
-      const findPkg = (name) => seededPackages.rows.find(r => r.name === name);
-      const bookingSeeds = [
-        ['Aryan Singh', 'aryan.singh@example.com', '+91 98200 11122', 2, 12, 'Goa Beach Escape', 'Paid', 'Confirmed'],
-        ['Priya Nair', 'priya.nair@example.com', '+91 98450 33221', 4, 20, 'Kerala Backwaters Retreat', 'Paid', 'Confirmed'],
-        ['Meridian Corporate Travel', 'travel@meridiancorp.com', '+91 98220 44556', 6, 35, 'Rajasthan Heritage Trail', 'Partial', 'Confirmed'],
-        ['Rohan Desai', 'rohan.desai@example.com', '+91 99870 55221', 2, -5, 'Dubai City Break', 'Paid', 'Completed'],
-        ['Vikram & Anjali Malhotra', 'vikram.m@example.com', '+91 98330 77441', 2, 45, 'Maldives Honeymoon Special', 'Partial', 'Confirmed'],
-        ['Zenith Adventure Club', 'contact@zenithadventure.com', '+91 97410 88332', 8, 18, 'Himalayan Trek Adventure', 'Pending', 'Confirmed'],
-        ['Sanya Kapoor', 'sanya.kapoor@example.com', '+91 98110 22114', 1, -12, 'Goa Beach Escape', 'Paid', 'Completed'],
-        ['Corporate Account — Infosys', 'travel.desk@infosys.com', '+91 98800 99112', 10, 40, 'Dubai City Break', 'Pending', 'Confirmed'],
-      ];
-      for (const b of bookingSeeds) {
-        const [guest, email, phone, travelers, dayOffset, pkgName, paymentStatus, bookingStatus] = b;
-        const pkg = findPkg(pkgName);
-        if (!pkg) continue;
-        const amount = Number(pkg.price) * travelers;
-        await pool.query(
-          `INSERT INTO travel_bookings (package_id, guest_name, guest_email, guest_phone, travelers_count, travel_date, amount, payment_status, booking_status)
-           VALUES ($1, $2, $3, $4, $5, CURRENT_DATE + $6::int, $7, $8, $9)`,
-          [pkg.id, guest, email, phone, travelers, dayOffset, amount, paymentStatus, bookingStatus]
-        );
+        await pool.query(`INSERT INTO travel_packages (name, destination, description, category, price, duration_days, max_travelers) VALUES ($1, $2, $3, $4, $5, $6, $7)`, p);
       }
     }
 
-    // Seed the Travel Desk login (idempotent — skipped if it already exists)
     const travelUserRes = await pool.query('SELECT id FROM users WHERE email = $1', ['travel@techhansa.com']);
     if (travelUserRes.rows.length === 0) {
       const travelHash = await bcrypt.hash('password123', 10);
@@ -2140,373 +1939,6 @@ async function runMigrations() {
   }
 }
 
-// ==========================================
-// FINANCE & LEDGER ENDPOINTS
-// ==========================================
-
-// 0. Cash Register
-app.get('/api/finance/cash-register', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
-  try {
-    const latestCount = await pool.query("SELECT * FROM cash_drawer_logs ORDER BY counted_at DESC LIMIT 1");
-    res.json({ status: 'success', data: latestCount.rows[0] || null });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch cash register' });
-  }
-});
-
-app.post('/api/finance/cash-register', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
-  try {
-    const { actual_amount, notes } = req.body;
-    // Calculate expected amount: Start with previous actual amount, add cash revenues, subtract cash expenses since last count.
-    // For simplicity, we just look at net cash since last count.
-    const lastCount = await pool.query("SELECT * FROM cash_drawer_logs ORDER BY counted_at DESC LIMIT 1");
-    const lastTime = lastCount.rows.length > 0 ? lastCount.rows[0].counted_at : new Date(0);
-
-    // Get total cash revenue since last count
-    const cashRevRes = await pool.query(
-      "SELECT COALESCE(SUM(amount), 0) AS total FROM ledger_transactions WHERE payment_method = 'Cash' AND transaction_type IN ('Revenue', 'Folio Payment', 'Payment') AND created_at > $1",
-      [lastTime]
-    );
-    const cashRev = Number(cashRevRes.rows[0].total);
-
-    // Get total cash expenses since last count
-    const cashExpRes = await pool.query(
-      "SELECT COALESCE(SUM(amount), 0) AS total FROM ledger_transactions WHERE payment_method = 'Cash' AND transaction_type IN ('Expense', 'Refund') AND created_at > $1",
-      [lastTime]
-    );
-    const cashExp = Number(cashExpRes.rows[0].total);
-
-    const prevBalance = lastCount.rows.length > 0 ? Number(lastCount.rows[0].actual_amount) : 0;
-    const expected_amount = prevBalance + cashRev - cashExp;
-
-    let status = 'Balanced';
-    if (Number(actual_amount) > expected_amount) status = 'Over';
-    if (Number(actual_amount) < expected_amount) status = 'Short';
-
-    const insertRes = await pool.query(
-      "INSERT INTO cash_drawer_logs (counted_by, actual_amount, expected_amount, status, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *",
-      [req.user.userId, actual_amount, expected_amount, status, notes]
-    );
-
-    res.json({ status: 'success', data: insertRes.rows[0] });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to save cash count' });
-  }
-});
-
-// 1. Full Finance Dashboard Summary
-app.get('/api/finance/overview', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
-  try {
-    const todayRev = await pool.query("SELECT COALESCE(SUM(total_price), 0) AS total FROM bookings WHERE DATE(created_at) = CURRENT_DATE AND status != 'CANCELLED'");
-    const pendingReceivables = await pool.query("SELECT COALESCE(SUM(total_amount - paid_amount), 0) AS total FROM invoices WHERE status IN ('UNPAID', 'PARTIAL')");
-
-    const recentTxns = await pool.query(`
-      SELECT l.id, g.name AS guest, r.room_number, l.amount, l.payment_method, l.status, l.created_at
-      FROM ledger_transactions l
-      LEFT JOIN bookings b ON l.booking_id = b.id
-      LEFT JOIN guests g ON b.guest_id = g.id
-      LEFT JOIN rooms r ON b.room_id = r.id
-      ORDER BY l.created_at DESC LIMIT 10
-    `);
-
-    // Payment Method Split
-    const paymentSplitRes = await pool.query(`
-      SELECT payment_method AS label, COALESCE(SUM(amount), 0) AS value 
-      FROM ledger_transactions 
-      WHERE transaction_type IN ('Revenue', 'Folio Payment') 
-      GROUP BY payment_method
-    `);
-
-    // 6-Month Revenue Projection based on actual current month revenue
-    const currentMonthRevRes = await pool.query(`
-      SELECT COALESCE(SUM(total_price), 0) AS total 
-      FROM bookings 
-      WHERE status != 'CANCELLED' AND created_at >= date_trunc('month', CURRENT_DATE)
-    `);
-
-    let baseRevenue = Number(currentMonthRevRes.rows[0].total);
-    if (baseRevenue === 0) baseRevenue = 5000000; // fallback if no data
-
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const currentMonthIdx = new Date().getMonth();
-    const sixMonthRevenueProjection = Array.from({ length: 6 }).map((_, i) => {
-      const nextMonthIdx = (currentMonthIdx + i + 1) % 12;
-      baseRevenue = baseRevenue * 1.035; // 3.5% projected MoM growth
-      return { label: monthNames[nextMonthIdx], value: Math.round(baseRevenue) };
-    });
-
-    // 6-Month Expense Trend (Historical)
-    const expenseTrendRes = await pool.query(`
-      SELECT 
-        EXTRACT(MONTH FROM created_at) AS month_idx, 
-        EXTRACT(YEAR FROM created_at) AS year_idx,
-        COALESCE(SUM(amount), 0) AS total_expense 
-      FROM operational_expenses 
-      WHERE created_at >= date_trunc('month', CURRENT_DATE) - INTERVAL '5 months'
-      GROUP BY year_idx, month_idx
-    `);
-    const expensesByMonth = {};
-    expenseTrendRes.rows.forEach(row => {
-      // month_idx from postgres is 1-12
-      expensesByMonth[Number(row.month_idx) - 1] = Number(row.total_expense);
-    });
-
-    const sixMonthExpenseTrend = Array.from({ length: 6 }).map((_, i) => {
-      const mIdx = (currentMonthIdx - 5 + i + 12) % 12;
-      const isToday = i === 5; // The last item in the array is the current month
-      return {
-        label: monthNames[mIdx],
-        value: expensesByMonth[mIdx] || 0,
-        isToday
-      };
-    });
-
-    res.json({
-      status: 'success',
-      data: {
-        todaysRevenue: todayRev.rows[0].total,
-        pendingReceivables: pendingReceivables.rows[0]?.total || 0,
-        recentTransactions: recentTxns.rows,
-        paymentSplit: paymentSplitRes.rows,
-        sixMonthRevenueProjection: sixMonthRevenueProjection,
-        sixMonthExpenseTrend: sixMonthExpenseTrend
-      }
-    });
-  } catch (err) {
-    console.error('Overview error:', err.message, err.stack);
-    res.status(500).json({ error: 'Failed to aggregate financial overview' });
-  }
-});
-
-// 2. Fetch & Create Expenses
-app.get('/api/finance/expenses', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT e.*, u.name AS logged_by_name 
-      FROM operational_expenses e 
-      LEFT JOIN users u ON e.logged_by = u.id 
-      ORDER BY e.created_at DESC
-    `);
-    res.json({ status: 'success', data: { expenses: result.rows } });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch operational expenses' });
-  }
-});
-
-app.post('/api/finance/expenses', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
-  const { category, vendor, amount, method, notes } = req.body;
-  try {
-    const result = await pool.query(`
-      INSERT INTO operational_expenses (category, vendor, amount, payment_method, notes, logged_by)
-      VALUES ($1, $2, $3, $4, $5, $6) RETURNING *
-    `, [category, vendor, amount, method, notes, req.user.userId]);
-
-    await logAuditAction(req.user.userId, 'Create Expense', `Logged expense of ₹${amount} for ${vendor} (${category})`);
-    res.status(201).json({ status: 'success', data: { expense: result.rows[0] } });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to record expense' });
-  }
-});
-
-// 3. Fetch Invoices
-app.get('/api/finance/invoices', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT * FROM invoices ORDER BY created_at DESC
-    `);
-    res.json({ status: 'success', data: { invoices: result.rows } });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch invoices' });
-  }
-});
-
-// 4. Create Invoice
-app.post('/api/finance/invoices', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
-  const { billTo, type, amount, dueDate, notes } = req.body;
-  try {
-    const invoiceNumber = `INV-${Math.floor(1000 + Math.random() * 9000)}`;
-    const subtotal = amount; // simplified for now
-    const tax_amount = 0;
-    const total_amount = amount;
-
-    const result = await pool.query(`
-      INSERT INTO invoices (invoice_number, bill_to, invoice_type, subtotal, tax_amount, total_amount, due_date)
-      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *
-    `, [invoiceNumber, billTo, type, subtotal, tax_amount, total_amount, dueDate || null]);
-
-    await logAuditAction(req.user.userId, 'Create Invoice', `Generated invoice ${invoiceNumber} for ${billTo}`);
-    res.status(201).json({ status: 'success', data: { invoice: result.rows[0] } });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to create invoice' });
-  }
-});
-
-// 5. Update Invoice (Pay/Partial)
-app.put('/api/finance/invoices/:id', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
-  const { id } = req.params;
-  const { paid_amount, status } = req.body;
-  try {
-    const result = await pool.query(`
-      UPDATE invoices SET paid_amount = $1, status = $2 WHERE id = $3 RETURNING *
-    `, [paid_amount, status, id]);
-
-    await logAuditAction(req.user.userId, 'Update Invoice', `Updated invoice ${id} to status ${status}`);
-    res.json({ status: 'success', data: { invoice: result.rows[0] } });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to update invoice' });
-  }
-});
-
-// 6. Fetch Payables (Vendor Bills)
-app.get('/api/finance/payables', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT * FROM vendor_bills ORDER BY created_at DESC
-    `);
-    res.json({ status: 'success', data: { payables: result.rows } });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch vendor bills' });
-  }
-});
-
-// 7. Create Payable
-app.post('/api/finance/payables', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
-  const { vendor, category, amount, dueDate, notes } = req.body;
-  try {
-    const billNumber = `BILL-${Math.floor(1000 + Math.random() * 9000)}`;
-    const status = 'Scheduled';
-
-    const result = await pool.query(`
-      INSERT INTO vendor_bills (bill_number, vendor, category, amount, due_date, status, notes)
-      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *
-    `, [billNumber, vendor, category, amount, dueDate || null, status, notes]);
-
-    await logAuditAction(req.user.userId, 'Log Vendor Bill', `Scheduled bill ${billNumber} for ${vendor}`);
-    res.status(201).json({ status: 'success', data: { payable: result.rows[0] } });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to create vendor bill' });
-  }
-});
-
-// 8. Fetch Reconciliations
-app.get('/api/finance/reconciliations', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT * FROM reconciliations ORDER BY created_at DESC
-    `);
-    res.json({ status: 'success', data: { reconciliations: result.rows } });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch reconciliations' });
-  }
-});
-
-// 9. Match Reconciliation
-app.put('/api/finance/reconciliations/:id/match', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
-  const { id } = req.params;
-  const { matchedWith } = req.body;
-  try {
-    const result = await pool.query(`
-      UPDATE reconciliations 
-      SET matched_with = $1, status = 'Matched' 
-      WHERE id = $2 RETURNING *
-    `, [matchedWith, id]);
-
-    await logAuditAction(req.user.userId, 'Match Reconciliation', `Matched reconciliation ${id} with ${matchedWith}`);
-    res.json({ status: 'success', data: { reconciliation: result.rows[0] } });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to match reconciliation' });
-  }
-});
-
-// 10. Fetch General Ledger
-app.get('/api/finance/ledger', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT l.id, l.amount, l.transaction_type, l.payment_method, l.status, l.created_at, l.reference_number
-      FROM ledger_transactions l
-      ORDER BY l.created_at DESC
-    `);
-    res.json({ status: 'success', data: { ledger: result.rows } });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch general ledger' });
-  }
-});
-
-// 11. Fetch Financial Statements
-app.get('/api/finance/statements', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
-  try {
-    const revenueRes = await pool.query(`
-      SELECT invoice_type, SUM(total_amount) as total
-      FROM invoices
-      GROUP BY invoice_type
-    `);
-
-    const expensesRes = await pool.query(`
-      SELECT category, SUM(amount) as total
-      FROM operational_expenses
-      GROUP BY category
-    `);
-
-    const liabilitiesRes = await pool.query(`
-      SELECT 
-        (SELECT COALESCE(SUM(amount), 0) FROM vendor_bills WHERE status != 'Paid') as payable,
-        (SELECT COALESCE(SUM(tax_amount), 0) FROM invoices) as taxes,
-        (SELECT COALESCE(SUM(amount), 0) FROM guest_deposits WHERE status = 'Active') as deposits
-    `);
-
-    const assetsRes = await pool.query(`
-      SELECT 
-        (SELECT COALESCE(SUM(total_amount - paid_amount), 0) FROM invoices WHERE status != 'PAID') as receivable
-    `);
-
-    // Fetch dynamic accounting balances
-    const balancesRes = await pool.query(`SELECT key_name, balance FROM accounting_balances`);
-    const balances = {};
-    balancesRes.rows.forEach(r => balances[r.key_name] = Number(r.balance));
-
-    res.json({
-      status: 'success',
-      data: {
-        revenue: revenueRes.rows,
-        expenses: expensesRes.rows,
-        liabilities: {
-          ...liabilitiesRes.rows[0],
-          long_term_loan: balances.long_term_loan || 0
-        },
-        equity: {
-          owners_equity: balances.owners_equity || 0
-        },
-        assets: {
-          ...assetsRes.rows[0],
-          cash_and_bank: balances.cash_and_bank || 0,
-          inventory: balances.inventory || 0,
-          property_and_equipment: balances.property_and_equipment || 0
-        },
-        cashFlow: {
-          property_improvements: balances.property_improvements || 0,
-          loan_repayment: balances.loan_repayment || 0
-        }
-      }
-    });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch financial statements' });
-  }
-});
-
-// 12. Fetch Budgets
-app.get('/api/finance/budgets', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM department_budgets ORDER BY id');
-    res.json({ status: 'success', data: { budgets: result.rows } });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch budgets' });
-  }
-});
-
-
-
-// Start the server
 const server = app.listen(PORT, async () => {
   console.log(`🚀 Secure Server active on http://localhost:${3000}`);
   await runMigrations();

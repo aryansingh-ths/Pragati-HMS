@@ -513,24 +513,24 @@ export default function AdminDashboard() {
     setIsLoading(true);
     try {
       if (['overview', 'activity_monitor', 'operations_log', 'broadcasting', 'security_audit', 'analytics'].includes(activeTab)) {
-        const liveRes = await fetchWithAuth('http://localhost:3000/api/admin/live-operations');
+        const liveRes = await fetchWithAuth('http://localhost:3000/api/Admin/live-operations');
         if (liveRes?.ok) {
           const json = await liveRes.json();
           setLiveData(json.data);
         }
 
-        const auditRes = await fetchWithAuth('http://localhost:3000/api/admin/audit-logs');
+        const auditRes = await fetchWithAuth('http://localhost:3000/api/Admin/audit-logs');
         if (auditRes?.ok) setAuditLogs((await auditRes.json()).data.logs || []);
 
-        const analyticsRes = await fetchWithAuth('http://localhost:3000/api/admin/analytics');
+        const analyticsRes = await fetchWithAuth('http://localhost:3000/api/Admin/analytics');
         if (analyticsRes?.ok) setAnalyticsData((await analyticsRes.json()).data || null);
       }
 
       if (activeTab === 'properties') {
-        const roomsRes = await fetchWithAuth('http://localhost:3000/api/admin/rooms');
+        const roomsRes = await fetchWithAuth('http://localhost:3000/api/Admin/rooms');
         if (roomsRes?.ok) setRoomsList((await roomsRes.json()).data.rooms || []);
 
-        const typesRes = await fetchWithAuth('http://localhost:3000/api/admin/room-types');
+        const typesRes = await fetchWithAuth('http://localhost:3000/api/Admin/room-types');
         if (typesRes?.ok) {
           const fetchedTypes = (await typesRes.json()).data.roomTypes || [];
           setRoomTypes(fetchedTypes);
@@ -539,40 +539,40 @@ export default function AdminDashboard() {
           setExpandedClasses(initialExpanded);
         }
 
-        const yieldRes = await fetchWithAuth('http://localhost:3000/api/admin/yield-rules');
+        const yieldRes = await fetchWithAuth('http://localhost:3000/api/Admin/yield-rules');
         if (yieldRes?.ok) setYieldRules((await yieldRes.json()).data.rules || null);
       }
 
       if (activeTab === 'crm') {
-        const crmRes = await fetchWithAuth('http://localhost:3000/api/admin/crm/guests');
+        const crmRes = await fetchWithAuth('http://localhost:3000/api/Admin/crm/guests');
         if (crmRes?.ok) setCrmGuests((await crmRes.json()).data.guests || []);
       }
 
       if (activeTab === 'maintenance') {
-        const roomsRes = await fetchWithAuth('http://localhost:3000/api/admin/rooms');
+        const roomsRes = await fetchWithAuth('http://localhost:3000/api/Admin/rooms');
         if (roomsRes?.ok) setRoomsList((await roomsRes.json()).data.rooms || []);
 
-        const ticketsRes = await fetchWithAuth('http://localhost:3000/api/admin/maintenance');
+        const ticketsRes = await fetchWithAuth('http://localhost:3000/api/Admin/maintenance');
         if (ticketsRes?.ok) {
           const ticketsData = await ticketsRes.json();
           setMaintenanceTickets(ticketsData.data.tickets || []);
         }
 
-        const yieldRes = await fetchWithAuth('http://localhost:3000/api/admin/yield-rules');
+        const yieldRes = await fetchWithAuth('http://localhost:3000/api/Admin/yield-rules');
         if (yieldRes?.ok) setYieldRules((await yieldRes.json()).data.rules || null);
       }
 
       if (activeTab === 'hr') {
-        const permRes = await fetchWithAuth('http://localhost:3000/api/admin/permissions');
+        const permRes = await fetchWithAuth('http://localhost:3000/api/Admin/permissions');
         if (permRes?.ok) setStaffPermissions((await permRes.json()).data.permissions || []);
 
-        const shiftsRes = await fetchWithAuth('http://localhost:3000/api/admin/shifts');
+        const shiftsRes = await fetchWithAuth('http://localhost:3000/api/Admin/shifts');
         if (shiftsRes?.ok) setStaffShifts((await shiftsRes.json()).data.shifts || []);
 
-        const salariesRes = await fetchWithAuth('http://localhost:3000/api/admin/salaries');
+        const salariesRes = await fetchWithAuth('http://localhost:3000/api/Admin/salaries');
         if (salariesRes?.ok) setStaffSalaries((await salariesRes.json()).data.salaries || []);
 
-        const analyticsRes = await fetchWithAuth('http://localhost:3000/api/admin/analytics');
+        const analyticsRes = await fetchWithAuth('http://localhost:3000/api/Admin/analytics');
         if (analyticsRes?.ok) setAnalyticsData((await analyticsRes.json()).data || null);
       }
     } catch (e) {
@@ -615,7 +615,7 @@ export default function AdminDashboard() {
     if (activeTab === 'security_audit' && auditLive) {
       interval = setInterval(async () => {
         try {
-          const res = await fetchWithAuth(`http://localhost:3000/api/admin/audit-logs?q=${encodeURIComponent(auditSearch)}`);
+          const res = await fetchWithAuth(`http://localhost:3000/api/Admin/audit-logs?q=${encodeURIComponent(auditSearch)}`);
           if (res?.ok) {
             const data = await res.json();
             setAuditLogs(data.data?.logs || []);
@@ -648,7 +648,7 @@ export default function AdminDashboard() {
   const handleAddTicket = async (e) => {
     e.preventDefault();
     if (!newTicketForm.room_id) return alert("❌ Please select a room.");
-    const res = await fetchWithAuth('http://localhost:3000/api/admin/maintenance', {
+    const res = await fetchWithAuth('http://localhost:3000/api/Admin/maintenance', {
       method: 'POST', body: JSON.stringify(newTicketForm)
     });
     if (res?.ok) {
@@ -661,27 +661,27 @@ export default function AdminDashboard() {
   };
 
   const handleChangeTicketStatus = async (id, status) => {
-    const res = await fetchWithAuth(`http://localhost:3000/api/admin/maintenance/${id}/status`, {
+    const res = await fetchWithAuth(`http://localhost:3000/api/Admin/maintenance/${id}/status`, {
       method: 'PATCH', body: JSON.stringify({ status })
     });
     if (res?.ok) loadAdminData();
   };
 
   const handleAssignTicket = async (id, assigned_to) => {
-    const res = await fetchWithAuth(`http://localhost:3000/api/admin/maintenance/${id}/assign`, {
+    const res = await fetchWithAuth(`http://localhost:3000/api/Admin/maintenance/${id}/assign`, {
       method: 'PATCH', body: JSON.stringify({ assigned_to })
     });
     if (res?.ok) loadAdminData();
   };
 
   const handleToggleBlock = async (roomId) => {
-    const res = await fetchWithAuth(`http://localhost:3000/api/admin/rooms/${roomId}/toggle-block`, { method: 'POST' });
+    const res = await fetchWithAuth(`http://localhost:3000/api/Admin/rooms/${roomId}/toggle-block`, { method: 'POST' });
     if (res?.ok) loadAdminData();
     else alert("❌ Failed to modify room block state.");
   };
 
   const handleChangeStatus = async (roomId, newStatus) => {
-    const res = await fetchWithAuth(`http://localhost:3000/api/admin/rooms/${roomId}/status`, {
+    const res = await fetchWithAuth(`http://localhost:3000/api/Admin/rooms/${roomId}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status: newStatus })
     });
@@ -698,7 +698,7 @@ export default function AdminDashboard() {
       return alert(`❌ Duplicate Error: Room ${cleanRoomNumber} already exists.`);
     }
 
-    const res = await fetchWithAuth('http://localhost:3000/api/admin/rooms', {
+    const res = await fetchWithAuth('http://localhost:3000/api/Admin/rooms', {
       method: 'POST', body: JSON.stringify({ ...newRoomForm, room_number: cleanRoomNumber })
     });
 
@@ -714,7 +714,7 @@ export default function AdminDashboard() {
 
   const handleDeleteRoom = async (roomId, roomNumber) => {
     if (!window.confirm(`⚠️ CRITICAL: Are you sure you want to permanently delete Room ${roomNumber}? This cannot be undone.`)) return;
-    const res = await fetchWithAuth(`http://localhost:3000/api/admin/rooms/${roomId}`, { method: 'DELETE' });
+    const res = await fetchWithAuth(`http://localhost:3000/api/Admin/rooms/${roomId}`, { method: 'DELETE' });
     if (res?.ok) loadAdminData();
     else alert("❌ Failed to delete room. It may have connected database records.");
   };
@@ -722,11 +722,11 @@ export default function AdminDashboard() {
   // --- ADVANCED CONTROLS ACTIONS ---
 
   const handleSaveYieldRule = async (key, value) => {
-    const res = await fetchWithAuth('http://localhost:3000/api/admin/yield-rules', {
+    const res = await fetchWithAuth('http://localhost:3000/api/Admin/yield-rules', {
       method: 'POST', body: JSON.stringify({ key, value })
     });
     if (res?.ok) {
-      const yieldRes = await fetchWithAuth('http://localhost:3000/api/admin/yield-rules');
+      const yieldRes = await fetchWithAuth('http://localhost:3000/api/Admin/yield-rules');
       if (yieldRes?.ok) setYieldRules((await yieldRes.json()).data.rules || null);
     } else {
       alert("❌ Failed to update yield engine rule configuration.");
@@ -734,7 +734,7 @@ export default function AdminDashboard() {
   };
 
   const handleSavePermissions = async (userId, data) => {
-    const res = await fetchWithAuth(`http://localhost:3000/api/admin/permissions/${userId}`, {
+    const res = await fetchWithAuth(`http://localhost:3000/api/Admin/permissions/${userId}`, {
       method: 'POST', body: JSON.stringify(data)
     });
     if (res?.ok) loadAdminData();
@@ -743,7 +743,7 @@ export default function AdminDashboard() {
   const handleSaveSalaryConfig = async (e) => {
     e.preventDefault();
     if (!selectedStaff) return;
-    const res = await fetchWithAuth(`http://localhost:3000/api/admin/salary/${selectedStaff.id}`, {
+    const res = await fetchWithAuth(`http://localhost:3000/api/Admin/salary/${selectedStaff.id}`, {
       method: 'POST', body: JSON.stringify(salaryForm)
     });
     if (res?.ok) {
@@ -760,7 +760,7 @@ export default function AdminDashboard() {
       name: field === 'name' ? value : selectedStaff.name,
       email: field === 'email' ? value : selectedStaff.email
     };
-    const res = await fetchWithAuth(`http://localhost:3000/api/admin/staff/${selectedStaff.id}`, {
+    const res = await fetchWithAuth(`http://localhost:3000/api/Admin/staff/${selectedStaff.id}`, {
       method: 'PATCH',
       body: JSON.stringify(payload)
     });
@@ -770,11 +770,11 @@ export default function AdminDashboard() {
   };
 
   const handleSaveGuestFlags = async (guestId, payload) => {
-    const res = await fetchWithAuth(`http://localhost:3000/api/admin/crm/guests/${guestId}`, {
+    const res = await fetchWithAuth(`http://localhost:3000/api/Admin/crm/guests/${guestId}`, {
       method: 'POST', body: JSON.stringify(payload)
     });
     if (res?.ok) {
-      const crmRes = await fetchWithAuth('http://localhost:3000/api/admin/crm/guests');
+      const crmRes = await fetchWithAuth('http://localhost:3000/api/Admin/crm/guests');
       if (crmRes?.ok) setCrmGuests((await crmRes.json()).data.guests || []);
     } else {
       alert("❌ Failed to update guest relations registry.");
@@ -784,14 +784,14 @@ export default function AdminDashboard() {
   const handleTriggerBroadcast = async (e) => {
     e.preventDefault();
     if (!broadcastForm.message.trim()) return;
-    const res = await fetchWithAuth('http://localhost:3000/api/admin/broadcast', {
+    const res = await fetchWithAuth('http://localhost:3000/api/Admin/broadcast', {
       method: 'POST', body: JSON.stringify(broadcastForm)
     });
     if (res?.ok) {
       setBroadcastSuccess(true);
       setBroadcastForm({ targetDept: 'ALL', message: '' });
       setTimeout(() => setBroadcastSuccess(false), 3000);
-      const auditRes = await fetchWithAuth('http://localhost:3000/api/admin/audit-logs');
+      const auditRes = await fetchWithAuth('http://localhost:3000/api/Admin/audit-logs');
       if (auditRes?.ok) setAuditLogs((await auditRes.json()).data.logs || []);
     } else {
       alert("❌ Failed to send operational broadcast alert.");
@@ -802,14 +802,14 @@ export default function AdminDashboard() {
     e.preventDefault();
     setOnboardSuccess(null);
     setOnboardError(null);
-    const res = await fetchWithAuth('http://localhost:3000/api/admin/staff/onboard', {
+    const res = await fetchWithAuth('http://localhost:3000/api/Admin/staff/onboard', {
       method: 'POST', body: JSON.stringify(onboardForm)
     });
     const json = await res.json();
     if (res?.ok) {
       setOnboardSuccess('Employee onboarded and provisioned successfully!');
       setOnboardForm({ email: '', password: '', name: '', role: 'FRONT_DESK' });
-      const permRes = await fetchWithAuth('http://localhost:3000/api/admin/permissions');
+      const permRes = await fetchWithAuth('http://localhost:3000/api/Admin/permissions');
       if (permRes?.ok) setStaffPermissions((await permRes.json()).data.permissions || []);
       setTimeout(() => { setShowOnboardModal(false); setOnboardSuccess(null); }, 1800);
     } else {
@@ -819,11 +819,11 @@ export default function AdminDashboard() {
 
   const handleHROffboard = async (userId) => {
     if (!window.confirm('⚠️ WARNING: Are you sure you want to permanently revoke credential tokens and delete this staff member? This cannot be undone.')) return;
-    const res = await fetchWithAuth(`http://localhost:3000/api/admin/staff/offboard/${userId}`, {
+    const res = await fetchWithAuth(`http://localhost:3000/api/Admin/staff/offboard/${userId}`, {
       method: 'POST'
     });
     if (res?.ok) {
-      const permRes = await fetchWithAuth('http://localhost:3000/api/admin/permissions');
+      const permRes = await fetchWithAuth('http://localhost:3000/api/Admin/permissions');
       if (permRes?.ok) setStaffPermissions((await permRes.json()).data.permissions || []);
     } else {
       const err = await res.json();
@@ -833,7 +833,7 @@ export default function AdminDashboard() {
 
   const handleSearchAudits = async (e) => {
     e.preventDefault();
-    const res = await fetchWithAuth(`http://localhost:3000/api/admin/audit-logs?q=${encodeURIComponent(auditSearch)}`);
+    const res = await fetchWithAuth(`http://localhost:3000/api/Admin/audit-logs?q=${encodeURIComponent(auditSearch)}`);
     if (res?.ok) setAuditLogs((await res.json()).data.logs || []);
   };
 
@@ -2484,7 +2484,7 @@ export default function AdminDashboard() {
                         >
                           <option value="ALL">All Roles</option>
                           <option value="Admin">Admin</option>
-                          <option value="Admin">Admin</option>
+                          <option value="ADMIN">Admin</option>
                           <option value="FRONT_DESK">Front Desk</option>
                           <option value="HOUSEKEEPING">Housekeeping</option>
                         </select>
@@ -4559,7 +4559,7 @@ export default function AdminDashboard() {
                                     <option value="RESTAURANT">RESTAURANT (Dining)</option>
                                     <option value="SALES">SALES</option>
                                     <option value="TRAVEL">TRAVEL</option>
-                                    <option value="Admin">Admin (Admin)</option>
+                                    <option value="ADMIN">ADMIN (admin)</option>
                                   </select>
                                 </div>
 

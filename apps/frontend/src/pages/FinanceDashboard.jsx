@@ -998,9 +998,10 @@ export default function FinanceDashboard() {
                   <button
                     key={item.key}
                     onClick={() => setActiveTab(item.key)}
-                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === item.key
-                      ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
-                      : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
+                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${
+                      activeTab === item.key
+                        ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+                        : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
                       }`}
                   >
                     {item.icon} {item.label}
@@ -1013,7 +1014,7 @@ export default function FinanceDashboard() {
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Command Center</p>
             <button
-              onClick={() => navigate('/dashboard/Admin')}
+              onClick={() => navigate('/dashboard/admin')}
               className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-500 hover:bg-zinc-50 hover:text-[#D4A373] transition-all text-left"
             >
               <span className="flex items-center gap-3"><Building2 size={15} /> Back to Admin</span>

@@ -11,6 +11,7 @@ import {
 // =============================================
 // Helper Components
 // =============================================
+
 function DonutChart({ data, size = 170, centerLabel = 'Orders' }) {
   const total = data.reduce((sum, d) => sum + d.value, 0);
   if (total === 0) return <div className="flex items-center justify-center text-zinc-400 text-sm" style={{ width: size, height: size }}>No Data</div>;
@@ -84,6 +85,14 @@ function OrderTrendLine({ data = [] }) {
   );
 }
 
+// Map Backend Icon Names to Lucide Components
+const iconMap = {
+  Receipt: <Receipt size={16} />,
+  Flame: <Flame size={16} />,
+  Clock: <Clock size={16} />,
+  Users: <Users size={16} />
+};
+
 // =============================================
 // MAIN DASHBOARD COMPONENT
 // =============================================
@@ -121,76 +130,155 @@ export default function DiningDashboard() {
   const isAdmin = location.state?.fromAdmin === true || sessionStorage.getItem('hms_role')?.toUpperCase() === 'Admin';
 
   const [activeTab, setActiveTab] = useState('overview');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Filters & State
+  // Filters & State connected to the DB
   const [orderSearch, setOrderSearch] = useState('');
   const [isKOTModalOpen, setIsKOTModalOpen] = useState(false);
   const [kotForm, setKotForm] = useState({ table: '', items: '', notes: '' });
 
+  const [activeKOTs, setActiveKOTs] = useState([]);
+  const [tables, setTables] = useState([]);
+  const [menuPerformance, setMenuPerformance] = useState([]);
+  const [overview, setOverview] = useState({ metrics: [], orderTrend: [], salesSplit: [] });
+
+  const themeMap = {
+    '#D4A373': { iconBg: 'bg-[#D4A373] text-zinc-900 shadow-lg shadow-[#D4A373]/30', gradient: 'from-amber-50 via-white to-white', ring: 'ring-amber-500/10', glow: 'rgba(212,163,115,0.35)' },
+    amber: { iconBg: 'bg-gradient-to-br from-[#D4A373] to-[#b9834f] text-white shadow-lg shadow-[#D4A373]/30', gradient: 'from-amber-50 via-white to-white', ring: 'ring-amber-500/10', glow: 'rgba(245,158,11,0.35)' },
+    rose: { iconBg: 'bg-gradient-to-br from-rose-400 to-pink-600 text-white shadow-lg shadow-rose-500/30', gradient: 'from-rose-50 via-white to-white', ring: 'ring-rose-500/10', glow: 'rgba(244,63,94,0.35)' },
+    emerald: { iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/30', gradient: 'from-emerald-50 via-white to-white', ring: 'ring-emerald-500/10', glow: 'rgba(16,185,129,0.35)' },
+    indigo: { iconBg: 'bg-gradient-to-br from-indigo-500 to-blue-600 text-white shadow-lg shadow-indigo-500/30', gradient: 'from-indigo-50 via-white to-white', ring: 'ring-indigo-500/10', glow: 'rgba(99,102,241,0.35)' },
+  };
+
+  // Small decorative graphics cycled per KPI card, mirroring the Admin dashboard's KPI cards
+  const kpiGraphic = (i, color) => {
+    const kind = i % 4;
+    if (kind === 0) {
+      return (
+        <div className="relative flex items-center justify-center shrink-0 ml-4">
+          <svg className="w-14 h-14 rotate-[-90deg]">
+            <circle cx="28" cy="28" r="20" fill="none" stroke={`${color}22`} strokeWidth="4" />
+            <motion.circle cx="28" cy="28" r="20" fill="none" strokeWidth="4.5" stroke={color}
+              strokeDasharray={2 * Math.PI * 20}
+              initial={{ strokeDashoffset: 2 * Math.PI * 20 }}
+              animate={{ strokeDashoffset: (2 * Math.PI * 20) * 0.28 }}
+              transition={{ duration: 1.3, ease: 'easeOut' }}
+              strokeLinecap="round" />
+          </svg>
+        </div>
+      );
+    }
+    if (kind === 1) {
+      return (
+        <div className="shrink-0 ml-4 border rounded-xl bg-white p-1.5 shadow-sm" style={{ borderColor: `${color}33` }}>
+          <svg className="w-16 h-9 overflow-visible">
+            <motion.path d="M0 22 Q8 6, 16 16 T32 3 T48 12 T60 8" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"
+              initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: 'easeOut' }} />
+            <motion.circle cx="60" cy="8" r="3" fill={color} initial={{ scale: 0 }} animate={{ scale: [0, 1.4, 1] }} transition={{ duration: 0.5, delay: 1.3 }} />
+          </svg>
+        </div>
+      );
+    }
+    if (kind === 2) {
+      return (
+        <div className="flex gap-1.5 h-7 items-end shrink-0 ml-4 border rounded-xl bg-white px-2.5 py-1.5 shadow-sm" style={{ borderColor: `${color}33` }}>
+          {[...Array(5)].map((_, idx) => (
+            <motion.div key={idx} className="w-2.5 rounded-t-md" style={{ background: idx < 3 ? color : '#e4e4e7' }}
+              initial={{ height: 0 }} animate={{ height: idx < 3 ? '20px' : '8px' }}
+              transition={{ duration: 0.6, delay: idx * 0.08, type: 'spring', stiffness: 200 }} />
+          ))}
+        </div>
+      );
+    }
+    return (
+      <div className="shrink-0 ml-4 border rounded-xl bg-white p-1.5 shadow-sm" style={{ borderColor: `${color}33` }}>
+        <svg className="w-16 h-9 overflow-visible">
+          <motion.path d="M0 25 L12 18 L24 22 L36 10 L48 14 L60 4" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"
+            initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: 'easeOut', delay: 0.2 }} />
+          <motion.circle cx="60" cy="4" r="3" fill={color} initial={{ scale: 0 }} animate={{ scale: [0, 1.4, 1] }} transition={{ duration: 0.5, delay: 1.5 }} />
+        </svg>
+      </div>
+    );
+  };
+
+  const fetchData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { 'Authorization': `Bearer ${token}` };
+
+      const [kotsRes, tablesRes, menuRes, overviewRes] = await Promise.all([
+        fetch('http://localhost:3000/api/dining/kots', { headers }),
+        fetch('http://localhost:3000/api/dining/tables', { headers }),
+        fetch('http://localhost:3000/api/dining/menu', { headers }),
+        fetch('http://localhost:3000/api/dining/overview', { headers })
+      ]);
+
+      if (kotsRes.ok) {
+        const data = await kotsRes.json();
+        setActiveKOTs(data.data.map(k => ({
+          id: k.id.slice(0, 8),
+          table: k.table_number,
+          items: k.items,
+          time: new Date(k.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+          status: k.status,
+          type: k.type
+        })));
+      }
+      
+      if (tablesRes.ok) {
+        const data = await tablesRes.json();
+        setTables(data.data);
+      }
+
+      if (menuRes.ok) {
+        const data = await menuRes.json();
+        setMenuPerformance(data.data);
+      }
+
+      if (overviewRes.ok) {
+        const data = await overviewRes.json();
+        setOverview(data.data);
+      }
+    } catch (err) {
+      console.error('Failed to sync dining data:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
   const refresh = () => {
     setIsLoading(true);
-    setTimeout(() => setIsLoading(false), 700);
+    fetchData();
   };
 
-  // --- MOCK DATA FOR F&B OPERATIONS ---
-  const themeMap = {
-    '#D4A373': { iconBg: 'bg-[#D4A373] text-zinc-900', glow: 'rgba(212,163,115,0.35)' },
-    amber: { iconBg: 'bg-gradient-to-br from-[#D4A373] to-[#D4A373] text-white shadow-lg shadow-[#D4A373]/20', glow: 'rgba(245,158,11,0.35)', ring: '#d97706' },
-    rose: { iconBg: 'bg-gradient-to-br from-rose-400 to-pink-600 text-white shadow-lg shadow-rose-500/30', glow: 'rgba(244,63,94,0.35)', ring: '#e11d48' },
-    emerald: { iconBg: 'bg-gradient-to-br from-[#D4A373] to-[#D4A373] text-white shadow-lg shadow-[#D4A373]/20', glow: 'rgba(16,185,129,0.35)', ring: '#059669' },
-    indigo: { iconBg: 'bg-gradient-to-br from-indigo-500 to-blue-600 text-white shadow-lg shadow-indigo-500/30', glow: 'rgba(99,102,241,0.35)', ring: '#4f46e5' },
-  };
-
-  const metrics = [
-    { label: "Today's Revenue", value: "₹42,500", sub: "Rooms & Walk-ins", icon: <Receipt size={16} />, theme: '#D4A373' },
-    { label: "Active KOTs", value: "14", sub: "Orders preparing in kitchen", icon: <Flame size={16} />, theme: 'rose' },
-    { label: "Avg Prep Time", value: "18m", sub: "-2m compared to yesterday", icon: <Clock size={16} />, theme: '#D4A373' },
-    { label: "Tables Occupied", value: "8/15", sub: "54% current seating capacity", icon: <Users size={16} />, theme: 'indigo' },
-  ];
-
-  const orderTrend = [
-    { label: 'Mon', value: 84 }, { label: 'Tue', value: 92 }, { label: 'Wed', value: 110 },
-    { label: 'Thu', value: 105 }, { label: 'Fri', value: 135 }, { label: 'Sat', value: 156 },
-    { label: 'Today', value: 88, isToday: true },
-  ];
-
-  const salesSplit = [
-    { label: 'In-Room Dining', value: 45, color: '#0ea5e9' },
-    { label: 'Restaurant Dine-in', value: 30, color: '#f59e0b' },
-    { label: 'Bar & Lounge', value: 13, color: '#ec4899' },
-  ];
-
-  const [activeKOTs, setActiveKOTs] = useState([
-    { id: 'KOT-801', table: 'Table 4', items: '2x Butter Chicken, 4x Garlic Naan, 1x Mojito', time: '12 mins ago', status: 'Preparing', type: 'Dine-in' },
-    { id: 'KOT-802', table: 'Room 205', items: '1x Club Sandwich, 1x Cold Coffee', time: '4 mins ago', status: 'New', type: 'Room Service' },
-    { id: 'KOT-803', table: 'Table 12', items: '1x Paneer Tikka, 2x Fresh Lime Soda', time: '18 mins ago', status: 'Ready', type: 'Dine-in' },
-    { id: 'KOT-804', table: 'Table 2', items: '1x Margarita Pizza, 1x Caesar Salad', time: '22 mins ago', status: 'Served', type: 'Dine-in' },
-    { id: 'KOT-805', table: 'Room 312', items: '2x Continental Breakfast, 2x Espresso', time: '8 mins ago', status: 'Preparing', type: 'Room Service' },
-  ]);
-
-  const tables = [
-    { id: 'T1', capacity: 2, status: 'Available' }, { id: 'T2', capacity: 4, status: 'Occupied', time: '45m' },
-    { id: 'T3', capacity: 4, status: 'Dirty' }, { id: 'T4', capacity: 6, status: 'Occupied', time: '15m' },
-    { id: 'T5', capacity: 2, status: 'Available' }, { id: 'T6', capacity: 8, status: 'Reserved', time: '8:00 PM' },
-    { id: 'T7', capacity: 4, status: 'Available' }, { id: 'T8', capacity: 4, status: 'Occupied', time: '55m' },
-  ];
-
-  const menuPerformance = [
-    { item: 'Butter Chicken', category: 'Main Course', orders: 145, revenue: 65250, status: 'In Stock' },
-    { item: 'Club Sandwich', category: 'Snacks', orders: 98, revenue: 24500, status: 'In Stock' },
-    { item: 'Paneer Tikka', category: 'Starters', orders: 84, revenue: 26880, status: 'Low Stock' },
-    { item: 'Fresh Lime Soda', category: 'Beverages', orders: 112, revenue: 16800, status: 'In Stock' },
-  ];
-
-  const handleAddKOT = (e) => {
+  const handleAddKOT = async (e) => {
     e.preventDefault();
     if (!kotForm.table || !kotForm.items) return;
-    setActiveKOTs([{
-      id: `KOT-${800 + activeKOTs.length + 1}`, table: kotForm.table, items: kotForm.items, time: 'Just now', status: 'New', type: kotForm.table.includes('Room') ? 'Room Service' : 'Dine-in'
-    }, ...activeKOTs]);
-    setIsKOTModalOpen(false);
-    setKotForm({ table: '', items: '', notes: '' });
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('http://localhost:3000/api/dining/kots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({
+          table: kotForm.table,
+          items: kotForm.items,
+          type: kotForm.table.includes('Room') ? 'Room Service' : 'Dine-in'
+        })
+      });
+      if (res.ok) {
+        refresh(); // Refresh state from DB
+        setIsKOTModalOpen(false);
+        setKotForm({ table: '', items: '', notes: '' });
+      }
+    } catch(err) {
+      console.error(err);
+      alert('Error connecting to database');
+    }
   };
 
   const navGroups = [
@@ -211,15 +299,18 @@ export default function DiningDashboard() {
         }
 
         .dd-sidebar { background: #FFFFFF; box-shadow: 14px 17px 40px 4px rgba(112, 144, 176, 0.08); border: 1px solid rgba(226, 232, 240, 0.8); }
-        .dd-card { background: #FFFFFF; border: 1px solid rgba(226, 232, 240, 0.8); box-shadow: 0px 18px 40px 0px rgba(112, 144, 176, 0.08); transition: all 0.3s ease; }
+        .dd-card { background: #FFFFFF; border: 1px solid rgba(226, 232, 240, 0.8); box-shadow: 0px 18px 40px 0px rgba(112, 144, 176, 0.08); transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .dd-card:hover { transform: translateY(-4px) scale(1.02); box-shadow: 0px 24px 48px 0px rgba(112, 144, 176, 0.16); }
+        .dd-icon-btn { transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1); display: inline-flex; }
+        .group:hover .dd-icon-btn { transform: translateY(-1px) scale(1.12) rotate(-6deg); }
         .dd-glass-backdrop { background: rgba(24, 24, 27, 0.4); backdrop-filter: blur(10px); }
         .dd-glass-modal { background: rgba(255, 255, 255, 0.98); border: 1px solid rgba(226, 232, 240, 0.8); box-shadow: 0 30px 70px -12px rgba(245,158,11, 0.25); backdrop-filter: blur(24px); }
         .dd-input { width: 100%; padding: 0.75rem 1.1rem; background: #F4F7FE; border: 1px solid #E2E8F0; border-radius: 1rem; font-size: 0.875rem; font-weight: 500; outline: none; transition: border 0.3s; }
         .dd-input:focus { border-color: #D4A373; }
       `}</style>
 
-      {/* SIDEBAR */}
-      <div className="w-full lg:w-72 shrink-0 rounded-[2rem] p-6 flex flex-col gap-6 dd-sidebar sticky top-[7.5rem] self-start z-30 lg:h-[calc(100vh-7.8rem)]">
+      {/* FIXED SIDEBAR */}
+      <div className="w-full lg:w-72 shrink-0 rounded-[2rem] p-6 flex flex-col gap-6 dd-sidebar lg:fixed lg:top-30 lg:left-6 z-30 lg:h-[calc(100vh-7.8rem)]">
         <div className="flex items-center gap-3 px-2">
           <div className="w-10 h-10 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center justify-center shadow-xs shrink-0">
             <Coffee size={19} className="text-[#D4A373]" />
@@ -247,7 +338,7 @@ export default function DiningDashboard() {
           {isAdmin && (
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Command Center</p>
-              <button onClick={() => navigate('/dashboard/Admin')} className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-500 hover:bg-zinc-50 hover:text-[#D4A373] transition-all text-left">
+              <button onClick={() => navigate('/dashboard/admin')} className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-500 hover:bg-zinc-50 hover:text-[#D4A373] transition-all text-left">
                 <span className="flex items-center gap-3"><Building2 size={15} /> Back to Admin</span><ArrowUpRight size={14} className="opacity-50" />
               </button>
             </div>
@@ -255,47 +346,8 @@ export default function DiningDashboard() {
         </div>
       </div>
 
-      {/* MAIN CONTENT */}
-      <div className="flex-1 flex flex-col gap-6 overflow-hidden min-w-0">
-        {/* BROADCAST BANNER */}
-        <AnimatePresence>
-          {broadcasts.filter(b => !dismissedBroadcasts.includes(b.id) && (!b.expires_at || new Date(b.expires_at) > new Date())).map((broadcast) => (
-            <motion.div
-              key={broadcast.id}
-              initial={{ opacity: 0, y: -20, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
-              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-              className="relative overflow-hidden rounded-[1.5rem] bg-gradient-to-r from-rose-500 via-rose-600 to-amber-500 p-[2px] shadow-lg shadow-rose-500/20 mb-4 min-h-[72px]"
-            >
-              <div className="w-full h-full relative bg-white/10 backdrop-blur-md rounded-[calc(1.5rem-2px)] px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-start gap-4">
-                  <div className="relative shrink-0">
-                    <div className="absolute inset-0 bg-white/40 rounded-full animate-ping opacity-75"></div>
-                    <div className="relative w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white border border-white/40 shadow-sm backdrop-blur-lg">
-                      <Zap size={18} className="drop-shadow-md" />
-                    </div>
-                  </div>
-                  <div className="flex-1 text-white flex flex-col justify-center">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] font-black uppercase tracking-widest bg-white/20 px-2 py-0.5 rounded-full backdrop-blur-sm border border-white/20">
-                        {broadcast.target_dept === 'ALL' ? 'GLOBAL BROADCAST' : 'DEPARTMENT ALERT'}
-                      </span>
-                      <span className="text-[10px] font-semibold text-white/80 border-l border-white/20 pl-2">From: {broadcast.sender_name}</span>
-                    </div>
-                    <p className="text-sm font-bold tracking-wide drop-shadow-sm leading-snug">{broadcast.message}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setDismissedBroadcasts(prev => [...prev, broadcast.id])}
-                  className="shrink-0 w-8 h-8 rounded-full bg-white/10 hover:bg-white/25 flex items-center justify-center text-white transition-colors border border-white/10 self-end sm:self-center"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
+      {/* MAIN CONTENT WORKSPACE */}
+      <div className="flex-1 flex flex-col gap-6 overflow-hidden min-w-0 lg:ml-[21rem]">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl font-black text-zinc-600 tracking-tight mt-0.5">
@@ -304,12 +356,18 @@ export default function DiningDashboard() {
             <p className="text-xs text-zinc-400 mt-1">Manage kitchen workflows, restaurant seating, and F&B revenue.</p>
           </div>
           <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
-            <button onClick={refresh} className="p-2.5 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-500 transition-all"><RefreshCw size={15} className={isLoading ? 'animate-spin' : ''} /></button>
-            {/* Profile Avatar Widget */}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+              </span>
+              <span className="text-[9px] font-bold uppercase tracking-wider">Live System</span>
+            </div>
+            <button onClick={refresh} className="p-2.5 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-500 transition-all"><RefreshCw size={15} className={isLoading ? 'animate-spin' : ''}/></button>
             {(() => {
               const staffName = sessionStorage.getItem('hms_name') || 'Staff';
               const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
-              const designation = 'Restaurant Admin';
+              const designation = 'Restaurant admin';
               return (
                 <motion.button
                   whileHover={{ y: -2 }}
@@ -336,163 +394,227 @@ export default function DiningDashboard() {
         </div>
 
         <AnimatePresence mode="wait">
-          <div className="space-y-6">
+          {isLoading ? (
+            <motion.div key="loader" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-96 flex flex-col items-center justify-center text-zinc-400">
+              <Loader2 className="animate-spin mb-2" size={32} />
+              <p className="text-xs font-medium uppercase tracking-wider">Syncing operations...</p>
+            </motion.div>
+          ) : (
+            <div className="space-y-6">
 
-            {/* TAB: OVERVIEW */}
-            {activeTab === 'overview' && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                  {metrics.map((kpi, i) => {
-                    const t = themeMap[kpi.theme];
-                    return (
-                      <div key={i} className="bg-white rounded-[1.75rem] p-5 border border-zinc-200/60 flex flex-col justify-between" style={{ boxShadow: `0 14px 30px -18px ${t.glow}` }}>
-                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${t.iconBg}`}>{kpi.icon}</div>
-                        <div>
-                          <p className="text-3xl font-black text-zinc-900 leading-none mb-1.5">{kpi.value}</p>
-                          <p className="text-xs font-bold uppercase tracking-wider text-zinc-500">{kpi.label}</p>
-                          <p className="text-[10px] text-zinc-400 mt-1">{kpi.sub}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-white rounded-[2rem] p-6 border border-zinc-200/60 shadow-sm relative overflow-hidden">
-                    <div className="absolute -bottom-16 -right-10 w-56 h-56 rounded-full bg-amber-200/20 blur-3xl pointer-events-none" />
-                    <h3 className="font-black text-sm uppercase mb-4 flex items-center gap-2 text-zinc-800"><TrendingUp size={16} className="text-[#D4A373]" /> Order Volume Trend</h3>
-                    <OrderTrendLine data={orderTrend} />
-                  </div>
-                  <div className="bg-white rounded-[2rem] p-6 border border-zinc-200/60 shadow-sm relative overflow-hidden">
-                    <div className="absolute -top-14 -right-14 w-40 h-40 rounded-full bg-rose-200/20 blur-3xl pointer-events-none" />
-                    <h3 className="font-black text-sm uppercase mb-4 flex items-center gap-2 text-zinc-800"><PieChart size={16} className="text-rose-500" /> Sales by Outlet</h3>
-                    <div className="flex flex-col sm:flex-row items-center justify-around gap-6">
-                      <DonutChart data={salesSplit} centerLabel="Orders" />
-                      <div className="grid grid-cols-1 gap-y-2.5">
-                        {salesSplit.map((d, i) => (
-                          <div key={i} className="flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
-                            <span className="text-[11px] text-zinc-500 font-semibold">{d.label}</span>
-                            <span className="text-xs font-black text-zinc-900 ml-auto">{d.value}%</span>
+              {/* TAB: OVERVIEW */}
+              {activeTab === 'overview' && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                    {overview.metrics && overview.metrics.map((kpi, i) => {
+                      const t = themeMap[kpi.theme] || themeMap['#D4A373'];
+                      const dotColor = kpi.theme && kpi.theme.startsWith('#') ? kpi.theme : { amber: '#D4A373', rose: '#e11d48', emerald: '#059669', indigo: '#4f46e5' }[kpi.theme] || '#D4A373';
+                      return (
+                        <motion.div
+                          key={i}
+                          initial={{ opacity: 0, y: 16 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: i * 0.08, type: 'spring', stiffness: 200, damping: 20 }}
+                          whileHover={{ y: -8, scale: 1.02 }}
+                          style={{ '--kpi-glow': t.glow }}
+                          className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between border border-zinc-200/70 bg-gradient-to-br ${t.gradient} shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_24px_-16px_rgba(0,0,0,0.15)] transition-shadow duration-500 hover:shadow-[0_20px_45px_-18px_var(--kpi-glow)] ring-1 ${t.ring}`}
+                        >
+                          {/* decorative glow blob */}
+                          <div
+                            className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
+                            style={{ background: t.glow }}
+                          />
+                          <div className="relative flex-1 min-w-0">
+                            <div className="flex items-start justify-between mb-4">
+                              <motion.div
+                                whileHover={{ rotate: -8, scale: 1.1 }}
+                                transition={{ type: 'spring', stiffness: 400, damping: 14 }}
+                                className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${t.iconBg}`}
+                              >
+                                {iconMap[kpi.iconName]}
+                              </motion.div>
+                            </div>
+                            <motion.p
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              transition={{ delay: i * 0.08 + 0.2 }}
+                              className="text-3xl font-black text-zinc-900 tracking-tight leading-none mb-1.5"
+                            >
+                              {kpi.value}
+                            </motion.p>
+                            <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 leading-none">{kpi.label}</p>
+                            <p className="text-[10px] text-zinc-400 mt-1">{kpi.sub}</p>
                           </div>
-                        ))}
-                      </div>
-                    </div>
+                          <div className="relative">{kpiGraphic(i, dotColor)}</div>
+                        </motion.div>
+                      );
+                    })}
                   </div>
-                </div>
-              </motion.div>
-            )}
 
-            {/* TAB: KITCHEN ORDER TICKETS (KOT) */}
-            {activeTab === 'kots' && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 h-[calc(100vh-14rem)] flex flex-col">
-                <div className="flex justify-between items-center bg-white p-4 rounded-[1.5rem] border border-zinc-200/60 shrink-0">
-                  <div className="flex items-center gap-2 text-sm font-bold uppercase text-zinc-800"><ChefHat size={16} className="text-[#D4A373]" /> Live Kitchen Display</div>
-                  <button onClick={() => setIsKOTModalOpen(true)} className="bg-[#D4A373] text-white px-4 py-2 rounded-xl text-xs font-bold uppercase hover:bg-[#D4A373] transition-colors flex items-center gap-1"><Plus size={14} /> Punch Order</button>
-                </div>
-
-                <div className="flex-1 flex gap-4 overflow-x-auto dd-scrollbar pb-2">
-                  {['New', 'Preparing', 'Ready', 'Served'].map(status => {
-                    const columnKOTs = activeKOTs.filter(k => k.status === status);
-                    const colColor = status === 'New' ? '#0ea5e9' : status === 'Preparing' ? '#f59e0b' : status === 'Ready' ? '#10b981' : '#6b7280';
-                    return (
-                      <div key={status} className="w-72 shrink-0 flex flex-col gap-3 bg-zinc-50/50 rounded-3xl p-3 border border-zinc-100">
-                        <div className="flex items-center justify-between px-2 pt-1">
-                          <h4 className="text-xs font-black uppercase tracking-wider text-zinc-700 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: colColor }} /> {status}</h4>
-                          <span className="text-[10px] font-bold text-zinc-500 bg-white px-2 py-0.5 rounded-full border border-zinc-200">{columnKOTs.length}</span>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <motion.div
+                      whileHover={{ y: -6, scale: 1.01 }}
+                      transition={{ type: 'spring', stiffness: 350, damping: 22 }}
+                      className="relative overflow-hidden bg-white rounded-[2rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]"
+                    >
+                      <div className="absolute -bottom-16 -right-10 w-56 h-56 rounded-full bg-amber-200/20 blur-3xl pointer-events-none" />
+                      <div className="relative flex items-center gap-2 mb-4">
+                        <div className="w-7 h-7 rounded-lg bg-[#D4A373] flex items-center justify-center shadow-md shadow-[#D4A373]/30">
+                          <TrendingUp size={14} className="text-white" />
                         </div>
-                        <div className="flex flex-col gap-3 overflow-y-auto dd-scrollbar h-full">
-                          {columnKOTs.map(kot => (
-                            <div key={kot.id} className="bg-white p-4 rounded-2xl border border-zinc-200/60 shadow-sm relative overflow-hidden group hover:shadow-md transition-all cursor-pointer">
-                              <div className="absolute top-0 left-0 w-1 h-full" style={{ background: colColor }} />
-                              <div className="flex justify-between items-start mb-2 pl-2">
-                                <span className="font-bold text-sm text-zinc-900">{kot.table}</span>
-                                <span className="text-[9px] font-bold bg-zinc-100 px-1.5 py-0.5 rounded text-zinc-500 uppercase tracking-widest">{kot.type}</span>
-                              </div>
-                              <p className="text-xs text-zinc-600 font-medium pl-2 leading-relaxed mb-3">{kot.items}</p>
-                              <div className="flex justify-between items-center pl-2 border-t border-zinc-100 pt-2 mt-auto">
-                                <span className="text-[10px] text-zinc-400 font-semibold flex items-center gap-1"><Clock size={11} /> {kot.time}</span>
-                                <span className="text-[10px] font-mono font-bold text-zinc-300">{kot.id}</span>
-                              </div>
+                        <h3 className="font-black text-sm uppercase text-zinc-800">Order Volume Trend</h3>
+                      </div>
+                      <OrderTrendLine data={overview.orderTrend || []} />
+                    </motion.div>
+                    <motion.div
+                      whileHover={{ y: -6, scale: 1.01 }}
+                      transition={{ type: 'spring', stiffness: 350, damping: 22 }}
+                      className="relative overflow-hidden bg-white rounded-[2rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]"
+                    >
+                      <div className="absolute -top-14 -right-14 w-40 h-40 rounded-full bg-rose-200/20 blur-3xl pointer-events-none" />
+                      <div className="relative flex items-center gap-2 mb-4">
+                        <div className="w-7 h-7 rounded-lg bg-rose-500 flex items-center justify-center shadow-md shadow-rose-500/30">
+                          <PieChart size={14} className="text-white" />
+                        </div>
+                        <h3 className="font-black text-sm uppercase text-zinc-800">Sales by Outlet</h3>
+                      </div>
+                      <div className="flex flex-col sm:flex-row items-center justify-around gap-6">
+                        <DonutChart data={overview.salesSplit || []} centerLabel="Orders" />
+                        <div className="grid grid-cols-1 gap-y-2.5">
+                          {overview.salesSplit && overview.salesSplit.map((d, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
+                              <span className="text-[11px] text-zinc-500 font-semibold">{d.label}</span>
+                              <span className="text-xs font-black text-zinc-900 ml-auto">{d.value}%</span>
                             </div>
                           ))}
                         </div>
                       </div>
-                    )
-                  })}
-                </div>
-              </motion.div>
-            )}
-
-            {/* TAB: TABLE MANAGEMENT */}
-            {activeTab === 'tables' && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                <div className="bg-white p-5 rounded-[1.5rem] border border-zinc-200/60 flex flex-wrap gap-4 justify-between items-center">
-                  <div className="flex items-center gap-2 text-sm font-bold uppercase text-zinc-800"><MapPin size={16} className="text-indigo-500" /> Floor Plan Status</div>
-                  <div className="flex gap-4 text-xs font-bold text-zinc-500">
-                    <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-[#D4A373]/10 border border-[#D4A373]/30" /> Available</span>
-                    <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-rose-100 border border-rose-400" /> Occupied</span>
-                    <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-[#D4A373]/10 border border-[#D4A373]/30" /> Dirty</span>
-                    <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-sky-100 border border-sky-400" /> Reserved</span>
+                    </motion.div>
                   </div>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  {tables.map(t => {
-                    const styles = {
-                      Available: 'bg-zinc-50 border-[#D4A373]/30 text-[#D4A373]',
-                      Occupied: 'bg-rose-50 border-rose-200 text-rose-700',
-                      Dirty: 'bg-zinc-50 border-[#D4A373]/30 text-[#D4A373]',
-                      Reserved: 'bg-sky-50 border-sky-200 text-sky-700'
-                    }[t.status];
-                    return (
-                      <div key={t.id} className={`p-4 rounded-[1.5rem] border-2 flex flex-col items-center justify-center gap-2 transition-all hover:scale-105 cursor-pointer shadow-sm ${styles}`}>
-                        <div className="flex items-center justify-between w-full text-[10px] font-bold uppercase tracking-widest opacity-60"><span>{t.capacity} Pax</span><span>{t.time || ''}</span></div>
-                        <h3 className="text-2xl font-black">{t.id}</h3>
-                        <span className="text-[10px] font-black uppercase tracking-widest bg-white/50 px-2 py-0.5 rounded-md">{t.status}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </motion.div>
-            )}
+                </motion.div>
+              )}
 
-            {/* TAB: MENU & INVENTORY */}
-            {activeTab === 'menu' && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                <div className="dd-card rounded-[2rem] overflow-hidden">
-                  <div className="p-5 border-b border-zinc-150 flex justify-between items-center bg-white/40">
-                    <h3 className="font-bold flex gap-2 text-sm uppercase"><Utensils size={16} className="text-[#D4A373]" /> Top Performing Items</h3>
+              {/* TAB: KITCHEN ORDER TICKETS (KOT) */}
+              {activeTab === 'kots' && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 h-[calc(100vh-14rem)] flex flex-col">
+                  <div className="flex justify-between items-center bg-white p-4 rounded-[1.5rem] border border-zinc-200/60 shrink-0">
+                    <div className="flex items-center gap-2 text-sm font-bold uppercase text-zinc-800">
+                      <div className="w-7 h-7 rounded-lg bg-[#D4A373] flex items-center justify-center shadow-md shadow-[#D4A373]/30"><ChefHat size={14} className="text-white"/></div>
+                      Live Kitchen Display
+                    </div>
+                    <button onClick={() => setIsKOTModalOpen(true)} className="bg-[#D4A373] text-white px-4 py-2 rounded-xl text-xs font-bold uppercase hover:bg-[#D4A373] transition-colors flex items-center gap-1"><Plus size={14}/> Punch Order</button>
                   </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead><tr className="border-b border-zinc-150 text-[10px] uppercase text-zinc-400 bg-zinc-50/50"><th className="p-4">Item Name</th><th className="p-4">Category</th><th className="p-4 text-center">Orders (Month)</th><th className="p-4 text-right">Revenue Generated</th><th className="p-4 text-right">Inventory Status</th></tr></thead>
-                      <tbody className="divide-y divide-zinc-100">
-                        {menuPerformance.map((m, idx) => (
-                          <tr key={idx} className="hover:bg-zinc-50/60">
-                            <td className="p-4 text-sm font-bold text-zinc-900">{m.item}</td>
-                            <td className="p-4"><span className="text-[10px] font-bold uppercase px-2 py-1 rounded-full bg-zinc-100 text-zinc-600">{m.category}</span></td>
-                            <td className="p-4 text-sm font-bold text-zinc-600 text-center">{m.orders}</td>
-                            <td className="p-4 text-sm font-bold text-[#D4A373] text-right">₹{m.revenue.toLocaleString('en-IN')}</td>
-                            <td className="p-4 text-right"><span className={`px-2 py-1 rounded-full text-[9px] font-bold uppercase border ${m.status === 'Low Stock' ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'}`}>{m.status}</span></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  
+                  <div className="flex-1 flex gap-4 overflow-x-auto dd-scrollbar pb-2">
+                    {['New', 'Preparing', 'Ready', 'Served'].map(status => {
+                      const columnKOTs = activeKOTs.filter(k => k.status === status);
+                      const colColor = status === 'New' ? '#0ea5e9' : status === 'Preparing' ? '#f59e0b' : status === 'Ready' ? '#10b981' : '#6b7280';
+                      return (
+                        <div key={status} className="w-72 shrink-0 flex flex-col gap-3 bg-zinc-50/50 rounded-3xl p-3 border border-zinc-100">
+                          <div className="flex items-center justify-between px-2 pt-1">
+                            <h4 className="text-xs font-black uppercase tracking-wider text-zinc-700 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: colColor }}/> {status}</h4>
+                            <span className="text-[10px] font-bold text-zinc-500 bg-white px-2 py-0.5 rounded-full border border-zinc-200">{columnKOTs.length}</span>
+                          </div>
+                          <div className="flex flex-col gap-3 overflow-y-auto dd-scrollbar h-full">
+                            {columnKOTs.map(kot => (
+                              <div key={kot.id} className="bg-white p-4 rounded-2xl border border-zinc-200/60 shadow-sm relative overflow-hidden group hover:shadow-md transition-all cursor-pointer">
+                                <div className="absolute top-0 left-0 w-1 h-full" style={{ background: colColor }} />
+                                <div className="flex justify-between items-start mb-2 pl-2">
+                                  <span className="font-bold text-sm text-zinc-900">{kot.table}</span>
+                                  <span className="text-[9px] font-bold bg-zinc-100 px-1.5 py-0.5 rounded text-zinc-500 uppercase tracking-widest">{kot.type}</span>
+                                </div>
+                                <p className="text-xs text-zinc-600 font-medium pl-2 leading-relaxed mb-3">{kot.items}</p>
+                                <div className="flex justify-between items-center pl-2 border-t border-zinc-100 pt-2 mt-auto">
+                                  <span className="text-[10px] text-zinc-400 font-semibold flex items-center gap-1"><Clock size={11}/> {kot.time}</span>
+                                  <span className="text-[10px] font-mono font-bold text-zinc-300">{kot.id}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
-                </div>
-              </motion.div>
-            )}
+                </motion.div>
+              )}
 
-            {/* FALLBACK FOR UNIMPLEMENTED TABS */}
-            {activeTab === 'billing' && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="dd-card rounded-[2rem] p-8 text-center text-zinc-500">
-                <Receipt size={32} className="mx-auto mb-3 text-[#D4A373] opacity-50" />
-                <h3 className="font-bold text-lg text-zinc-900 mb-2">Billing Module</h3>
-                <p className="text-sm">Connects directly to the main Finance ledger. (See Finance Dashboard)</p>
-              </motion.div>
-            )}
+              {/* TAB: TABLE MANAGEMENT */}
+              {activeTab === 'tables' && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                  <div className="bg-white p-5 rounded-[1.5rem] border border-zinc-200/60 flex flex-wrap gap-4 justify-between items-center">
+                    <div className="flex items-center gap-2 text-sm font-bold uppercase text-zinc-800">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-500 flex items-center justify-center shadow-md shadow-indigo-500/30"><MapPin size={14} className="text-white"/></div>
+                      Floor Plan Status
+                    </div>
+                    <div className="flex gap-4 text-xs font-bold text-zinc-500">
+                      <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-[#D4A373]/10 border border-[#D4A373]/30"/> Available</span>
+                      <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-rose-100 border border-rose-400"/> Occupied</span>
+                      <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-[#D4A373]/10 border border-[#D4A373]/30"/> Dirty</span>
+                      <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-sky-100 border border-sky-400"/> Reserved</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    {tables.map(t => {
+                      const styles = {
+                        Available: 'bg-zinc-50 border-[#D4A373]/30 text-[#D4A373]',
+                        Occupied: 'bg-rose-50 border-rose-200 text-rose-700',
+                        Dirty: 'bg-zinc-50 border-[#D4A373]/30 text-[#D4A373]',
+                        Reserved: 'bg-sky-50 border-sky-200 text-sky-700'
+                      }[t.status] || 'bg-zinc-50 border-zinc-200 text-zinc-700';
+                      return (
+                        <div key={t.id} className={`p-4 rounded-[1.5rem] border-2 flex flex-col items-center justify-center gap-2 transition-all hover:scale-105 cursor-pointer shadow-sm ${styles}`}>
+                          <div className="flex items-center justify-between w-full text-[10px] font-bold uppercase tracking-widest opacity-60"><span>{t.capacity} Pax</span><span>{t.time || ''}</span></div>
+                          <h3 className="text-2xl font-black">{t.id}</h3>
+                          <span className="text-[10px] font-black uppercase tracking-widest bg-white/50 px-2 py-0.5 rounded-md">{t.status}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </motion.div>
+              )}
 
-          </div>
+              {/* TAB: MENU & INVENTORY */}
+              {activeTab === 'menu' && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                  <div className="dd-card rounded-[2rem] overflow-hidden">
+                    <div className="p-5 border-b border-zinc-150 flex justify-between items-center bg-white/40">
+                      <h3 className="font-bold flex items-center gap-2 text-sm uppercase">
+                        <div className="w-7 h-7 rounded-lg bg-[#D4A373] flex items-center justify-center shadow-md shadow-[#D4A373]/30"><Utensils size={14} className="text-white" /></div>
+                        Top Performing Items
+                      </h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead><tr className="border-b border-zinc-150 text-[10px] uppercase text-zinc-400 bg-zinc-50/50"><th className="p-4">Item Name</th><th className="p-4">Category</th><th className="p-4 text-center">Orders (Month)</th><th className="p-4 text-right">Revenue Generated</th><th className="p-4 text-right">Inventory Status</th></tr></thead>
+                        <tbody className="divide-y divide-zinc-100">
+                          {menuPerformance.map((m, idx) => (
+                            <tr key={idx} className="hover:bg-zinc-50/60">
+                              <td className="p-4 text-sm font-bold text-zinc-900">{m.item}</td>
+                              <td className="p-4"><span className="text-[10px] font-bold uppercase px-2 py-1 rounded-full bg-zinc-100 text-zinc-600">{m.category}</span></td>
+                              <td className="p-4 text-sm font-bold text-zinc-600 text-center">{m.orders}</td>
+                              <td className="p-4 text-sm font-bold text-[#D4A373] text-right">₹{parseFloat(m.revenue).toLocaleString('en-IN')}</td>
+                              <td className="p-4 text-right"><span className={`px-2 py-1 rounded-full text-[9px] font-bold uppercase border ${m.status === 'Low Stock' ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'}`}>{m.status}</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* FALLBACK FOR UNIMPLEMENTED TABS */}
+              {activeTab === 'billing' && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="dd-card rounded-[2rem] p-8 text-center text-zinc-500">
+                  <Receipt size={32} className="mx-auto mb-3 text-[#D4A373] opacity-50" />
+                  <h3 className="font-bold text-lg text-zinc-900 mb-2">Billing Module</h3>
+                  <p className="text-sm">Connects directly to the main Finance ledger. (See Finance Dashboard)</p>
+                </motion.div>
+              )}
+
+            </div>
+          )}
         </AnimatePresence>
       </div>
 

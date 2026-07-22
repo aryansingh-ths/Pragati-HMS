@@ -37,7 +37,7 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
         // Computed role tracking state and target routing maps
         const role = user.role.toUpperCase();
         let redirectPath = '/';
-
+        
         if (role === 'ADMIN') redirectPath = '/dashboard/Admin';
         else if (role === 'FRONT_DESK' || role === 'RECEPTION') redirectPath = '/dashboard/front-desk';
         else if (role === 'HOUSEKEEPING') redirectPath = '/dashboard/housekeeping';
