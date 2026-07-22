@@ -21,7 +21,7 @@ import LoginPage from './pages/LoginPage';
 import FrontDeskDashboard from './pages/FrontDeskDashboard';
 import HousekeepingDashboard from './pages/HousekeepingDashboard';
 import FinanceDashboard from './pages/FinanceDashboard';
-import ManagerDashboard from './pages/ManagerDashboard';
+import AdminDashboard from './pages/AdminDashboard';
 import SalesDashboard from './pages/SalesDashboard';
 import TravelDashboard from './pages/TravelDashboard';
 import DiningDashboard from './pages/DiningDashboard'; // Ensure this matches your file name (e.g., DinningDashboard if you kept the double 'n')
@@ -145,9 +145,9 @@ export default function App() {
               <Route path="/dashboard/finance" element={<FinanceDashboard />} />
             </Route>
 
-            {/* ROUTE 6: PROTECTED MANAGERIAL COMMAND CENTER */}
+            {/* ROUTE 6: PROTECTED AdminIAL COMMAND CENTER */}
             <Route element={<ProtectedRoute isAllowed={userRole?.toUpperCase() === 'ADMIN'} />}>
-              <Route path="/dashboard/manager" element={<ManagerDashboard />} />
+              <Route path="/dashboard/Admin" element={<AdminDashboard />} />
             </Route>
 
             {/* ROUTE 7: PROTECTED SALES DASHBOARD */}

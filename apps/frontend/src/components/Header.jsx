@@ -34,7 +34,7 @@ export default function Header({
 
   const getDashboardPath = (role) => {
     const r = role.toLowerCase();
-    if (r === 'admin') return '/dashboard/manager';
+    if (r === 'admin') return '/dashboard/Admin';
     if (r === 'housekeeping') return '/dashboard/housekeeping';
     if (r === 'finance') return '/dashboard/finance';
     if (r === 'sales') return '/dashboard/sales';

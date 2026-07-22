@@ -38,7 +38,7 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
         const role = user.role.toUpperCase();
         let redirectPath = '/';
         
-        if (role === 'ADMIN') redirectPath = '/dashboard/manager';
+        if (role === 'ADMIN') redirectPath = '/dashboard/Admin';
         else if (role === 'FRONT_DESK' || role === 'RECEPTION') redirectPath = '/dashboard/front-desk';
         else if (role === 'HOUSEKEEPING') redirectPath = '/dashboard/housekeeping';
         else if (role === 'FINANCE') redirectPath = '/dashboard/finance';
