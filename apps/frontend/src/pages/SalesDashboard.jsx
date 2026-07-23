@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import toast, { Toaster } from 'react-hot-toast'; // ✨ Added Toast Notifications
 import {
   Target, TrendingUp, Briefcase, Handshake, Calendar, Search, Plus, X, Loader2,
   AlertTriangle, CheckCircle2, Clock, XCircle, Send, FileText, DollarSign,
@@ -9,6 +10,16 @@ import {
   User, Building2, MapPin, BarChart3, ArrowRight, Percent, TrendingDown, LogOut,
   RefreshCw, Zap
 } from 'lucide-react';
+
+// =============================================
+// CENTRALIZED API CONFIG
+// =============================================
+const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:3000';
+
+const getHeaders = () => ({
+  'Content-Type': 'application/json',
+  'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}`
+});
 
 // =============================================
 // SVG DONUT CHART
@@ -197,7 +208,19 @@ function TargetVsRevenueChart({ period }) {
 // MAIN COMPONENT - SALES EXECUTIVE VIEW
 // =============================================
 export default function SalesExecutiveDashboard() {
-  // ─── Broadcast States ──────────────────────────────────────
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('overview');
+  const [isLoading, setIsLoading] = useState(true);
+  const [timePeriod, setTimePeriod] = useState('Monthly');
+  
+  // ─── Pagination States ✨ ──────────────────────────────────────
+  const [accountsPage, setAccountsPage] = useState(1);
+  const ACCOUNTS_PER_PAGE = 6;
+  
+  const [tasksPage, setTasksPage] = useState(1);
+  const TASKS_PER_PAGE = 5;
+
+  // ─── Broadcast States (Real-Time SSE) ──────────────────────────────────────
   const [broadcasts, setBroadcasts] = React.useState([]);
   const [dismissedBroadcasts, setDismissedBroadcasts] = React.useState(() => {
     try { return JSON.parse(localStorage.getItem('hms_dismissed_broadcasts')) || []; } catch { return []; }
@@ -207,30 +230,40 @@ export default function SalesExecutiveDashboard() {
     localStorage.setItem('hms_dismissed_broadcasts', JSON.stringify(dismissedBroadcasts));
   }, [dismissedBroadcasts]);
 
-  const fetchBroadcasts = React.useCallback(async () => {
-    try {
-      const token = sessionStorage.getItem('hms_token');
-      const res = await fetch(`http://localhost:3000/api/broadcasts`, { headers: { 'Authorization': `Bearer ${token}` } });
-      if (res?.ok) {
-        const data = await res.json();
-        setBroadcasts(data.data.broadcasts || []);
-      }
-    } catch (e) {
-      console.error('Failed to fetch broadcasts:', e);
-    }
+  React.useEffect(() => {
+    const token = sessionStorage.getItem('hms_token');
+    
+    // 1. Fetch initial historical broadcasts
+    fetch(`${API_BASE_URL}/api/broadcasts`, { headers: getHeaders() })
+      .then(res => res.json())
+      .then(data => {
+        if(data?.data?.broadcasts) setBroadcasts(data.data.broadcasts);
+      })
+      .catch(e => console.error('Failed to fetch historical broadcasts:', e));
+
+    // 2. Open persistent Server-Sent Events (SSE) connection
+    const eventSource = new EventSource(`${API_BASE_URL}/api/broadcasts/stream?token=${token}`);
+
+    // Listen for real-time pushes from the server
+    eventSource.onmessage = (event) => {
+      const newBroadcast = JSON.parse(event.data);
+      setBroadcasts((prevBroadcasts) => [newBroadcast, ...prevBroadcasts]);
+      toast('New Department Broadcast!', { icon: '📣' });
+    };
+
+    eventSource.onerror = (error) => {
+      console.error('SSE Broadcast Stream disconnected:', error);
+      eventSource.close();
+    };
+
+    // Cleanup connection when component unmounts
+    return () => eventSource.close();
   }, []);
 
-  React.useEffect(() => {
-    fetchBroadcasts();
-    const interval = setInterval(fetchBroadcasts, 30000);
-    return () => clearInterval(interval);
-  }, [fetchBroadcasts]);
-  const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('overview');
-  const [isLoading, setIsLoading] = useState(true);
-  const [timePeriod, setTimePeriod] = useState('Monthly');
-  
   // Database Connected States
+  const [currentUser, setCurrentUser] = useState({
+    initials: 'ST', name: 'Loading...', target: 1200000, achieved: 0, baseIncentiveRate: 0.025
+  });
   const [myLeads, setMyLeads] = useState([]);
   const [myAccounts, setMyAccounts] = useState([]);
   const [ongoingTasks, setOngoingTasks] = useState([]);
@@ -243,32 +276,28 @@ export default function SalesExecutiveDashboard() {
   const [showAddLeadModal, setShowAddLeadModal] = useState(false);
   const [isSubmittingLead, setIsSubmittingLead] = useState(false);
   const [newLeadForm, setNewLeadForm] = useState({
-    company: '',
-    deal_name: '',
-    value: '',
-    stage: 'New',
-    source: 'Hotel Website',
-    contact_name: '',
-    contact_email: '',
-    contact_phone: ''
+    company: '', deal_name: '', value: '', stage: 'New', source: 'Hotel Website',
+    contact_name: '', contact_email: '', contact_phone: ''
   });
 
-  const CURRENT_USER = { initials: 'AS', name: 'Aditi Sharma', target: 1200000, achieved: 980000, baseIncentiveRate: 0.025 };
   const STAGES = ['New', 'Contacted', 'Proposal Sent', 'Negotiation', 'Won', 'Lost'];
 
-  const fetchData = async () => {
+  const fetchData = async (silent = false) => {
     try {
-      const token = sessionStorage.getItem('hms_token');
-      const headers = { 'Authorization': `Bearer ${token}` };
-
-      // Fetch all dashboard data concurrently
-      const [leadsRes, accountsRes, tasksRes, otaRes, modesRes] = await Promise.all([
-        fetch('http://localhost:3000/api/sales/leads', { headers }),
-        fetch('http://localhost:3000/api/sales/accounts', { headers }),
-        fetch('http://localhost:3000/api/sales/tasks', { headers }),
-        fetch('http://localhost:3000/api/sales/ota', { headers }),
-        fetch('http://localhost:3000/api/sales/booking-modes', { headers })
+      if (!silent) setIsLoading(true); // ✨ Silent refresh prevents UI flicker during optimistic updates
+      const [userRes, leadsRes, accountsRes, tasksRes, otaRes, modesRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/sales/me`, { headers: getHeaders() }),
+        fetch(`${API_BASE_URL}/api/sales/leads`, { headers: getHeaders() }),
+        fetch(`${API_BASE_URL}/api/sales/accounts`, { headers: getHeaders() }),
+        fetch(`${API_BASE_URL}/api/sales/tasks`, { headers: getHeaders() }),
+        fetch(`${API_BASE_URL}/api/sales/ota`, { headers: getHeaders() }),
+        fetch(`${API_BASE_URL}/api/sales/booking-modes`, { headers: getHeaders() })
       ]);
+
+      if (userRes.ok) {
+        const data = await userRes.json();
+        setCurrentUser(data.data);
+      }
 
       if (leadsRes.ok) {
         const data = await leadsRes.json();
@@ -319,14 +348,14 @@ export default function SalesExecutiveDashboard() {
         };
         
         setBookingModes(data.data.map(mode => ({
-          label: mode.label,
-          value: parseFloat(mode.value),
+          label: mode.label, value: parseFloat(mode.value),
           color: modeMeta[mode.label]?.color || '#94a3b8',
           icon: modeMeta[mode.label]?.icon || <Activity size={14} />
         })));
       }
     } catch (error) {
       console.error('Failed to sync dashboard data:', error);
+      toast.error('Failed to sync latest data.');
     } finally {
       setIsLoading(false);
     }
@@ -337,81 +366,110 @@ export default function SalesExecutiveDashboard() {
   }, []);
 
   const refresh = () => {
-    setIsLoading(true);
     fetchData();
   };
 
   const handleAddLead = async (e) => {
     e.preventDefault();
     setIsSubmittingLead(true);
+    
+    // ✨ Optimistic UI Update: Create mock lead and update state immediately
+    const previousLeads = [...myLeads];
+    const optimisticLead = {
+      id: 'temp-' + Date.now(), company: newLeadForm.company, deal: newLeadForm.deal_name,
+      value: parseFloat(newLeadForm.value) || 0, stage: newLeadForm.stage, source: newLeadForm.source,
+      contactName: newLeadForm.contact_name, contactEmail: newLeadForm.contact_email, contactPhone: newLeadForm.contact_phone
+    };
+    
+    setMyLeads(prev => [optimisticLead, ...prev]);
+    setShowAddLeadModal(false);
+
     try {
-      const token = sessionStorage.getItem('hms_token');
-      const res = await fetch('http://localhost:3000/api/sales/leads', {
+      const res = await fetch(`${API_BASE_URL}/api/sales/leads`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          ...newLeadForm,
-          value: parseFloat(newLeadForm.value) || 0
-        })
+        headers: getHeaders(),
+        body: JSON.stringify({ ...newLeadForm, value: parseFloat(newLeadForm.value) || 0 })
       });
 
       if (res.ok) {
-        setShowAddLeadModal(false);
+        toast.success('Lead added successfully!');
         setNewLeadForm({ company: '', deal_name: '', value: '', stage: 'New', source: 'Hotel Website', contact_name: '', contact_email: '', contact_phone: '' });
-        refresh();
+        fetchData(true); // Silent refresh to grab actual DB ID
       } else {
-        const errData = await res.json();
-        alert(`Error: ${errData.error || 'Failed to add lead'}`);
+        throw new Error((await res.json()).error);
       }
     } catch (error) {
       console.error('Failed to add lead:', error);
-      alert('Network error while saving the lead.');
+      setMyLeads(previousLeads); // ✨ Revert optimistic update on failure
+      toast.error(`Failed to add lead: ${error.message || 'Network error'}`);
+      setShowAddLeadModal(true); // Re-open modal so they don't lose data
     } finally {
       setIsSubmittingLead(false);
     }
   };
 
-  const filteredLeads = myLeads.filter(l => (l.company + l.deal + l.contactName).toLowerCase().includes(leadSearch.toLowerCase()));
-
   const moveToAccounts = async (lead) => {
+    // ✨ Optimistic UI Update
+    const previousLeads = [...myLeads];
+    const previousAccounts = [...myAccounts];
+
+    setMyLeads(prev => prev.filter(l => l.id !== lead.id));
+    setMyAccounts(prev => [{
+      id: 'temp-' + Date.now(), name: lead.company, industry: 'General',
+      rate: 5000, ytdRevenue: lead.value, status: 'Onboarding'
+    }, ...prev]);
+
     try {
-      const token = sessionStorage.getItem('hms_token');
-      const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
-
-      // 1. Move lead to 'Contacted' stage
-      await fetch(`http://localhost:3000/api/sales/leads/${lead.id}/stage`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify({ stage: 'Contacted' })
-      });
-
-      // 2. Add as a new Account
-      const accResponse = await fetch(`http://localhost:3000/api/sales/accounts`, {
+      const res = await fetch(`${API_BASE_URL}/api/sales/leads/${lead.id}/convert`, {
         method: 'POST',
-        headers,
-        body: JSON.stringify({
-          name: lead.company,
-          industry: 'General',
-          rate: 5000,
-          ytd_revenue: 0,
-          status: 'Onboarding'
-        })
+        headers: getHeaders()
       });
 
-      if (accResponse.ok) {
-        refresh(); // Sync the fresh data back from the DB
-        alert(`${lead.company} moved to My Accounts!`);
+      if (res.ok) {
+        toast.success(`${lead.company} moved to My Accounts!`);
+        fetchData(true); // Silent sync
+      } else {
+        throw new Error((await res.json()).error);
       }
     } catch (error) {
-      console.error('Failed to convert lead to account:', error);
-      alert('Error updating database.');
+      console.error('Conversion error:', error);
+      // ✨ Revert optimistic update
+      setMyLeads(previousLeads);
+      setMyAccounts(previousAccounts);
+      toast.error(`Conversion failed. Reverting changes.`);
     }
   };
 
-  // --- Dynamic Metrics Processing ---
+  const updateTaskStatus = async (taskId, newStatus) => {
+    // ✨ Optimistic UI for Tasks
+    const previousTasks = [...ongoingTasks];
+    setOngoingTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
+    
+    // Simulating API Call or firing actual API if endpoint exists
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/sales/tasks/${taskId}/status`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (!res.ok) throw new Error('API failed');
+      toast.success('Task status updated');
+    } catch(e) {
+      setOngoingTasks(previousTasks); // Revert
+      toast.error('Failed to update task status.');
+    }
+  };
+
+  // Derived Data & Pagination
+  const filteredLeads = myLeads.filter(l => (l.company + l.deal + l.contactName).toLowerCase().includes(leadSearch.toLowerCase()));
+  
+  // ✨ Pagination Setup
+  const paginatedAccounts = myAccounts.slice((accountsPage - 1) * ACCOUNTS_PER_PAGE, accountsPage * ACCOUNTS_PER_PAGE);
+  const totalAccountPages = Math.max(1, Math.ceil(myAccounts.length / ACCOUNTS_PER_PAGE));
+
+  const paginatedTasks = ongoingTasks.slice((tasksPage - 1) * TASKS_PER_PAGE, tasksPage * TASKS_PER_PAGE);
+  const totalTaskPages = Math.max(1, Math.ceil(ongoingTasks.length / TASKS_PER_PAGE));
+
   const totalOtaGross = otaData.reduce((acc, curr) => acc + curr.grossRevenue, 0);
   const totalOtaCommission = otaData.reduce((acc, curr) => acc + (curr.grossRevenue * (curr.commissionRate / 100)), 0);
   const totalOtaNet = totalOtaGross - totalOtaCommission;
@@ -426,100 +484,40 @@ export default function SalesExecutiveDashboard() {
 
   const stageColors = { 'New': '#94a3b8', 'Contacted': '#0ea5e9', 'Proposal Sent': '#f59e0b', 'Negotiation': '#8b5cf6', 'Won': '#10b981', 'Lost': '#f43f5e' };
 
-  // Enhanced Theme Map with diverse gradients and glowing effects
+  // Enhanced Theme Map
   const enhancedThemeMap = {
-    indigo: {
-      gradient: 'from-indigo-50 via-white to-white',
-      ring: 'ring-indigo-500/10',
-      glow: 'rgba(79,70,229,0.35)',
-      iconBg: 'bg-[#4f46e5] text-white shadow-lg shadow-[#4f46e5]/30'
-    },
-    emerald: {
-      gradient: 'from-emerald-50 via-white to-white',
-      ring: 'ring-emerald-500/10',
-      glow: 'rgba(16,185,129,0.35)',
-      iconBg: 'bg-[#10b981] text-white shadow-lg shadow-[#10b981]/30'
-    },
-    amber: {
-      gradient: 'from-amber-50 via-white to-white',
-      ring: 'ring-amber-500/10',
-      glow: 'rgba(245,158,11,0.35)',
-      iconBg: 'bg-[#f59e0b] text-white shadow-lg shadow-[#f59e0b]/30'
-    },
-    rose: {
-      gradient: 'from-rose-50 via-white to-white',
-      ring: 'ring-rose-500/10',
-      glow: 'rgba(225,29,72,0.35)',
-      iconBg: 'bg-[#e11d48] text-white shadow-lg shadow-[#e11d48]/30'
-    },
-    sky: {
-      gradient: 'from-sky-50 via-white to-white',
-      ring: 'ring-sky-500/10',
-      glow: 'rgba(14,165,233,0.35)',
-      iconBg: 'bg-[#0ea5e9] text-white shadow-lg shadow-[#0ea5e9]/30'
-    },
-    violet: {
-      gradient: 'from-violet-50 via-white to-white',
-      ring: 'ring-violet-500/10',
-      glow: 'rgba(139,92,246,0.35)',
-      iconBg: 'bg-[#8b5cf6] text-white shadow-lg shadow-[#8b5cf6]/30'
-    },
-    orange: { 
-      gradient: 'from-orange-50 via-white to-white',
-      ring: 'ring-orange-500/10',
-      glow: 'rgba(212,163,115,0.35)',
-      iconBg: 'bg-[#D4A373] text-white shadow-lg shadow-[#D4A373]/30'
-    }
+    indigo: { gradient: 'from-indigo-50 via-white to-white', ring: 'ring-indigo-500/10', glow: 'rgba(79,70,229,0.35)', iconBg: 'bg-[#4f46e5] text-white shadow-lg shadow-[#4f46e5]/30' },
+    emerald: { gradient: 'from-emerald-50 via-white to-white', ring: 'ring-emerald-500/10', glow: 'rgba(16,185,129,0.35)', iconBg: 'bg-[#10b981] text-white shadow-lg shadow-[#10b981]/30' },
+    amber: { gradient: 'from-amber-50 via-white to-white', ring: 'ring-amber-500/10', glow: 'rgba(245,158,11,0.35)', iconBg: 'bg-[#f59e0b] text-white shadow-lg shadow-[#f59e0b]/30' },
+    rose: { gradient: 'from-rose-50 via-white to-white', ring: 'ring-rose-500/10', glow: 'rgba(225,29,72,0.35)', iconBg: 'bg-[#e11d48] text-white shadow-lg shadow-[#e11d48]/30' },
+    sky: { gradient: 'from-sky-50 via-white to-white', ring: 'ring-sky-500/10', glow: 'rgba(14,165,233,0.35)', iconBg: 'bg-[#0ea5e9] text-white shadow-lg shadow-[#0ea5e9]/30' },
+    violet: { gradient: 'from-violet-50 via-white to-white', ring: 'ring-violet-500/10', glow: 'rgba(139,92,246,0.35)', iconBg: 'bg-[#8b5cf6] text-white shadow-lg shadow-[#8b5cf6]/30' },
+    orange: { gradient: 'from-orange-50 via-white to-white', ring: 'ring-orange-500/10', glow: 'rgba(212,163,115,0.35)', iconBg: 'bg-[#D4A373] text-white shadow-lg shadow-[#D4A373]/30' }
   };
 
   const navGroups = [
-    {
-      heading: 'My Workspace',
-      items: [
-        { key: 'overview', label: 'My Performance', icon: <TrendingUp size={15} /> },
-        { key: 'tasks', label: 'Task Management', icon: <ListTodo size={15} /> },
-      ],
-    },
-    {
-      heading: 'Pipeline & Accounts',
-      items: [
-        { key: 'pipeline', label: 'Lead Pipeline', icon: <Target size={15} /> },
-        { key: 'accounts', label: 'My Accounts', icon: <Briefcase size={15} /> },
-      ],
-    },
-    {
-      heading: 'Sources & Channels',
-      items: [
-        { key: 'modes', label: 'Booking Modes', icon: <Activity size={15} /> },
-        { key: 'ota', label: 'OTA Performance', icon: <Globe size={15} /> },
-      ],
-    },
+    { heading: 'My Workspace', items: [{ key: 'overview', label: 'My Performance', icon: <TrendingUp size={15} /> }, { key: 'tasks', label: 'Task Management', icon: <ListTodo size={15} /> }] },
+    { heading: 'Pipeline & Accounts', items: [{ key: 'pipeline', label: 'Lead Pipeline', icon: <Target size={15} /> }, { key: 'accounts', label: 'My Accounts', icon: <Briefcase size={15} /> }] },
+    { heading: 'Sources & Channels', items: [{ key: 'modes', label: 'Booking Modes', icon: <Activity size={15} /> }, { key: 'ota', label: 'OTA Performance', icon: <Globe size={15} /> }] },
   ];
   const navItems = navGroups.flatMap(g => g.items);
 
   return (
     <div className="min-h-[calc(100vh-6rem)] relative sd-app-bg sd-scrollbar p-6 flex flex-col lg:flex-row gap-6">
+      <Toaster position="top-right" toastOptions={{ className: 'text-sm font-bold shadow-lg rounded-2xl' }} />
       <style>{`
         .sd-scrollbar { scrollbar-width: thin; scrollbar-color: rgba(161,161,170,0.4) transparent; }
         .sd-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .sd-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .sd-scrollbar::-webkit-scrollbar-thumb { background: rgba(161, 161, 170, 0.45); border-radius: 999px; }
 
-        .sd-app-bg {
-          background: #F8F1E3 !important;
-        }
+        .sd-app-bg { background: #F8F1E3 !important; }
         .sd-dealdeck-sidebar { background: #FFFFFF; box-shadow: 14px 17px 40px 4px rgba(112, 144, 176, 0.08); border: 1px solid rgba(226, 232, 240, 0.8); }
         .sd-dealdeck-card { background: #FFFFFF; border: 1px solid rgba(226, 232, 240, 0.8); box-shadow: 0px 18px 40px 0px rgba(112, 144, 176, 0.08); }
         .sd-input { width: 100%; padding: 0.75rem 1.1rem; background: #F4F7FE; border: 1px solid #E2E8F0; border-radius: 1rem; font-size: 0.875rem; font-weight: 500; }
         
         .sd-glass-backdrop { background: rgba(24, 24, 27, 0.4); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
-        .sd-glass-modal {
-          background: rgba(255, 255, 255, 0.98);
-          border: 1px solid rgba(226, 232, 240, 0.8);
-          box-shadow: 0 30px 70px -12px rgba(112, 144, 176, 0.25);
-          backdrop-filter: blur(24px);
-          -webkit-backdrop-filter: blur(24px);
-        }
+        .sd-glass-modal { background: rgba(255, 255, 255, 0.98); border: 1px solid rgba(226, 232, 240, 0.8); box-shadow: 0 30px 70px -12px rgba(112, 144, 176, 0.25); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
       `}</style>
 
       {/* LEFT SIDEBAR */}
@@ -567,7 +565,6 @@ export default function SalesExecutiveDashboard() {
             <p className="text-xs text-zinc-500 mt-1">Manage your active deals, daily tasks, and track your quota.</p>
           </div>
           <div className="flex items-center gap-3">
-            {/* Live Indicator */}
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
@@ -576,11 +573,7 @@ export default function SalesExecutiveDashboard() {
               <span className="text-[9px] font-bold uppercase tracking-wider">Live System</span>
             </div>
 
-            {/* Refresh */}
-            <button
-              onClick={refresh}
-              className={`p-2.5 rounded-xl border border-zinc-200/80 bg-white hover:bg-zinc-50 text-zinc-500 transition-all ${isLoading ? 'animate-spin' : ''}`}
-            >
+            <button onClick={() => refresh()} className={`p-2.5 rounded-xl border border-zinc-200/80 bg-white hover:bg-zinc-50 text-zinc-500 transition-all ${isLoading ? 'animate-spin' : ''}`}>
               <RefreshCw size={15} />
             </button>
 
@@ -588,17 +581,14 @@ export default function SalesExecutiveDashboard() {
               <Plus size={14} /> Add Lead
             </button>
             {(() => {
-              const staffName = sessionStorage.getItem('hms_name') || 'Staff';
-              const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
-              const designation = 'Sales admin';
+              const staffName = currentUser.name || sessionStorage.getItem('hms_name') || 'Staff';
+              const initials = currentUser.initials || 'ST';
+              const designation = 'Sales Executive';
               return (
                 <motion.button
                   whileHover={{ y: -2 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => {
-                    localStorage.clear();
-                    window.location.href = '/login';
-                  }}
+                  onClick={() => { localStorage.clear(); window.location.href = '/login'; }}
                   className="group flex items-center gap-3 bg-white pl-3 pr-4 py-1.5 rounded-2xl border border-zinc-200/60 shadow-xs hover:shadow-md hover:border-rose-200 hover:bg-rose-50 transition-all duration-300 cursor-pointer"
                   title="Sign Out"
                 >
@@ -670,8 +660,8 @@ export default function SalesExecutiveDashboard() {
                 <motion.div key="overview" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                     {[
-                      { label: 'Target', value: `₹${(CURRENT_USER.target / 100000).toFixed(1)}L`, sub: 'Monthly Goal', icon: <Target size={16} />, theme: 'indigo' },
-                      { label: 'Revenue Generated', value: `₹${(CURRENT_USER.achieved / 100000).toFixed(1)}L`, sub: `${Math.round((CURRENT_USER.achieved / CURRENT_USER.target) * 100)}% of Target`, icon: <TrendingUp size={16} />, theme: 'emerald' },
+                      { label: 'Target', value: `₹${(currentUser.target / 100000).toFixed(1)}L`, sub: 'Monthly Goal', icon: <Target size={16} />, theme: 'indigo' },
+                      { label: 'Revenue Generated', value: `₹${(currentUser.achieved / 100000).toFixed(1)}L`, sub: `${Math.round((currentUser.achieved / currentUser.target) * 100)}% of Target`, icon: <TrendingUp size={16} />, theme: 'emerald' },
                       { label: 'Deals In Pipeline', value: activeDealsCount, sub: `₹${(myPipelineValue / 100000).toFixed(1)}L Total Value`, icon: <Briefcase size={16} />, theme: 'amber' },
                       { label: 'Pending Tasks', value: pendingTasksCount, sub: 'Ongoing & Assigned', icon: <CheckSquare size={16} />, theme: 'rose' },
                     ].map((kpi, i) => {
@@ -743,7 +733,7 @@ export default function SalesExecutiveDashboard() {
                     <motion.div whileHover={{ y: -6 }} className="relative overflow-hidden bg-gradient-to-br from-zinc-50 to-zinc-50 rounded-[2rem] p-6 shadow-sm border border-[#D4A373]/30 flex flex-col justify-center text-center">
                       <Trophy size={40} className="mx-auto text-[#D4A373] mb-4" />
                       <h3 className="text-sm font-black text-[#D4A373] uppercase tracking-wider mb-2">Incentive Status</h3>
-                      <p className="text-2xl font-black text-[#D4A373] mb-2">₹{(CURRENT_USER.achieved * CURRENT_USER.baseIncentiveRate).toLocaleString('en-IN')}</p>
+                      <p className="text-2xl font-black text-[#D4A373] mb-2">₹{(currentUser.achieved * currentUser.baseIncentiveRate).toLocaleString('en-IN')}</p>
                       <p className="text-xs text-[#D4A373] font-medium">Earned so far this month.</p>
                       <div className="mt-6">
                         <button onClick={() => setActiveTab('pipeline')} className="w-full bg-[#D4A373] hover:bg-[#D4A373] text-white py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-colors shadow-sm">
@@ -775,7 +765,7 @@ export default function SalesExecutiveDashboard() {
                               <span className="text-[10px] font-semibold text-zinc-500 bg-white px-2 py-1 rounded border border-zinc-200">By: {task.assigner}</span>
                               <span className="text-[10px] text-zinc-500 flex items-center gap-1"><Clock size={12} /> Due: {task.deadline}</span>
                             </div>
-                            <button className="mt-4 w-full bg-white border border-zinc-200 text-zinc-700 hover:bg-rose-600 hover:text-white hover:border-rose-600 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors">
+                            <button onClick={() => toast.success('Sent completion report to Admin')} className="mt-4 w-full bg-white border border-zinc-200 text-zinc-700 hover:bg-rose-600 hover:text-white hover:border-rose-600 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors">
                               Mark as Done
                             </button>
                           </div>
@@ -789,8 +779,8 @@ export default function SalesExecutiveDashboard() {
                         <button className="text-[11px] font-bold text-[#D4A373] bg-zinc-50 px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/10 transition flex items-center gap-1"><Plus size={12} /> New Task</button>
                       </div>
                       <div className="flex flex-col gap-3 flex-1">
-                        {ongoingTasks.length === 0 && <div className="text-center text-zinc-400 text-xs py-4">No active ongoing tasks.</div>}
-                        {ongoingTasks.map((task) => (
+                        {paginatedTasks.length === 0 && <div className="text-center text-zinc-400 text-xs py-4">No active ongoing tasks.</div>}
+                        {paginatedTasks.map((task) => (
                           <div key={task.id} className="bg-white border border-zinc-200 rounded-xl p-4 shadow-sm flex flex-col">
                             <p className="text-sm font-bold text-zinc-900 mb-2">{task.title}</p>
                             <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -802,9 +792,7 @@ export default function SalesExecutiveDashboard() {
                               <span className="text-[10px] font-bold uppercase text-zinc-400">Status</span>
                               <select
                                 value={task.status}
-                                onChange={(e) => {
-                                  setOngoingTasks(ongoingTasks.map(t => t.id === task.id ? { ...t, status: e.target.value } : t));
-                                }}
+                                onChange={(e) => updateTaskStatus(task.id, e.target.value)}
                                 className="text-xs font-bold text-[#D4A373] bg-zinc-50 border-none rounded py-1 px-2 cursor-pointer outline-none focus:ring-2 focus:ring-violet-200"
                               >
                                 <option value="Pending">Pending</option>
@@ -814,6 +802,15 @@ export default function SalesExecutiveDashboard() {
                             </div>
                           </div>
                         ))}
+                        
+                        {/* ✨ Tasks Pagination Controls */}
+                        {totalTaskPages > 1 && (
+                          <div className="flex items-center justify-between mt-auto pt-4 border-t border-zinc-100">
+                            <button disabled={tasksPage === 1} onClick={() => setTasksPage(p => p - 1)} className="px-3 py-1 rounded-lg border border-zinc-200 text-[10px] font-bold text-zinc-600 disabled:opacity-50 hover:bg-zinc-50">Previous</button>
+                            <span className="text-[10px] font-bold text-zinc-400">Page {tasksPage} of {totalTaskPages}</span>
+                            <button disabled={tasksPage === totalTaskPages} onClick={() => setTasksPage(p => p + 1)} className="px-3 py-1 rounded-lg border border-zinc-200 text-[10px] font-bold text-zinc-600 disabled:opacity-50 hover:bg-zinc-50">Next</button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -841,10 +838,11 @@ export default function SalesExecutiveDashboard() {
                             </div>
                           </div>
 
-                          <div className="flex flex-col gap-3 min-h-[100px]">
+                          {/* ✨ Virtualized Container for Kanban Columns */}
+                          <div className="flex flex-col gap-3 min-h-[100px] max-h-[65vh] overflow-y-auto sd-scrollbar pr-2 pb-6">
                             {stageLeads.map((lead, i) => (
                               <motion.div key={lead.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
-                                className="bg-white rounded-[1.5rem] p-4 border border-zinc-200/80 shadow-sm relative overflow-hidden flex flex-col"
+                                className="bg-white rounded-[1.5rem] p-4 border border-zinc-200/80 shadow-sm relative overflow-hidden flex flex-col shrink-0"
                               >
                                 <div className="absolute top-0 left-0 w-1 h-full" style={{ background: stageColors[stage] }} />
                                 <div className="pl-2">
@@ -893,13 +891,15 @@ export default function SalesExecutiveDashboard() {
               {/* TAB: MY ACCOUNTS */}
               {activeTab === 'accounts' && (
                 <motion.div key="accounts" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
-                  <div className="bg-white border border-zinc-200/60 rounded-[2rem] overflow-hidden p-6 shadow-sm">
-                    <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider mb-6"><Briefcase size={16} className="text-[#D4A373]" /> Accounts Managed By Me</h3>
-                    <p className="text-xs text-zinc-500 mb-6">Leads you start working on heavily can be moved here for long-term management.</p>
+                  <div className="bg-white border border-zinc-200/60 rounded-[2rem] overflow-hidden p-6 shadow-sm flex flex-col">
+                    <div>
+                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider mb-2"><Briefcase size={16} className="text-[#D4A373]" /> Accounts Managed By Me</h3>
+                      <p className="text-xs text-zinc-500 mb-6">Leads you start working on heavily can be moved here for long-term management.</p>
+                    </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {myAccounts.length === 0 && <div className="text-center text-zinc-400 text-xs py-4 col-span-full">No active accounts.</div>}
-                      {myAccounts.map(acc => (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 flex-1">
+                      {paginatedAccounts.length === 0 && <div className="text-center text-zinc-400 text-xs py-4 col-span-full">No active accounts.</div>}
+                      {paginatedAccounts.map(acc => (
                         <div key={acc.id} className="bg-white border border-zinc-200 rounded-[1.5rem] p-5 shadow-sm hover:border-[#D4A373]/30 transition-colors">
                           <div className="flex justify-between items-start mb-3">
                             <div className="w-10 h-10 rounded-xl bg-zinc-50 text-[#D4A373] flex items-center justify-center"><Building2 size={20} /></div>
@@ -920,6 +920,15 @@ export default function SalesExecutiveDashboard() {
                         </div>
                       ))}
                     </div>
+
+                    {/* ✨ Accounts Pagination Controls */}
+                    {totalAccountPages > 1 && (
+                      <div className="flex items-center justify-between mt-6 pt-4 border-t border-zinc-100">
+                        <button disabled={accountsPage === 1} onClick={() => setAccountsPage(p => p - 1)} className="px-4 py-2 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-600 disabled:opacity-50 hover:bg-zinc-50 transition-colors">Previous</button>
+                        <span className="text-xs font-bold text-zinc-400">Page {accountsPage} of {totalAccountPages}</span>
+                        <button disabled={accountsPage === totalAccountPages} onClick={() => setAccountsPage(p => p + 1)} className="px-4 py-2 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-600 disabled:opacity-50 hover:bg-zinc-50 transition-colors">Next</button>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               )}

@@ -564,8 +564,8 @@ export default function DiningDashboard() {
                       }[t.status] || 'bg-zinc-50 border-zinc-200 text-zinc-700';
                       return (
                         <div key={t.id} className={`p-4 rounded-[1.5rem] border-2 flex flex-col items-center justify-center gap-2 transition-all hover:scale-105 cursor-pointer shadow-sm ${styles}`}>
-                          <div className="flex items-center justify-between w-full text-[10px] font-bold uppercase tracking-widest opacity-60"><span>{t.capacity} Pax</span><span>{t.time || ''}</span></div>
-                          <h3 className="text-2xl font-black">{t.id}</h3>
+                          <div className="flex items-center justify-between w-full text-[10px] font-bold uppercase tracking-widest opacity-60"><span>{t.capacity} Pax</span><span>{t.reserved_time || ''}</span></div>
+                          <h3 className="text-2xl font-black">{t.table_number}</h3>
                           <span className="text-[10px] font-black uppercase tracking-widest bg-white/50 px-2 py-0.5 rounded-md">{t.status}</span>
                         </div>
                       )

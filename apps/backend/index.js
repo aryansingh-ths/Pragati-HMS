@@ -1,14 +1,61 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const pool = require('./db/index');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { z } = require('zod');
+const helmet = require('helmet'); // ✨ Added Helmet
+const rateLimit = require('express-rate-limit'); // ✨ Added Rate Limiter
 
 const app = express();
-const PORT = 3000;
-const JWT_SECRET = 'techkriti_grand_super_secret_key_2026';
+const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+// 1. Secure JWT Secret loaded from Environment Variables
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error("FATAL ERROR: JWT_SECRET is not defined in environment variables.");
+  process.exit(1);
+}
+
+// 2. Strict CORS Policy
+const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : [];
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Blocked by CORS policy'));
+    }
+  },
+  credentials: true
+}));
+
+// 3. ✨ Security Headers with Helmet
+app.use(helmet());
+
+// 4. ✨ Rate Limiting
+// Global API Limiter: Max 200 requests per 15 minutes per IP
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, 
+  max: 200, 
+  standardHeaders: true, 
+  legacyHeaders: false, 
+  message: { error: 'Too many requests from this IP, please try again after 15 minutes' }
+});
+
+// Strict Auth Limiter: Max 10 requests per 15 minutes per IP to prevent brute-force
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many authentication attempts, please try again later' }
+});
+
+// Apply global limiter to all /api routes
+app.use('/api', globalLimiter);
+// Apply strict limiter to auth routes specifically
+app.use('/api/auth', authLimiter);
+
 app.use(express.json());
 
 // Logging middleware to track incoming requests
@@ -16,6 +63,61 @@ app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
 });
+
+// ==========================================
+// ROLE SECURITY MIDDLEWARE & SSE
+// ==========================================
+
+const logAuditAction = async (userId, action, details) => {
+  try {
+    let name = 'System / Guest';
+    let role = 'System';
+    if (userId) {
+      const uRes = await pool.query('SELECT name, role FROM users WHERE id = $1', [userId]);
+      if (uRes.rows.length > 0) {
+        name = uRes.rows[0].name;
+        role = uRes.rows[0].role;
+      }
+    }
+    await pool.query(
+      'INSERT INTO system_audit_logs (user_name, user_role, action, details) VALUES ($1, $2, $3, $4)',
+      [name, role, action, details]
+    );
+  } catch (err) {
+    console.error('Audit trail logging error:', err);
+  }
+};
+
+const verifyToken = (req, res, next) => {
+  // Allow token in Authorization header OR query string (for SSE)
+  let token = req.headers['authorization']?.split(' ')[1];
+  if (!token && req.query.token) {
+    token = req.query.token;
+  }
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access denied. No token provided.' });
+  }
+
+  try {
+    const verifiedData = jwt.verify(token, JWT_SECRET);
+    req.user = verifiedData;
+    next();
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid or expired authentication token.' });
+  }
+};
+
+const requireRole = (allowedRoles) => {
+  return (req, res, next) => {
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Permission denied. Insufficient access clearance.' });
+    }
+    next();
+  };
+};
+
+const verifyStaffToken = [verifyToken, requireRole(['ADMIN', 'RECEPTION', 'FRONT_DESK', 'HOUSEKEEPING'])];
 
 // ==========================================
 // AUTHENTICATION ROUTES
@@ -86,47 +188,6 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// ==========================================
-// ROLE SECURITY MIDDLEWARE
-// ==========================================
-
-const logAuditAction = async (userId, action, details) => {
-  try {
-    let name = 'System / Guest';
-    let role = 'System';
-    if (userId) {
-      const uRes = await pool.query('SELECT name, role FROM users WHERE id = $1', [userId]);
-      if (uRes.rows.length > 0) {
-        name = uRes.rows[0].name;
-        role = uRes.rows[0].role;
-      }
-    }
-    await pool.query(
-      'INSERT INTO system_audit_logs (user_name, user_role, action, details) VALUES ($1, $2, $3, $4)',
-      [name, role, action, details]
-    );
-  } catch (err) {
-    console.error('Audit trail logging error:', err);
-  }
-};
-
-const verifyToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ error: 'Access denied. No token provided.' });
-  }
-
-  try {
-    const verifiedData = jwt.verify(token, JWT_SECRET);
-    req.user = verifiedData;
-    next();
-  } catch (err) {
-    res.status(401).json({ error: 'Invalid or expired authentication token.' });
-  }
-};
-
 app.post('/api/auth/logout', verifyToken, async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -147,16 +208,36 @@ app.post('/api/auth/logout', verifyToken, async (req, res) => {
   }
 });
 
-const requireRole = (allowedRoles) => {
-  return (req, res, next) => {
-    if (!allowedRoles.includes(req.user.role)) {
-      return res.status(403).json({ error: 'Permission denied. Insufficient access clearance.' });
-    }
-    next();
-  };
-};
+// ==========================================
+// REAL-TIME BROADCASTS (SSE)
+// ==========================================
+let broadcastClients = [];
 
-const verifyStaffToken = [verifyToken, requireRole(['ADMIN', 'RECEPTION', 'FRONT_DESK', 'HOUSEKEEPING'])];
+app.get('/api/broadcasts/stream', verifyToken, (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const clientId = Date.now();
+  const newClient = { id: clientId, res, userRole: req.user.role };
+  broadcastClients.push(newClient);
+
+  req.on('close', () => {
+    broadcastClients = broadcastClients.filter(client => client.id !== clientId);
+  });
+});
+
+app.get('/api/broadcasts', verifyToken, async (req, res) => {
+  try {
+    const userRes = await pool.query('SELECT role FROM users WHERE id = $1', [req.user.userId]);
+    const userRole = userRes.rows.length > 0 ? userRes.rows[0].role : 'NONE';
+    const result = await pool.query(`SELECT id, target_dept, message, sender_name, created_at, expires_at FROM broadcasts WHERE (target_dept = 'ALL' OR UPPER(target_dept) = UPPER($1) OR $1 = 'ADMIN') ORDER BY created_at DESC`, [userRole]);
+    res.json({ status: 'success', data: { broadcasts: result.rows } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch broadcasts' });
+  }
+});
 
 // ==========================================
 // CORE & DASHBOARD ENDPOINTS
@@ -373,18 +454,6 @@ const pushInventoryUpdateToOTA = async (roomTypeId, dateFrom, dateTo) => {
     `, [roomTypeId]);
     const remainingInventory = countRes.rows[0].remaining;
 
-    // 2. Make an HTTP request to your Channel Admin (e.g., Channex, SiteMinder)
-    /* await fetch('https://api.yourchannelAdmin.com/v1/inventory', {
-      method: 'POST',
-      headers: { 'Authorization': \`Bearer \${process.env.CHANNEL_Admin_API_KEY}\` },
-      body: JSON.stringify({
-        room_type_id: roomTypeId,
-        start_date: dateFrom,
-        end_date: dateTo,
-        available_count: remainingInventory
-      })
-    });
-    */
     console.log(`📡 [OTA SYNC] Pushed new inventory count (${remainingInventory}) to Channel Admin for RoomType ${roomTypeId}`);
   } catch (err) {
     console.error('Failed to sync inventory to OTA:', err);
@@ -1426,11 +1495,20 @@ app.post('/api/Admin/broadcast', verifyToken, requireRole(['ADMIN']), async (req
     const senderName = await pool.query('SELECT name FROM users WHERE id = $1', [req.user.userId]);
     const name = senderName.rows.length > 0 ? senderName.rows[0].name : 'Admin';
 
-    await pool.query(
+    const insertRes = await pool.query(
       `INSERT INTO broadcasts (target_dept, message, sender_id, sender_name, expires_at)
-       VALUES ($1, $2, $3, $4, NOW() + INTERVAL '24 hours')`,
+       VALUES ($1, $2, $3, $4, NOW() + INTERVAL '24 hours') RETURNING *`,
       [targetDept || 'ALL', message, req.user.userId, name]
     );
+
+    const newBroadcast = insertRes.rows[0];
+
+    // PUSH NOTIFICATION TO CONNECTED SSE CLIENTS
+    broadcastClients.forEach(client => {
+      if (targetDept === 'ALL' || client.userRole === targetDept || client.userRole === 'ADMIN') {
+        client.res.write(`data: ${JSON.stringify(newBroadcast)}\n\n`);
+      }
+    });
 
     await logAuditAction(
       req.user.userId,
@@ -1440,17 +1518,6 @@ app.post('/api/Admin/broadcast', verifyToken, requireRole(['ADMIN']), async (req
     res.json({ status: 'success', message: 'Operational broadcast transmitted successfully' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to process broadcasting task' });
-  }
-});
-
-app.get('/api/broadcasts', verifyToken, async (req, res) => {
-  try {
-    const userRes = await pool.query('SELECT role FROM users WHERE id = $1', [req.user.userId]);
-    const userRole = userRes.rows.length > 0 ? userRes.rows[0].role : 'NONE';
-    const result = await pool.query(`SELECT id, target_dept, message, sender_name, created_at, expires_at FROM broadcasts WHERE (target_dept = 'ALL' OR UPPER(target_dept) = UPPER($1) OR $1 = 'ADMIN') ORDER BY created_at DESC`, [userRole]);
-    res.json({ status: 'success', data: { broadcasts: result.rows } });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch broadcasts' });
   }
 });
 
@@ -1590,86 +1657,220 @@ app.get('/api/dining/overview', verifyToken, requireDining, async (req, res) => 
 // ==========================================
 const requireSales = requireRole(['SALES', 'ADMIN']);
 
+app.get('/api/sales/me', verifyToken, requireSales, async (req, res) => {
+  try {
+    const { userId, role } = req.user;
+    
+    // Admins see total company achieved, Sales Reps see their own closed-won deals
+    let query = `SELECT COALESCE(SUM(value), 0) as total_achieved FROM sales_leads WHERE stage = 'Won' AND deleted_at IS NULL`;
+    let params = [];
+
+    if (role !== 'ADMIN') {
+      query += ` AND assigned_to = $1`;
+      params.push(userId);
+    }
+
+    const achievedRes = await pool.query(query, params);
+    
+    const userRes = await pool.query('SELECT name FROM users WHERE id = $1', [userId]);
+    const name = userRes.rows[0]?.name || 'Sales Staff';
+    const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+
+    res.json({
+      status: 'success',
+      data: {
+        id: userId,
+        name: name,
+        initials: initials,
+        target: 1200000, 
+        achieved: parseFloat(achievedRes.rows[0].total_achieved),
+        baseIncentiveRate: 0.025 
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch user KPIs' });
+  }
+});
+
 app.get('/api/sales/leads', verifyToken, requireSales, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM sales_leads ORDER BY created_at DESC');
+    const { userId, role } = req.user;
+    let query = 'SELECT * FROM sales_leads WHERE deleted_at IS NULL';
+    let params = [];
+
+    // Filter by assigned user unless they are an Admin
+    if (role !== 'ADMIN') {
+      query += ' AND assigned_to = $1';
+      params.push(userId);
+    }
+    query += ' ORDER BY created_at DESC';
+
+    const result = await pool.query(query, params);
     res.json({ status: 'success', data: result.rows });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch leads' });
   }
 });
 
+const leadSchema = z.object({
+  company: z.string().min(2, "Company name is required"),
+  deal_name: z.string().min(2, "Deal name is required"),
+  value: z.number().nonnegative("Value must be a positive number").optional().default(0),
+  stage: z.enum(['New', 'Contacted', 'Proposal Sent', 'Negotiation', 'Won', 'Lost']).default('New'),
+  source: z.string().min(1, "Source is required").optional().default('Hotel Website'),
+  contact_name: z.string().min(2, "Contact name is required").optional().default('Unknown'),
+  contact_email: z.string().email("Invalid email format").optional().or(z.literal('')),
+  contact_phone: z.string().optional()
+});
+
 app.post('/api/sales/leads', verifyToken, requireSales, async (req, res) => {
-  const { company, deal_name, value, stage, source, contact_name, contact_email, contact_phone } = req.body;
   try {
+    const validatedData = leadSchema.parse(req.body); 
+    const { userId } = req.user;
+
     const result = await pool.query(
-      `INSERT INTO sales_leads (company, deal_name, value, stage, source, contact_name, contact_email, contact_phone) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [company, deal_name, value || 0, stage || 'New', source, contact_name, contact_email, contact_phone]
+      `INSERT INTO sales_leads (company, deal_name, value, stage, source, contact_name, contact_email, contact_phone, assigned_to) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [
+        validatedData.company, 
+        validatedData.deal_name, 
+        validatedData.value, 
+        validatedData.stage, 
+        validatedData.source, 
+        validatedData.contact_name, 
+        validatedData.contact_email, 
+        validatedData.contact_phone,
+        userId // Automatically assign the lead to the user making the request
+      ]
     );
     res.status(201).json({ status: 'success', data: result.rows[0] });
   } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: err.errors });
+    }
+    console.error('Lead creation error:', err);
     res.status(500).json({ error: 'Failed to create lead' });
+  }
+});
+
+// Single Atomic Lead-to-Account Conversion Route
+app.post('/api/sales/leads/:id/convert', verifyToken, requireSales, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    const { userId, role } = req.user;
+    
+    // Ensure the user actually owns this lead before converting
+    const checkLead = await client.query('SELECT * FROM sales_leads WHERE id = $1 AND deleted_at IS NULL', [req.params.id]);
+    if (checkLead.rows.length === 0) throw new Error('Lead not found');
+    if (role !== 'ADMIN' && checkLead.rows[0].assigned_to !== userId) throw new Error('Unauthorized');
+
+    const leadRes = await client.query(
+      `UPDATE sales_leads SET stage = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *`, 
+      ['Won', req.params.id]
+    );
+    const lead = leadRes.rows[0];
+    
+    const accRes = await client.query(
+      `INSERT INTO sales_accounts (name, industry, rate, ytd_revenue, status, assigned_to) 
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [lead.company, 'General', 5000, lead.value, 'Active', userId]
+    );
+    
+    await client.query('COMMIT');
+    res.json({ status: 'success', data: { lead, account: accRes.rows[0] } });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message || 'Conversion failed' });
+  } finally {
+    client.release();
   }
 });
 
 app.patch('/api/sales/leads/:id/stage', verifyToken, requireSales, async (req, res) => {
   const { stage } = req.body;
   const { id } = req.params;
+  const { userId, role } = req.user;
+
   try {
-    const result = await pool.query('UPDATE sales_leads SET stage = $1 WHERE id = $2 RETURNING *', [stage, id]);
+    let query = 'UPDATE sales_leads SET stage = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND deleted_at IS NULL';
+    let params = [stage, id];
+
+    if (role !== 'ADMIN') {
+      query += ' AND assigned_to = $3';
+      params.push(userId);
+    }
+    query += ' RETURNING *';
+
+    const result = await pool.query(query, params);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Lead not found or unauthorized' });
+
     res.json({ status: 'success', data: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update lead stage' });
   }
 });
 
+// Soft Delete a Lead
+app.delete('/api/sales/leads/:id', verifyToken, requireSales, async (req, res) => {
+  const { id } = req.params;
+  const { userId, role } = req.user;
+  
+  try {
+    let query = 'UPDATE sales_leads SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1';
+    let params = [id];
+
+    if (role !== 'ADMIN') {
+      query += ' AND assigned_to = $2';
+      params.push(userId);
+    }
+    query += ' RETURNING id';
+
+    const result = await pool.query(query, params);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Lead not found or unauthorized' });
+    
+    res.json({ status: 'success', message: 'Lead successfully deleted' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete lead' });
+  }
+});
+
 app.get('/api/sales/accounts', verifyToken, requireSales, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM sales_accounts ORDER BY ytd_revenue DESC');
+    const { userId, role } = req.user;
+    let query = 'SELECT * FROM sales_accounts WHERE deleted_at IS NULL';
+    let params = [];
+
+    if (role !== 'ADMIN') {
+      query += ' AND assigned_to = $1';
+      params.push(userId);
+    }
+    query += ' ORDER BY ytd_revenue DESC';
+
+    const result = await pool.query(query, params);
     res.json({ status: 'success', data: result.rows });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch accounts' });
   }
 });
 
-app.post('/api/sales/accounts', verifyToken, requireSales, async (req, res) => {
-  const { name, industry, rate, ytd_revenue, status } = req.body;
-  try {
-    const result = await pool.query(
-      `INSERT INTO sales_accounts (name, industry, rate, ytd_revenue, status) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [name, industry, rate || 0, ytd_revenue || 0, status || 'Onboarding']
-    );
-    res.status(201).json({ status: 'success', data: result.rows[0] });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to create account' });
-  }
-});
-
 app.get('/api/sales/tasks', verifyToken, requireSales, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM sales_tasks ORDER BY deadline ASC');
+    const { userId, role } = req.user;
+    let query = 'SELECT * FROM sales_tasks WHERE deleted_at IS NULL';
+    let params = [];
+
+    if (role !== 'ADMIN') {
+      query += ' AND assigned_to = $1';
+      params.push(userId);
+    }
+    query += ' ORDER BY deadline ASC';
+
+    const result = await pool.query(query, params);
     res.json({ status: 'success', data: result.rows });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch tasks' });
-  }
-});
-
-app.get('/api/sales/ota', verifyToken, requireSales, async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM ota_performance ORDER BY gross_revenue DESC');
-    res.json({ status: 'success', data: result.rows });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch OTA data' });
-  }
-});
-
-app.get('/api/sales/booking-modes', verifyToken, requireSales, async (req, res) => {
-  try {
-    const result = await pool.query(`SELECT source as label, SUM(total_price) as value FROM bookings WHERE status != 'CANCELLED' GROUP BY source`);
-    res.json({ status: 'success', data: result.rows });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch booking modes' });
   }
 });
 
@@ -1682,6 +1883,65 @@ async function runMigrations() {
     if (enumCheck.rows.length === 0) {
       await pool.query("ALTER TYPE room_status ADD VALUE IF NOT EXISTS 'INSPECTING'");
     }
+
+    await pool.query(`
+      -- 1. SALES LEADS TABLE
+      CREATE TABLE IF NOT EXISTS sales_leads (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE, -- Multi-tenancy
+        assigned_to UUID REFERENCES users(id) ON DELETE SET NULL, -- User Scoping
+        company VARCHAR(255) NOT NULL,
+        deal_name VARCHAR(255) NOT NULL,
+        value DECIMAL(12, 2) NOT NULL DEFAULT 0,
+        stage VARCHAR(50) NOT NULL DEFAULT 'New',
+        source VARCHAR(100),
+        contact_name VARCHAR(255),
+        contact_email VARCHAR(255),
+        contact_phone VARCHAR(50),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, -- Audit Tracking
+        deleted_at TIMESTAMP WITH TIME ZONE -- Soft Delete
+      );
+
+      -- 2. SALES ACCOUNTS TABLE
+      CREATE TABLE IF NOT EXISTS sales_accounts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
+        assigned_to UUID REFERENCES users(id) ON DELETE SET NULL,
+        name VARCHAR(255) NOT NULL,
+        industry VARCHAR(100),
+        rate DECIMAL(10, 2) DEFAULT 0,
+        ytd_revenue DECIMAL(15, 2) DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'Active',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        deleted_at TIMESTAMP WITH TIME ZONE
+      );
+
+      -- 3. SALES TASKS TABLE
+      CREATE TABLE IF NOT EXISTS sales_tasks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
+        assigned_to UUID REFERENCES users(id) ON DELETE SET NULL,
+        title VARCHAR(255) NOT NULL,
+        type VARCHAR(50),
+        deadline TIMESTAMP WITH TIME ZONE,
+        status VARCHAR(50) DEFAULT 'Pending',
+        priority VARCHAR(50) DEFAULT 'Medium',
+        client VARCHAR(255),
+        assigner VARCHAR(255),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        deleted_at TIMESTAMP WITH TIME ZONE
+      );
+
+      -- 4. PERFORMANCE INDEXES
+      CREATE INDEX IF NOT EXISTS idx_sales_leads_stage ON sales_leads(stage) WHERE deleted_at IS NULL;
+      CREATE INDEX IF NOT EXISTS idx_sales_leads_assigned ON sales_leads(assigned_to) WHERE deleted_at IS NULL;
+      CREATE INDEX IF NOT EXISTS idx_sales_leads_company ON sales_leads(company);
+      CREATE INDEX IF NOT EXISTS idx_sales_tasks_deadline ON sales_tasks(deadline) WHERE deleted_at IS NULL;
+      CREATE INDEX IF NOT EXISTS idx_sales_accounts_assigned ON sales_accounts(assigned_to) WHERE deleted_at IS NULL;
+    `);
 
     // DINING MODULE TABLES
     await pool.query(`
@@ -1737,55 +1997,6 @@ async function runMigrations() {
         await pool.query('INSERT INTO dining_menu (item, category, orders, revenue, status) VALUES ($1, $2, $3, $4, $5)', m);
       }
     }
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS sales_leads (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        company VARCHAR(255) NOT NULL,
-        deal_name VARCHAR(255) NOT NULL,
-        value DECIMAL(12, 2) NOT NULL DEFAULT 0,
-        stage VARCHAR(50) NOT NULL DEFAULT 'New',
-        source VARCHAR(100),
-        contact_name VARCHAR(255),
-        contact_email VARCHAR(255),
-        contact_phone VARCHAR(50),
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS sales_accounts (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        name VARCHAR(255) NOT NULL,
-        industry VARCHAR(100),
-        rate DECIMAL(10, 2) DEFAULT 0,
-        ytd_revenue DECIMAL(15, 2) DEFAULT 0,
-        status VARCHAR(50) DEFAULT 'Active',
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS sales_tasks (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        title VARCHAR(255) NOT NULL,
-        type VARCHAR(50),
-        deadline TIMESTAMP WITH TIME ZONE,
-        status VARCHAR(50) DEFAULT 'Pending',
-        priority VARCHAR(50) DEFAULT 'Medium',
-        client VARCHAR(255),
-        assigner VARCHAR(255),
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS ota_performance (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        name VARCHAR(100) NOT NULL,
-        color VARCHAR(20),
-        bookings INT DEFAULT 0,
-        room_nights INT DEFAULT 0,
-        gross_revenue DECIMAL(15,2) DEFAULT 0,
-        commission_rate DECIMAL(5,2) DEFAULT 0,
-        cancel_rate DECIMAL(5,2) DEFAULT 0,
-        status VARCHAR(50) DEFAULT 'Active'
-      );
-    `);
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS room_expenses (
@@ -1846,9 +2057,27 @@ async function runMigrations() {
     const columnsToAdd = [
       "ALTER TABLE bookings ADD COLUMN source VARCHAR(50) DEFAULT 'DIRECT'",
       "ALTER TABLE bookings ADD COLUMN ota_reference VARCHAR(255)",
-      "ALTER TABLE guests ADD COLUMN id_number VARCHAR(100)"
-    ];
+      "ALTER TABLE guests ADD COLUMN id_number VARCHAR(100)",
+      
+      // Add missing Multi-tenancy and Soft Delete columns for Sales Leads
+      "ALTER TABLE sales_leads ADD COLUMN deleted_at TIMESTAMP WITH TIME ZONE",
+      "ALTER TABLE sales_leads ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP",
+      "ALTER TABLE sales_leads ADD COLUMN assigned_to UUID REFERENCES users(id) ON DELETE SET NULL",
+      "ALTER TABLE sales_leads ADD COLUMN hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE",
 
+      // Add missing Multi-tenancy and Soft Delete columns for Sales Accounts
+      "ALTER TABLE sales_accounts ADD COLUMN deleted_at TIMESTAMP WITH TIME ZONE",
+      "ALTER TABLE sales_accounts ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP",
+      "ALTER TABLE sales_accounts ADD COLUMN assigned_to UUID REFERENCES users(id) ON DELETE SET NULL",
+      "ALTER TABLE sales_accounts ADD COLUMN hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE",
+
+      // Add missing Multi-tenancy and Soft Delete columns for Sales Tasks
+      "ALTER TABLE sales_tasks ADD COLUMN deleted_at TIMESTAMP WITH TIME ZONE",
+      "ALTER TABLE sales_tasks ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP",
+      "ALTER TABLE sales_tasks ADD COLUMN assigned_to UUID REFERENCES users(id) ON DELETE SET NULL",
+      "ALTER TABLE sales_tasks ADD COLUMN hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE"
+    ];
+    
     for (const query of columnsToAdd) {
       try {
         await pool.query(query);
@@ -1958,7 +2187,7 @@ async function runMigrations() {
 }
 
 const server = app.listen(PORT, async () => {
-  console.log(`🚀 Secure Server active on http://localhost:${3000}`);
+  console.log(`🚀 Secure Server active on port ${PORT}`);
   await runMigrations();
 });
 
