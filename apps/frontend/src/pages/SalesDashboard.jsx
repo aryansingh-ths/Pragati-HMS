@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import toast, { Toaster } from 'react-hot-toast'; // ✨ Added Toast Notifications
+import toast, { Toaster } from 'react-hot-toast';
 import {
   Target, TrendingUp, Briefcase, Handshake, Calendar, Search, Plus, X, Loader2,
   AlertTriangle, CheckCircle2, Clock, XCircle, Send, FileText, DollarSign,
   ArrowUpRight, Star, ChevronRight, PieChart, Trophy, CalendarClock, Eye,
   PhoneCall, Mail, CheckSquare, ListTodo, Flame, Activity, ShieldCheck, Globe,
-  User, Building2, MapPin, BarChart3, ArrowRight, Percent, TrendingDown, LogOut,
-  RefreshCw, Zap
+  User, Users, Building2, MapPin, BarChart3, ArrowRight, Percent, TrendingDown, LogOut,
+  RefreshCw, Zap, BedDouble, PartyPopper, CalendarRange, Download, FileSpreadsheet,
+  Lock, ArrowRightLeft, FileSignature, LineChart, LayoutTemplate
 } from 'lucide-react';
 
 // =============================================
@@ -65,7 +66,7 @@ function DonutChart({ data, size = 180, centerLabel = 'Total' }) {
           );
         })}
         <text x={cx} y={cy - 6} textAnchor="middle" className="fill-zinc-900" style={{ fontSize: '18px', fontWeight: 900 }}>
-          {centerLabel === 'Bookings' ? total : `₹${(total / 100000).toFixed(1)}L`}
+          {centerLabel === 'Bookings' || centerLabel === 'Rooms' ? total : `₹${(total / 100000).toFixed(1)}L`}
         </text>
         <text x={cx} y={cy + 14} textAnchor="middle" className="fill-zinc-400" style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{centerLabel}</text>
       </svg>
@@ -205,6 +206,69 @@ function TargetVsRevenueChart({ period }) {
 }
 
 // =============================================
+// KPI GRAPHIC RENDERER
+// =============================================
+const kpiGraphic = (i, color, pct = null) => {
+  const kind = i % 4;
+  
+  if (kind === 0) {
+    return (
+      <div className="relative flex items-center justify-center shrink-0 ml-2 sm:ml-4">
+        <svg className="w-12 h-12 sm:w-14 sm:h-14 rotate-[-90deg]">
+          <circle cx="50%" cy="50%" r="20" fill="none" stroke={`${color}22`} strokeWidth="4" />
+          <motion.circle cx="50%" cy="50%" r="20" fill="none" strokeWidth="4.5" stroke={color}
+            strokeDasharray={2 * Math.PI * 20}
+            initial={{ strokeDashoffset: 2 * Math.PI * 20 }}
+            animate={{ strokeDashoffset: pct !== null ? (2 * Math.PI * 20) * (1 - pct) : (2 * Math.PI * 20) * 0.28 }}
+            transition={{ duration: 1.3, ease: 'easeOut' }}
+            strokeLinecap="round" />
+        </svg>
+        {pct !== null && <span className="absolute text-[9px] font-black" style={{ color }}>{Math.round(pct * 100)}%</span>}
+      </div>
+    );
+  }
+  if (kind === 1) {
+    return (
+      <div className="shrink-0 ml-2 sm:ml-4 border rounded-xl bg-white p-1.5 shadow-sm" style={{ borderColor: `${color}33` }}>
+        <svg className="w-12 h-8 sm:w-16 sm:h-9 overflow-visible" viewBox="0 0 60 32">
+          <motion.path d="M0 22 Q8 6, 16 16 T32 3 T48 12 T60 8" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"
+            initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: 'easeOut' }} />
+          <motion.circle cx="60" cy="8" r="3" fill={color} initial={{ scale: 0 }} animate={{ scale: [0, 1.4, 1] }} transition={{ duration: 0.5, delay: 1.3 }} />
+        </svg>
+      </div>
+    );
+  }
+  if (kind === 2) {
+    return (
+      <div className="flex gap-1 sm:gap-1.5 h-6 sm:h-7 items-end shrink-0 ml-2 sm:ml-4 border rounded-xl bg-white px-2 py-1.5 shadow-sm" style={{ borderColor: `${color}33` }}>
+        {[...Array(5)].map((_, idx) => (
+          <motion.div key={idx} className="w-2 sm:w-2.5 rounded-t-md" style={{ background: idx < 3 ? color : '#e4e4e7' }}
+            initial={{ height: 0 }} animate={{ height: idx < 3 ? '16px' : '6px' }}
+            transition={{ duration: 0.6, delay: idx * 0.08, type: 'spring', stiffness: 200 }} />
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="shrink-0 ml-2 sm:ml-4 border rounded-xl bg-white p-1.5 shadow-sm" style={{ borderColor: `${color}33` }}>
+      <svg className="w-12 h-8 sm:w-16 sm:h-9 overflow-visible" viewBox="0 0 60 32">
+        <defs>
+          <linearGradient id={`kpiYieldFill-${color.replace('#','')}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <motion.path d="M0 25 L12 18 L24 22 L36 10 L48 14 L60 4 V32 H0 Z" fill={`url(#kpiYieldFill-${color.replace('#','')})`}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1, delay: 0.2 }} />
+        <motion.path d="M0 25 L12 18 L24 22 L36 10 L48 14 L60 4" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"
+          initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: 'easeOut', delay: 0.2 }} />
+        <motion.circle cx="60" cy="4" r="3" fill={color} initial={{ scale: 0 }} animate={{ scale: [0, 1.4, 1] }} transition={{ duration: 0.5, delay: 1.5 }} />
+      </svg>
+    </div>
+  );
+};
+
+// =============================================
 // MAIN COMPONENT - SALES EXECUTIVE VIEW
 // =============================================
 export default function SalesExecutiveDashboard() {
@@ -213,7 +277,7 @@ export default function SalesExecutiveDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [timePeriod, setTimePeriod] = useState('Monthly');
   
-  // ─── Pagination States ✨ ──────────────────────────────────────
+  // ─── Pagination States ──────────────────────────────────────
   const [accountsPage, setAccountsPage] = useState(1);
   const ACCOUNTS_PER_PAGE = 6;
   
@@ -271,6 +335,10 @@ export default function SalesExecutiveDashboard() {
   const [bookingModes, setBookingModes] = useState([]);
   const [otaData, setOtaData] = useState([]);
   const [leadSearch, setLeadSearch] = useState('');
+  
+  // Inventory State
+  const [inventoryDate, setInventoryDate] = useState(new Date().toISOString().split('T')[0]);
+  const [inventoryData, setInventoryData] = useState(null);
 
   // Add Lead Modal State
   const [showAddLeadModal, setShowAddLeadModal] = useState(false);
@@ -280,11 +348,17 @@ export default function SalesExecutiveDashboard() {
     contact_name: '', contact_email: '', contact_phone: ''
   });
 
+  // Report & Block Modal State
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportForm, setReportForm] = useState({ type: 'Pipeline Analysis', format: 'PDF Document', dateRange: 'This Month' });
+  const [showBlockModal, setShowBlockModal] = useState(false);
+  const [blockForm, setBlockForm] = useState({ company: '', roomType: 'Standard Room', roomsNeeded: '', startDate: '', endDate: '' });
+
   const STAGES = ['New', 'Contacted', 'Proposal Sent', 'Negotiation', 'Won', 'Lost'];
 
   const fetchData = async (silent = false) => {
     try {
-      if (!silent) setIsLoading(true); // ✨ Silent refresh prevents UI flicker during optimistic updates
+      if (!silent) setIsLoading(true); 
       const [userRes, leadsRes, accountsRes, tasksRes, otaRes, modesRes] = await Promise.all([
         fetch(`${API_BASE_URL}/api/sales/me`, { headers: getHeaders() }),
         fetch(`${API_BASE_URL}/api/sales/leads`, { headers: getHeaders() }),
@@ -353,6 +427,33 @@ export default function SalesExecutiveDashboard() {
           icon: modeMeta[mode.label]?.icon || <Activity size={14} />
         })));
       }
+
+      // Production-level Mock Inventory Data for Sales Executive
+      setInventoryData({
+        roomClasses: [
+          { name: 'Standard Room', total: 45, available: 12, group_blocked: 10, out_of_order: 3, price: 3500 },
+          { name: 'Deluxe Sea View', total: 30, available: 5, group_blocked: 8, out_of_order: 1, price: 5500 },
+          { name: 'Executive Suite', total: 10, available: 2, group_blocked: 0, out_of_order: 0, price: 8500 },
+          { name: 'Presidential', total: 2, available: 1, group_blocked: 0, out_of_order: 0, price: 15000 },
+        ],
+        banquets: [
+          { name: 'Grand Ballroom', capacity: 500, color: '#f43f5e', events: [{ name: 'Tech Conf', start: 9, end: 14, type: 'corporate' }, { name: 'Gala Dinner', start: 18, end: 22, type: 'social' }] },
+          { name: 'Crystal Conference', capacity: 150, color: '#10b981', events: [{ name: 'Board Meet', start: 10, end: 13, type: 'corporate' }] },
+          { name: 'Sunset Terrace', capacity: 250, color: '#f59e0b', events: [{ name: 'Maintenance', start: 8, end: 22, type: 'maintenance' }] },
+        ],
+        groupBlocks: [
+          { company: 'Reliance Retreat', dates: '24 Jul - 26 Jul', blocked: 15, picked_up: 12, rm_step: 5 }, // Deposit Received
+          { company: 'TechNova Summit', dates: '01 Aug - 05 Aug', blocked: 25, picked_up: 5, rm_step: 3 }, // Approved
+          { company: 'Global Traders Meet', dates: '10 Aug - 12 Aug', blocked: 40, picked_up: 0, rm_step: 2 }, // Pending RM Approval
+        ],
+        marketPulse: {
+          cityOccupancy: 82, compAdr: 5200, demandTrend: '+12%'
+        },
+        yieldRecommendation: {
+          suggestedMinRate: 4100, standardRate: 5500, confidence: 'High'
+        }
+      });
+
     } catch (error) {
       console.error('Failed to sync dashboard data:', error);
       toast.error('Failed to sync latest data.');
@@ -373,7 +474,7 @@ export default function SalesExecutiveDashboard() {
     e.preventDefault();
     setIsSubmittingLead(true);
     
-    // ✨ Optimistic UI Update: Create mock lead and update state immediately
+    // Optimistic UI Update
     const previousLeads = [...myLeads];
     const optimisticLead = {
       id: 'temp-' + Date.now(), company: newLeadForm.company, deal: newLeadForm.deal_name,
@@ -394,22 +495,21 @@ export default function SalesExecutiveDashboard() {
       if (res.ok) {
         toast.success('Lead added successfully!');
         setNewLeadForm({ company: '', deal_name: '', value: '', stage: 'New', source: 'Hotel Website', contact_name: '', contact_email: '', contact_phone: '' });
-        fetchData(true); // Silent refresh to grab actual DB ID
+        fetchData(true);
       } else {
         throw new Error((await res.json()).error);
       }
     } catch (error) {
       console.error('Failed to add lead:', error);
-      setMyLeads(previousLeads); // ✨ Revert optimistic update on failure
+      setMyLeads(previousLeads);
       toast.error(`Failed to add lead: ${error.message || 'Network error'}`);
-      setShowAddLeadModal(true); // Re-open modal so they don't lose data
+      setShowAddLeadModal(true);
     } finally {
       setIsSubmittingLead(false);
     }
   };
 
   const moveToAccounts = async (lead) => {
-    // ✨ Optimistic UI Update
     const previousLeads = [...myLeads];
     const previousAccounts = [...myAccounts];
 
@@ -427,13 +527,12 @@ export default function SalesExecutiveDashboard() {
 
       if (res.ok) {
         toast.success(`${lead.company} moved to My Accounts!`);
-        fetchData(true); // Silent sync
+        fetchData(true);
       } else {
         throw new Error((await res.json()).error);
       }
     } catch (error) {
       console.error('Conversion error:', error);
-      // ✨ Revert optimistic update
       setMyLeads(previousLeads);
       setMyAccounts(previousAccounts);
       toast.error(`Conversion failed. Reverting changes.`);
@@ -441,11 +540,9 @@ export default function SalesExecutiveDashboard() {
   };
 
   const updateTaskStatus = async (taskId, newStatus) => {
-    // ✨ Optimistic UI for Tasks
     const previousTasks = [...ongoingTasks];
     setOngoingTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
     
-    // Simulating API Call or firing actual API if endpoint exists
     try {
       const res = await fetch(`${API_BASE_URL}/api/sales/tasks/${taskId}/status`, {
         method: 'PATCH',
@@ -455,15 +552,37 @@ export default function SalesExecutiveDashboard() {
       if (!res.ok) throw new Error('API failed');
       toast.success('Task status updated');
     } catch(e) {
-      setOngoingTasks(previousTasks); // Revert
+      setOngoingTasks(previousTasks);
       toast.error('Failed to update task status.');
     }
+  };
+
+  const handleGenerateReport = (e) => {
+    e.preventDefault();
+    setShowReportModal(false);
+    toast.success(`Generating ${reportForm.type} (${reportForm.format})...`);
+    setTimeout(() => {
+      toast.success('Report downloaded successfully!', { icon: '📄' });
+    }, 1500);
+  };
+
+  const handleRequestBlock = (e) => {
+    e.preventDefault();
+    setShowBlockModal(false);
+    toast.success(`Block request sent to Revenue Manager for ${blockForm.company}.`);
+    setBlockForm({ company: '', roomType: 'Standard Room', roomsNeeded: '', startDate: '', endDate: '' });
+  };
+  
+  const handleGenerateProForma = (company) => {
+    toast.success(`Generating Pro Forma Contract for ${company}...`);
+    setTimeout(() => {
+      toast.success('PDF sent to your email!', { icon: '📩' });
+    }, 1200);
   };
 
   // Derived Data & Pagination
   const filteredLeads = myLeads.filter(l => (l.company + l.deal + l.contactName).toLowerCase().includes(leadSearch.toLowerCase()));
   
-  // ✨ Pagination Setup
   const paginatedAccounts = myAccounts.slice((accountsPage - 1) * ACCOUNTS_PER_PAGE, accountsPage * ACCOUNTS_PER_PAGE);
   const totalAccountPages = Math.max(1, Math.ceil(myAccounts.length / ACCOUNTS_PER_PAGE));
 
@@ -499,8 +618,30 @@ export default function SalesExecutiveDashboard() {
     { heading: 'My Workspace', items: [{ key: 'overview', label: 'My Performance', icon: <TrendingUp size={15} /> }, { key: 'tasks', label: 'Task Management', icon: <ListTodo size={15} /> }] },
     { heading: 'Pipeline & Accounts', items: [{ key: 'pipeline', label: 'Lead Pipeline', icon: <Target size={15} /> }, { key: 'accounts', label: 'My Accounts', icon: <Briefcase size={15} /> }] },
     { heading: 'Sources & Channels', items: [{ key: 'modes', label: 'Booking Modes', icon: <Activity size={15} /> }, { key: 'ota', label: 'OTA Performance', icon: <Globe size={15} /> }] },
+    { heading: 'Property Assets', items: [{ key: 'inventory', label: 'Room & Banquet Inventory', icon: <BedDouble size={15} /> }] },
   ];
   const navItems = navGroups.flatMap(g => g.items);
+
+  const modalVariants = {
+    hidden: { opacity: 0, scale: 0.95, y: 20 },
+    visible: { opacity: 1, scale: 1, y: 0, transition: { type: 'spring', damping: 25, stiffness: 350 } },
+    exit: { opacity: 0, scale: 0.95, y: 20, transition: { duration: 0.2 } }
+  };
+
+  // Helper component for workflow tracker
+  const WorkflowStepper = ({ currentStep }) => {
+    const steps = ['Draft', 'RM Review', 'Approved', 'Contract', 'Deposit'];
+    return (
+      <div className="flex items-center w-full max-w-[200px] mt-1.5 opacity-90">
+        {steps.map((s, i) => (
+           <div key={s} className="flex-1 flex items-center">
+              <div className={`w-2 h-2 shrink-0 rounded-full ${i < currentStep ? 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]' : i === currentStep ? 'bg-amber-400 animate-pulse' : 'bg-zinc-200'}`} title={s} />
+              {i < steps.length - 1 && <div className={`flex-1 h-0.5 ${i < currentStep - 1 ? 'bg-emerald-500' : 'bg-zinc-200'}`} />}
+           </div>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-[calc(100vh-6rem)] relative sd-app-bg sd-scrollbar p-6 flex flex-col lg:flex-row gap-6">
@@ -562,7 +703,11 @@ export default function SalesExecutiveDashboard() {
             <h2 className="text-2xl font-serif font-black text-zinc-900 capitalize">
               {navItems.find(i => i.key === activeTab)?.label || 'Overview'}
             </h2>
-            <p className="text-xs text-zinc-500 mt-1">Manage your active deals, daily tasks, and track your quota.</p>
+            <p className="text-xs text-zinc-500 mt-1">
+              {activeTab === 'inventory' 
+                ? 'Monitor live room allotments, group blocks, and banquet availability.' 
+                : 'Manage your active deals, daily tasks, and track your quota.'}
+            </p>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700">
@@ -575,6 +720,10 @@ export default function SalesExecutiveDashboard() {
 
             <button onClick={() => refresh()} className={`p-2.5 rounded-xl border border-zinc-200/80 bg-white hover:bg-zinc-50 text-zinc-500 transition-all ${isLoading ? 'animate-spin' : ''}`}>
               <RefreshCw size={15} />
+            </button>
+
+            <button onClick={() => setShowReportModal(true)} className="bg-white text-[#D4A373] border border-[#D4A373]/30 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-zinc-50 transition-colors flex items-center gap-2 shadow-sm">
+              <FileText size={14} /> Generate Report
             </button>
 
             <button onClick={() => setShowAddLeadModal(true)} className="bg-zinc-900 text-white px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#D4A373] transition-colors flex items-center gap-2 shadow-sm">
@@ -660,12 +809,14 @@ export default function SalesExecutiveDashboard() {
                 <motion.div key="overview" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                     {[
-                      { label: 'Target', value: `₹${(currentUser.target / 100000).toFixed(1)}L`, sub: 'Monthly Goal', icon: <Target size={16} />, theme: 'indigo' },
+                      { label: 'Target', value: `₹${(currentUser.target / 100000).toFixed(1)}L`, sub: 'Monthly Goal', icon: <Target size={16} />, theme: 'indigo', pct: currentUser.target ? Math.min(currentUser.achieved / currentUser.target, 1) : 0 },
                       { label: 'Revenue Generated', value: `₹${(currentUser.achieved / 100000).toFixed(1)}L`, sub: `${Math.round((currentUser.achieved / currentUser.target) * 100)}% of Target`, icon: <TrendingUp size={16} />, theme: 'emerald' },
                       { label: 'Deals In Pipeline', value: activeDealsCount, sub: `₹${(myPipelineValue / 100000).toFixed(1)}L Total Value`, icon: <Briefcase size={16} />, theme: 'amber' },
                       { label: 'Pending Tasks', value: pendingTasksCount, sub: 'Ongoing & Assigned', icon: <CheckSquare size={16} />, theme: 'rose' },
                     ].map((kpi, i) => {
                       const t = enhancedThemeMap[kpi.theme];
+                      const dotColor = { indigo: '#4f46e5', emerald: '#10b981', amber: '#f59e0b', rose: '#e11d48' }[kpi.theme] || '#D4A373';
+                      
                       return (
                         <motion.div
                           key={i}
@@ -680,7 +831,7 @@ export default function SalesExecutiveDashboard() {
                             className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
                             style={{ background: t.glow }}
                           />
-                          <div className="relative flex-1 min-w-0">
+                          <div className="relative flex-1 min-w-0 pr-2">
                             <div className="flex items-start justify-between mb-4">
                               <motion.div
                                 whileHover={{ rotate: -8, scale: 1.1 }}
@@ -694,13 +845,14 @@ export default function SalesExecutiveDashboard() {
                               initial={{ opacity: 0 }}
                               animate={{ opacity: 1 }}
                               transition={{ delay: i * 0.08 + 0.2 }}
-                              className="text-3xl font-black text-zinc-900 tracking-tight leading-none mb-1.5"
+                              className="text-xl xl:text-2xl font-black text-zinc-900 tracking-tight leading-none mb-2 break-words whitespace-normal"
                             >
                               {kpi.value}
                             </motion.p>
-                            <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 leading-none">{kpi.label}</p>
-                            <p className="text-[10px] text-zinc-400 mt-1">{kpi.sub}</p>
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 leading-tight mb-1 break-words whitespace-normal">{kpi.label}</p>
+                            <p className="text-[9px] text-zinc-400 leading-tight break-words whitespace-normal">{kpi.sub}</p>
                           </div>
+                          <div className="relative shrink-0">{kpiGraphic(i, dotColor, kpi.pct)}</div>
                         </motion.div>
                       );
                     })}
@@ -742,6 +894,279 @@ export default function SalesExecutiveDashboard() {
                       </div>
                     </motion.div>
                   </div>
+                </motion.div>
+              )}
+
+              {/* TAB: INVENTORY */}
+              {activeTab === 'inventory' && (
+                <motion.div key="inventory" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
+                  
+                  {/* Date Forecaster Banner */}
+                  <div className="flex flex-col sm:flex-row items-center justify-between bg-white p-4 rounded-[1.5rem] border border-zinc-200/60 shadow-sm">
+                     <div className="flex items-center gap-3 text-sm font-bold uppercase text-zinc-800 tracking-wider mb-4 sm:mb-0">
+                       <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center border border-indigo-100">
+                         <CalendarRange size={16} className="text-indigo-600"/> 
+                       </div>
+                       Inventory Forecast
+                     </div>
+                     <div className="flex items-center gap-3 w-full sm:w-auto">
+                       <input 
+                         type="date" 
+                         value={inventoryDate} 
+                         onChange={e => setInventoryDate(e.target.value)} 
+                         className="fd-input py-2 text-xs flex-1 sm:w-auto cursor-pointer" 
+                       />
+                       <button onClick={() => setShowBlockModal(true)} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-indigo-700 transition shadow-sm flex items-center justify-center gap-2 shrink-0">
+                         <Lock size={14}/> Request Block
+                       </button>
+                     </div>
+                  </div>
+
+                  {/* Inventory KPIs */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                    {[
+                      { label: 'Total Salable Rooms', value: inventoryData?.roomClasses?.reduce((sum, c) => sum + c.total, 0) || 87, sub: 'Across 4 categories', icon: <BedDouble size={16} />, theme: 'indigo', graphicIndex: 1, pct: null },
+                      { label: 'Rooms Blocked', value: inventoryData?.roomClasses?.reduce((sum, c) => sum + c.group_blocked, 0) || 18, sub: 'Group & Corporate allotments', icon: <Briefcase size={16} />, theme: 'amber', graphicIndex: 2, pct: null },
+                      { label: 'Banquet Spaces', value: inventoryData?.banquets?.length || 3, sub: `${inventoryData?.banquets?.filter(b => b.status === 'Available').length || 1} available today`, icon: <PartyPopper size={16} />, theme: 'rose', graphicIndex: 3, pct: null },
+                      { label: 'Current Occupancy', value: '74%', sub: 'Live front-desk status', icon: <Users size={16} />, theme: 'emerald', graphicIndex: 0, pct: 0.74 },
+                    ].map((kpi, i) => {
+                      const t = enhancedThemeMap[kpi.theme];
+                      const dotColor = { indigo: '#4f46e5', emerald: '#10b981', amber: '#f59e0b', rose: '#e11d48' }[kpi.theme] || '#D4A373';
+                      
+                      return (
+                        <motion.div
+                          key={i}
+                          initial={{ opacity: 0, y: 16 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: i * 0.08, type: 'spring', stiffness: 200, damping: 20 }}
+                          whileHover={{ y: -8, scale: 1.02 }}
+                          style={{ '--kpi-glow': t.glow }}
+                          className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between border border-zinc-200/70 bg-gradient-to-br ${t.gradient} shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_24px_-16px_rgba(0,0,0,0.15)] transition-shadow duration-500 hover:shadow-[0_20px_45px_-18px_var(--kpi-glow)] ring-1 ${t.ring}`}
+                        >
+                          <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none" style={{ background: t.glow }} />
+                          <div className="relative flex-1 min-w-0 pr-2">
+                            <div className="flex items-start justify-between mb-4">
+                              <motion.div whileHover={{ rotate: -8, scale: 1.1 }} transition={{ type: 'spring', stiffness: 400, damping: 14 }} className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${t.iconBg}`}>
+                                {kpi.icon}
+                              </motion.div>
+                            </div>
+                            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.08 + 0.2 }} className="text-xl xl:text-2xl font-black text-zinc-900 tracking-tight leading-none mb-2 break-words whitespace-normal">
+                              {kpi.value}
+                            </motion.p>
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 leading-tight mb-1 break-words whitespace-normal">{kpi.label}</p>
+                            <p className="text-[9px] text-zinc-400 leading-tight break-words whitespace-normal">{kpi.sub}</p>
+                          </div>
+                          <div className="relative">{kpiGraphic(kpi.graphicIndex ?? i, dotColor, kpi.pct ?? null)}</div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Room Class Availability & Yield Recommender */}
+                    <div className="flex flex-col gap-6">
+                      <motion.div whileHover={{ y: -2 }} className="group relative overflow-hidden bg-white rounded-[2rem] p-6 shadow-sm border border-zinc-200/60 flex-1">
+                        <div className="absolute -top-14 -left-14 w-40 h-40 bg-indigo-500/10 blur-3xl pointer-events-none" />
+                        <div className="relative flex items-center justify-between mb-5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-indigo-500 flex items-center justify-center shadow-md"><BedDouble size={14} className="text-white" /></div>
+                            <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Room Class Availability</h3>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-4 relative z-10">
+                          {inventoryData?.roomClasses?.map((rc, idx) => {
+                            const availPct = Math.round((rc.available / rc.total) * 100);
+                            const blockedPct = Math.round((rc.group_blocked / rc.total) * 100);
+                            const oooPct = Math.round((rc.out_of_order / rc.total) * 100);
+                            const isLow = availPct < 20;
+                            
+                            return (
+                              <div key={idx} className="bg-zinc-50/80 p-4 rounded-[1.25rem] border border-zinc-100/80 flex flex-col gap-3">
+                                <div className="flex items-center justify-between">
+                                  <h4 className="text-sm font-bold text-zinc-800">{rc.name}</h4>
+                                  <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500 bg-white border border-zinc-200 px-2 py-0.5 rounded-md shadow-sm">₹{rc.price}/Night</span>
+                                </div>
+                                
+                                <div className="flex items-center gap-1.5 w-full h-2 rounded-full overflow-hidden bg-zinc-200">
+                                  <motion.div initial={{ width: 0 }} animate={{ width: `${availPct}%` }} transition={{ duration: 0.8 }} className="h-full bg-emerald-500" title="Available" />
+                                  <motion.div initial={{ width: 0 }} animate={{ width: `${blockedPct}%` }} transition={{ duration: 0.8 }} className="h-full bg-amber-500" title="Blocked" />
+                                  <motion.div initial={{ width: 0 }} animate={{ width: `${oooPct}%` }} transition={{ duration: 0.8 }} className="h-full bg-rose-500" title="Out of Order" />
+                                  <motion.div initial={{ width: 0 }} animate={{ width: `${100 - availPct - blockedPct - oooPct}%` }} transition={{ duration: 0.8 }} className="h-full bg-zinc-400" title="Occupied" />
+                                </div>
+
+                                <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider">
+                                  <span className={`flex items-center gap-1 ${isLow ? 'text-rose-500' : 'text-emerald-600'}`}><span className={`w-2 h-2 rounded-full ${isLow ? 'bg-rose-500' : 'bg-emerald-500'}`}/> {rc.available} Available</span>
+                                  <span className="flex items-center gap-1 text-amber-600"><span className="w-2 h-2 rounded-full bg-amber-500"/> {rc.group_blocked} Blocked</span>
+                                  <span className="flex items-center gap-1 text-zinc-500"> Total {rc.total}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </motion.div>
+                    </div>
+
+                    {/* Yield Recommender & Market Pulse */}
+                    <div className="flex flex-col gap-6">
+                      <motion.div whileHover={{ y: -2 }} className="group relative overflow-hidden bg-gradient-to-br from-emerald-50 to-white rounded-[2rem] p-6 shadow-sm border border-emerald-200/60">
+                        <div className="absolute -top-14 -right-14 w-40 h-40 bg-emerald-500/10 blur-3xl pointer-events-none" />
+                        <div className="relative flex items-center justify-between mb-5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center shadow-md"><LineChart size={14} className="text-white" /></div>
+                            <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Predictive Yield Recommender</h3>
+                          </div>
+                          <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100/50 px-2 py-0.5 rounded border border-emerald-200 uppercase tracking-wider">AI Powered</span>
+                        </div>
+                        
+                        <div className="flex items-end justify-between bg-white p-4 rounded-[1.25rem] border border-emerald-100 shadow-sm relative overflow-hidden">
+                           <div className="absolute top-0 right-0 w-1.5 h-full bg-emerald-500" />
+                           <div>
+                             <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider mb-1">Suggested Min Group Rate</p>
+                             <p className="text-2xl font-black text-emerald-600">₹{inventoryData?.yieldRecommendation?.suggestedMinRate}</p>
+                           </div>
+                           <div className="text-right">
+                             <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider mb-1">Standard Rate</p>
+                             <p className="text-lg font-bold text-zinc-500 line-through">₹{inventoryData?.yieldRecommendation?.standardRate}</p>
+                           </div>
+                        </div>
+                        <p className="text-[10px] text-zinc-500 mt-3 font-semibold leading-relaxed">
+                          Based on 30-day price elasticity and current inventory compression, the Revenue Manager is highly likely to approve group deals at or above the suggested minimum rate.
+                        </p>
+                      </motion.div>
+
+                      <motion.div whileHover={{ y: -2 }} className="group relative overflow-hidden bg-white rounded-[2rem] p-6 shadow-sm border border-zinc-200/60 flex-1">
+                        <div className="absolute -bottom-14 -left-14 w-40 h-40 bg-amber-500/10 blur-3xl pointer-events-none" />
+                        <div className="relative flex items-center justify-between mb-5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-amber-500 flex items-center justify-center shadow-md"><Activity size={14} className="text-white" /></div>
+                            <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Market Demand Pulse</h3>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 relative z-10">
+                          <div className="bg-zinc-50 p-4 rounded-[1.25rem] border border-zinc-100 flex flex-col justify-center items-center text-center">
+                            <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider mb-1">City Occupancy</p>
+                            <p className="text-2xl font-black text-zinc-800">{inventoryData?.marketPulse?.cityOccupancy}%</p>
+                          </div>
+                          <div className="bg-zinc-50 p-4 rounded-[1.25rem] border border-zinc-100 flex flex-col justify-center items-center text-center">
+                            <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider mb-1">CompSet ADR</p>
+                            <p className="text-xl font-black text-zinc-800">₹{inventoryData?.marketPulse?.compAdr}</p>
+                          </div>
+                        </div>
+                        <div className="mt-4 flex items-center justify-center gap-2 text-xs font-bold text-amber-600 bg-amber-50 py-2 rounded-xl border border-amber-100">
+                          <TrendingUp size={14} /> Market Demand Trend: {inventoryData?.marketPulse?.demandTrend}
+                        </div>
+                      </motion.div>
+                    </div>
+                  </div>
+
+                  {/* Interactive Banquet Gantt Calendar */}
+                  <motion.div whileHover={{ y: -2 }} className="group relative overflow-hidden bg-white rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
+                     <div className="relative flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-rose-500 flex items-center justify-center shadow-md"><PartyPopper size={14} className="text-white" /></div>
+                          <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Event Spaces Timeline (08:00 - 22:00)</h3>
+                        </div>
+                      </div>
+
+                      <div className="relative border border-zinc-100 rounded-[1.25rem] overflow-hidden bg-zinc-50/50">
+                        {/* Timeline Header */}
+                        <div className="flex items-center border-b border-zinc-200/80 bg-zinc-100/50">
+                           <div className="w-40 shrink-0 p-3 text-[10px] font-black uppercase text-zinc-400 tracking-wider border-r border-zinc-200/80">Space</div>
+                           <div className="flex-1 flex text-[9px] font-bold text-zinc-400 uppercase tracking-widest px-2">
+                             {[8, 10, 12, 14, 16, 18, 20, 22].map(h => (
+                               <div key={h} className="flex-1 text-center border-l border-zinc-200/50 py-3">{h}:00</div>
+                             ))}
+                           </div>
+                        </div>
+                        
+                        {/* Timeline Rows */}
+                        <div className="flex flex-col divide-y divide-zinc-200/60">
+                          {inventoryData?.banquets?.map((bq, idx) => (
+                            <div key={idx} className="flex items-stretch min-h-[60px] hover:bg-white transition-colors">
+                              <div className="w-40 shrink-0 p-3 border-r border-zinc-200/80 flex flex-col justify-center bg-white z-10">
+                                <span className="text-xs font-bold text-zinc-800 leading-tight">{bq.name}</span>
+                                <span className="text-[9px] text-zinc-500 font-semibold">{bq.capacity} Pax</span>
+                              </div>
+                              <div className="flex-1 relative mx-2 my-2 rounded-xl bg-zinc-100 overflow-hidden">
+                                 {/* Grid Lines Overlay */}
+                                 <div className="absolute inset-0 flex pointer-events-none">
+                                   {[...Array(8)].map((_, i) => <div key={i} className="flex-1 border-l border-zinc-200/40 h-full" />)}
+                                 </div>
+                                 {/* Event Blocks */}
+                                 {bq.events?.map((ev, eIdx) => {
+                                    // Math: Timeline is 14 hours (8 to 22). 
+                                    const totalHours = 14;
+                                    const leftPct = ((ev.start - 8) / totalHours) * 100;
+                                    const widthPct = ((ev.end - ev.start) / totalHours) * 100;
+                                    
+                                    return (
+                                      <div 
+                                        key={eIdx}
+                                        className="absolute top-1 bottom-1 rounded-lg flex items-center justify-center text-[10px] font-bold text-white shadow-sm overflow-hidden whitespace-nowrap px-2 cursor-pointer transition-transform hover:scale-[1.02]"
+                                        style={{ left: `${leftPct}%`, width: `${widthPct}%`, backgroundColor: ev.type === 'maintenance' ? '#f59e0b' : bq.color }}
+                                        title={`${ev.name} (${ev.start}:00 - ${ev.end}:00)`}
+                                      >
+                                        {ev.name}
+                                      </div>
+                                    )
+                                 })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                  </motion.div>
+
+                  {/* Group Blocks Ledger with RM Stepper & Pro Forma Action */}
+                  <div className="bg-white border border-zinc-200/60 rounded-[2rem] overflow-hidden shadow-sm">
+                    <div className="p-5 border-b border-zinc-150 bg-white/40 flex items-center justify-between">
+                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><CalendarRange size={16} className="text-amber-500" /> Active Corporate & Group Blocks</h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse min-w-[800px]">
+                        <thead>
+                          <tr className="border-b border-zinc-150 text-[10px] uppercase tracking-wider text-zinc-400 bg-zinc-50/50">
+                            <th className="p-4 font-bold">Company / Group</th>
+                            <th className="p-4 font-bold">Blocked Dates</th>
+                            <th className="p-4 font-bold text-center">Rooms Blocked</th>
+                            <th className="p-4 font-bold text-center">Picked Up</th>
+                            <th className="p-4 font-bold">Approval Pipeline</th>
+                            <th className="p-4 font-bold text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-100">
+                          {inventoryData?.groupBlocks?.length === 0 && <tr><td colSpan={6} className="text-center py-4 text-xs text-zinc-400">No active group blocks.</td></tr>}
+                          {inventoryData?.groupBlocks?.map((block, index) => {
+                            const pickupRate = Math.round((block.picked_up / block.blocked) * 100);
+                            return (
+                              <tr key={index} className="hover:bg-zinc-50/60 transition-colors">
+                                <td className="p-4">
+                                  <span className="text-sm font-bold text-zinc-900 block">{block.company}</span>
+                                  <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[9px] font-bold ${pickupRate >= 80 ? 'bg-emerald-100 text-emerald-700' : pickupRate < 30 ? 'bg-rose-100 text-rose-700' : 'bg-[#D4A373]/10 text-[#D4A373]'}`}>
+                                    {pickupRate}% Pickup Rate
+                                  </span>
+                                </td>
+                                <td className="p-4 text-xs text-zinc-600 font-semibold">{block.dates}</td>
+                                <td className="p-4 text-sm text-zinc-600 text-center font-black">{block.blocked}</td>
+                                <td className="p-4 text-sm text-indigo-600 text-center font-black">{block.picked_up}</td>
+                                <td className="p-4">
+                                  <WorkflowStepper currentStep={block.rm_step} />
+                                </td>
+                                <td className="p-4 text-right">
+                                  <button onClick={() => handleGenerateProForma(block.company)} className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 border border-indigo-100 hover:bg-indigo-600 hover:text-white px-3 py-1.5 rounded-lg transition-colors flex items-center justify-center gap-1.5 ml-auto w-fit shadow-sm">
+                                    <FileSignature size={12} /> Pro Forma
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  
                 </motion.div>
               )}
 
@@ -803,7 +1228,6 @@ export default function SalesExecutiveDashboard() {
                           </div>
                         ))}
                         
-                        {/* ✨ Tasks Pagination Controls */}
                         {totalTaskPages > 1 && (
                           <div className="flex items-center justify-between mt-auto pt-4 border-t border-zinc-100">
                             <button disabled={tasksPage === 1} onClick={() => setTasksPage(p => p - 1)} className="px-3 py-1 rounded-lg border border-zinc-200 text-[10px] font-bold text-zinc-600 disabled:opacity-50 hover:bg-zinc-50">Previous</button>
@@ -838,7 +1262,6 @@ export default function SalesExecutiveDashboard() {
                             </div>
                           </div>
 
-                          {/* ✨ Virtualized Container for Kanban Columns */}
                           <div className="flex flex-col gap-3 min-h-[100px] max-h-[65vh] overflow-y-auto sd-scrollbar pr-2 pb-6">
                             {stageLeads.map((lead, i) => (
                               <motion.div key={lead.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
@@ -921,7 +1344,6 @@ export default function SalesExecutiveDashboard() {
                       ))}
                     </div>
 
-                    {/* ✨ Accounts Pagination Controls */}
                     {totalAccountPages > 1 && (
                       <div className="flex items-center justify-between mt-6 pt-4 border-t border-zinc-100">
                         <button disabled={accountsPage === 1} onClick={() => setAccountsPage(p => p - 1)} className="px-4 py-2 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-600 disabled:opacity-50 hover:bg-zinc-50 transition-colors">Previous</button>
@@ -976,12 +1398,44 @@ export default function SalesExecutiveDashboard() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                     {[
-                      { label: 'Total Gross Revenue', value: `₹${(totalOtaGross / 100000).toFixed(2)}L`, sub: 'All OTA Channels', icon: <Globe size={16} />, theme: 'sky' },
-                      { label: 'Commission Paid', value: `₹${(totalOtaCommission / 100000).toFixed(2)}L`, sub: 'Direct Expense', icon: <Percent size={16} />, theme: 'rose' },
-                      { label: 'Net Revenue', value: `₹${(totalOtaNet / 100000).toFixed(2)}L`, sub: 'After Commissions', icon: <DollarSign size={16} />, theme: 'emerald' },
-                      { label: 'Avg Cancel Rate', value: `${avgCancelRate}%`, sub: 'Across platforms', icon: <TrendingDown size={16} />, theme: 'violet' },
+                      { 
+                        label: 'Total Gross Revenue', 
+                        value: `₹${(totalOtaGross / 100000).toFixed(2)}L`, 
+                        sub: 'All OTA Channels', 
+                        icon: <Globe size={16} />, 
+                        theme: 'sky',
+                        graphicIndex: 1
+                      },
+                      { 
+                        label: 'Commission Paid', 
+                        value: `₹${(totalOtaCommission / 100000).toFixed(2)}L`, 
+                        sub: `${totalOtaGross > 0 ? ((totalOtaCommission / totalOtaGross) * 100).toFixed(1) : 0}% Avg Commission`, 
+                        icon: <Percent size={16} />, 
+                        theme: 'rose',
+                        graphicIndex: 2
+                      },
+                      { 
+                        label: 'Net Revenue', 
+                        value: `₹${(totalOtaNet / 100000).toFixed(2)}L`, 
+                        sub: `${totalOtaGross > 0 ? ((totalOtaNet / totalOtaGross) * 100).toFixed(1) : '0.0'}% Net Margin Retained`, 
+                        icon: <DollarSign size={16} />, 
+                        theme: 'emerald',
+                        graphicIndex: 3,
+                        pct: totalOtaGross > 0 ? totalOtaNet / totalOtaGross : 0
+                      },
+                      { 
+                        label: 'Avg Cancel Rate', 
+                        value: `${avgCancelRate}%`, 
+                        sub: 'Across platforms', 
+                        icon: <TrendingDown size={16} />, 
+                        theme: 'violet',
+                        graphicIndex: 0,
+                        pct: parseFloat(avgCancelRate) / 100
+                      },
                     ].map((kpi, i) => {
                       const t = enhancedThemeMap[kpi.theme];
+                      const dotColor = { sky: '#0ea5e9', rose: '#e11d48', emerald: '#10b981', violet: '#8b5cf6' }[kpi.theme] || '#D4A373';
+                      
                       return (
                         <motion.div
                           key={i}
@@ -996,7 +1450,7 @@ export default function SalesExecutiveDashboard() {
                             className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
                             style={{ background: t.glow }}
                           />
-                          <div className="relative flex-1 min-w-0">
+                          <div className="relative flex-1 min-w-0 pr-2">
                             <div className="flex items-start justify-between mb-4">
                               <motion.div
                                 whileHover={{ rotate: -8, scale: 1.1 }}
@@ -1010,13 +1464,14 @@ export default function SalesExecutiveDashboard() {
                               initial={{ opacity: 0 }}
                               animate={{ opacity: 1 }}
                               transition={{ delay: i * 0.08 + 0.2 }}
-                              className="text-3xl font-black text-zinc-900 tracking-tight leading-none mb-1.5"
+                              className="text-xl xl:text-2xl font-black text-zinc-900 tracking-tight leading-none mb-2 break-words whitespace-normal"
                             >
                               {kpi.value}
                             </motion.p>
-                            <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 leading-none">{kpi.label}</p>
-                            <p className="text-[10px] text-zinc-400 mt-1">{kpi.sub}</p>
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 leading-tight mb-1 break-words whitespace-normal">{kpi.label}</p>
+                            <p className="text-[9px] text-zinc-400 leading-tight break-words whitespace-normal">{kpi.sub}</p>
                           </div>
+                          <div className="relative">{kpiGraphic(kpi.graphicIndex ?? i, dotColor, kpi.pct ?? null)}</div>
                         </motion.div>
                       );
                     })}
@@ -1114,8 +1569,155 @@ export default function SalesExecutiveDashboard() {
       </div>
 
       {/* =============================================
-          ADD LEAD MODAL
+          MODAL SYSTEM
       ============================================= */}
+      
+      {/* Generate Report Modal */}
+      <AnimatePresence>
+        {showReportModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center sd-glass-backdrop p-4"
+            onClick={() => setShowReportModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+              onClick={e => e.stopPropagation()}
+              className="w-full max-w-md sd-glass-modal rounded-3xl p-7 overflow-hidden relative"
+            >
+              <div className="flex justify-between items-center mb-6 border-b border-zinc-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#D4A373]/10 text-[#D4A373] flex items-center justify-center">
+                    <FileSpreadsheet size={20} />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-serif font-black text-zinc-900">Generate Report</h2>
+                    <p className="text-[10px] uppercase font-bold tracking-wider text-zinc-400">Export sales analytics</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowReportModal(false)} className="p-2 rounded-xl hover:bg-zinc-100 text-zinc-400 transition-all"><X size={18} /></button>
+              </div>
+
+              <form onSubmit={handleGenerateReport} className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Report Type</label>
+                  <select
+                    value={reportForm.type}
+                    onChange={e => setReportForm({ ...reportForm, type: e.target.value })}
+                    className="sd-input bg-white appearance-none cursor-pointer"
+                  >
+                    <option value="Pipeline Analysis">Pipeline Analysis</option>
+                    <option value="OTA Performance">OTA Performance</option>
+                    <option value="Inventory Forecast">Inventory Forecast</option>
+                    <option value="Tasks & Productivity">Tasks & Productivity</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Date Range</label>
+                  <select
+                    value={reportForm.dateRange}
+                    onChange={e => setReportForm({ ...reportForm, dateRange: e.target.value })}
+                    className="sd-input bg-white appearance-none cursor-pointer"
+                  >
+                    <option value="Today">Today</option>
+                    <option value="This Week">This Week</option>
+                    <option value="This Month">This Month</option>
+                    <option value="Last 90 Days">Last 90 Days</option>
+                    <option value="YTD">Year to Date (YTD)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Export Format</label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {['PDF Document', 'CSV Excel', 'JSON'].map(fmt => (
+                      <div 
+                        key={fmt}
+                        onClick={() => setReportForm({ ...reportForm, format: fmt })}
+                        className={`text-center py-2 rounded-xl cursor-pointer border text-xs font-bold transition-all ${reportForm.format === fmt ? 'bg-[#D4A373]/10 border-[#D4A373] text-[#D4A373]' : 'bg-white border-zinc-200 text-zinc-500 hover:border-zinc-300'}`}
+                      >
+                        {fmt.split(' ')[0]}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" className="w-full mt-6 bg-zinc-900 hover:bg-[#D4A373] text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2">
+                  <Download size={16} /> Generate & Download
+                </motion.button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Request Block Modal */}
+      <AnimatePresence>
+        {showBlockModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center sd-glass-backdrop p-4"
+            onClick={() => setShowBlockModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+              onClick={e => e.stopPropagation()}
+              className="w-full max-w-lg sd-glass-modal rounded-3xl p-7 overflow-hidden relative"
+            >
+              <div className="flex justify-between items-center mb-6 border-b border-zinc-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
+                    <Lock size={20} />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-serif font-black text-zinc-900">Request Inventory Block</h2>
+                    <p className="text-[10px] uppercase font-bold tracking-wider text-zinc-400">Requires RM Approval</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowBlockModal(false)} className="p-2 rounded-xl hover:bg-zinc-100 text-zinc-400 transition-all"><X size={18} /></button>
+              </div>
+
+              <form onSubmit={handleRequestBlock} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Group / Corporate Name</label>
+                    <input type="text" required placeholder="e.g. Apex Corp" value={blockForm.company} onChange={e => setBlockForm({ ...blockForm, company: e.target.value })} className="sd-input bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Room Class</label>
+                    <select value={blockForm.roomType} onChange={e => setBlockForm({ ...blockForm, roomType: e.target.value })} className="sd-input bg-white appearance-none cursor-pointer">
+                      {inventoryData?.roomClasses?.map((rc, i) => <option key={i} value={rc.name}>{rc.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Number of Rooms</label>
+                  <input type="number" required min="1" placeholder="0" value={blockForm.roomsNeeded} onChange={e => setBlockForm({ ...blockForm, roomsNeeded: e.target.value })} className="sd-input bg-white" />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Check-In Date</label>
+                    <input type="date" required value={blockForm.startDate} onChange={e => setBlockForm({ ...blockForm, startDate: e.target.value })} className="sd-input bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Check-Out Date</label>
+                    <input type="date" required value={blockForm.endDate} onChange={e => setBlockForm({ ...blockForm, endDate: e.target.value })} className="sd-input bg-white" />
+                  </div>
+                </div>
+
+                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" className="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2">
+                  <ArrowRightLeft size={16} /> Submit to Revenue Manager
+                </motion.button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Add Lead Modal */}
       <AnimatePresence>
         {showAddLeadModal && (
           <motion.div

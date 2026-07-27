@@ -8,7 +8,17 @@ import { Plane, MapPin, Users, Wallet, Clock, CheckCircle2, AlertTriangle, Refre
 const API_BASE = 'http://localhost:3000';
 const getToken = () => sessionStorage.getItem('hms_token');
 const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` });
+
+// Standard Currency Formatter
 const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
+
+// Compact Currency Formatter (for KPIs and tight spaces)
+const shortInr = (n) => {
+  const num = Number(n || 0);
+  if (num >= 100000) return `₹${(num / 100000).toFixed(2)}L`;
+  if (num >= 1000) return `₹${(num / 1000).toFixed(1)}K`;
+  return `₹${num.toLocaleString('en-IN')}`;
+};
 
 // =============================================
 // SVG DONUT CHART (package popularity)
@@ -51,7 +61,7 @@ function DonutChart({ data, size = 170, centerLabel = 'Booked' }) {
             />
           );
         })}
-        <text x={cx} y={cy - 6} textAnchor="middle" className="fill-zinc-900" style={{ fontSize: '20px', fontWeight: 900 }}>{inr(total).replace('₹', '₹')}</text>
+        <text x={cx} y={cy - 6} textAnchor="middle" className="fill-zinc-900" style={{ fontSize: '20px', fontWeight: 900 }}>{shortInr(total).replace('₹', '₹')}</text>
         <text x={cx} y={cy + 14} textAnchor="middle" className="fill-zinc-400" style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{centerLabel}</text>
       </svg>
     </div>
@@ -114,7 +124,7 @@ function TrendLine({ data = [], from = '#fb923c', to = '#c2410c', areaColor = '#
             className="absolute pointer-events-none px-2.5 py-1.5 rounded-lg bg-zinc-900 text-white text-[10px] font-bold shadow-lg whitespace-nowrap"
             style={{ left: `${(active.x / width) * 100}%`, top: `${(active.y / height) * 100}%`, transform: 'translate(-50%, -140%)' }}
           >
-            {active.label}: <span className="text-orange-300">{inr(active.value)}</span>
+            {active.label}: <span className="text-orange-300">{shortInr(active.value)}</span>
           </motion.div>
         )}
       </AnimatePresence>
@@ -146,7 +156,7 @@ function BarRankChart({ data = [] }) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between mb-1">
               <span className="text-[11px] font-bold text-zinc-600 truncate">{d.label}</span>
-              <span className="text-[11px] font-black text-zinc-900 shrink-0 ml-2">{inr(d.value)}</span>
+              <span className="text-[11px] font-black text-zinc-900 shrink-0 ml-2">{shortInr(d.value)}</span>
             </div>
             <div className="h-2 rounded-full bg-zinc-100 overflow-hidden">
               <motion.div initial={{ width: 0 }} animate={{ width: `${(Number(d.value) / max) * 100}%` }}
@@ -158,6 +168,69 @@ function BarRankChart({ data = [] }) {
     </div>
   );
 }
+
+// =============================================
+// KPI GRAPHIC RENDERER
+// =============================================
+const kpiGraphic = (i, color, pct = null) => {
+  const kind = i % 4;
+  
+  if (kind === 0) {
+    return (
+      <div className="relative flex items-center justify-center shrink-0 ml-2 sm:ml-4">
+        <svg className="w-12 h-12 sm:w-14 sm:h-14 rotate-[-90deg]">
+          <circle cx="50%" cy="50%" r="20" fill="none" stroke={`${color}22`} strokeWidth="4" />
+          <motion.circle cx="50%" cy="50%" r="20" fill="none" strokeWidth="4.5" stroke={color}
+            strokeDasharray={2 * Math.PI * 20}
+            initial={{ strokeDashoffset: 2 * Math.PI * 20 }}
+            animate={{ strokeDashoffset: pct !== null ? (2 * Math.PI * 20) * (1 - pct) : (2 * Math.PI * 20) * 0.28 }}
+            transition={{ duration: 1.3, ease: 'easeOut' }}
+            strokeLinecap="round" />
+        </svg>
+        {pct !== null && <span className="absolute text-[9px] font-black" style={{ color }}>{Math.round(pct * 100)}%</span>}
+      </div>
+    );
+  }
+  if (kind === 1) {
+    return (
+      <div className="shrink-0 ml-2 sm:ml-4 border rounded-xl bg-white p-1.5 shadow-sm" style={{ borderColor: `${color}33` }}>
+        <svg className="w-12 h-8 sm:w-16 sm:h-9 overflow-visible" viewBox="0 0 60 32">
+          <motion.path d="M0 22 Q8 6, 16 16 T32 3 T48 12 T60 8" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"
+            initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: 'easeOut' }} />
+          <motion.circle cx="60" cy="8" r="3" fill={color} initial={{ scale: 0 }} animate={{ scale: [0, 1.4, 1] }} transition={{ duration: 0.5, delay: 1.3 }} />
+        </svg>
+      </div>
+    );
+  }
+  if (kind === 2) {
+    return (
+      <div className="flex gap-1 sm:gap-1.5 h-6 sm:h-7 items-end shrink-0 ml-2 sm:ml-4 border rounded-xl bg-white px-2 py-1.5 shadow-sm" style={{ borderColor: `${color}33` }}>
+        {[...Array(5)].map((_, idx) => (
+          <motion.div key={idx} className="w-2 sm:w-2.5 rounded-t-md" style={{ background: idx < 3 ? color : '#e4e4e7' }}
+            initial={{ height: 0 }} animate={{ height: idx < 3 ? '16px' : '6px' }}
+            transition={{ duration: 0.6, delay: idx * 0.08, type: 'spring', stiffness: 200 }} />
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="shrink-0 ml-2 sm:ml-4 border rounded-xl bg-white p-1.5 shadow-sm" style={{ borderColor: `${color}33` }}>
+      <svg className="w-12 h-8 sm:w-16 sm:h-9 overflow-visible" viewBox="0 0 60 32">
+        <defs>
+          <linearGradient id={`kpiYieldFill-${color.replace('#','')}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <motion.path d="M0 25 L12 18 L24 22 L36 10 L48 14 L60 4 V32 H0 Z" fill={`url(#kpiYieldFill-${color.replace('#','')})`}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1, delay: 0.2 }} />
+        <motion.path d="M0 25 L12 18 L24 22 L36 10 L48 14 L60 4" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"
+          initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: 'easeOut', delay: 0.2 }} />
+        <motion.circle cx="60" cy="4" r="3" fill={color} initial={{ scale: 0 }} animate={{ scale: [0, 1.4, 1] }} transition={{ duration: 0.5, delay: 1.5 }} />
+      </svg>
+    </div>
+  );
+};
 
 const PACKAGE_PALETTE = ['#f97316', '#0ea5e9', '#ec4899', '#10b981', '#6366f1', '#eab308'];
 const modalVariants = {
@@ -383,19 +456,22 @@ export default function TravelDashboard() {
     },
   ];
 
-  const themeMap = {
-    '#D4A373': { iconBg: 'bg-[#D4A373] text-zinc-900', glow: 'rgba(212,163,115,0.35)' },
-    orange: { iconBg: 'bg-gradient-to-br from-[#D4A373] to-[#D4A373] text-white shadow-lg shadow-[#D4A373]/20', glow: 'rgba(249,115,22,0.3)' },
-    sky: { iconBg: 'bg-gradient-to-br from-sky-500 to-blue-500 text-white shadow-lg shadow-sky-500/30', glow: 'rgba(14,165,233,0.3)' },
-    emerald: { iconBg: 'bg-gradient-to-br from-[#D4A373] to-[#D4A373] text-white shadow-lg shadow-[#D4A373]/20', glow: 'rgba(16,185,129,0.3)' },
-    rose: { iconBg: 'bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-lg shadow-rose-500/30', glow: 'rgba(225,29,72,0.3)' },
+  // Enhanced Theme Map aligning with Sales/Admin
+  const enhancedThemeMap = {
+    indigo: { gradient: 'from-indigo-50 via-white to-white', ring: 'ring-indigo-500/10', glow: 'rgba(79,70,229,0.35)', iconBg: 'bg-[#4f46e5] text-white shadow-lg shadow-[#4f46e5]/30' },
+    emerald: { gradient: 'from-emerald-50 via-white to-white', ring: 'ring-emerald-500/10', glow: 'rgba(16,185,129,0.35)', iconBg: 'bg-[#10b981] text-white shadow-lg shadow-[#10b981]/30' },
+    amber: { gradient: 'from-amber-50 via-white to-white', ring: 'ring-amber-500/10', glow: 'rgba(245,158,11,0.35)', iconBg: 'bg-[#f59e0b] text-white shadow-lg shadow-[#f59e0b]/30' },
+    rose: { gradient: 'from-rose-50 via-white to-white', ring: 'ring-rose-500/10', glow: 'rgba(225,29,72,0.35)', iconBg: 'bg-[#e11d48] text-white shadow-lg shadow-[#e11d48]/30' },
+    sky: { gradient: 'from-sky-50 via-white to-white', ring: 'ring-sky-500/10', glow: 'rgba(14,165,233,0.35)', iconBg: 'bg-[#0ea5e9] text-white shadow-lg shadow-[#0ea5e9]/30' },
+    violet: { gradient: 'from-violet-50 via-white to-white', ring: 'ring-violet-500/10', glow: 'rgba(139,92,246,0.35)', iconBg: 'bg-[#8b5cf6] text-white shadow-lg shadow-[#8b5cf6]/30' },
+    orange: { gradient: 'from-orange-50 via-white to-white', ring: 'ring-orange-500/10', glow: 'rgba(212,163,115,0.35)', iconBg: 'bg-[#D4A373] text-white shadow-lg shadow-[#D4A373]/30' }
   };
 
   const overviewKpis = kpis ? [
-    { label: 'Total Bookings', value: kpis.total_bookings, sub: 'Active + completed', icon: <CalendarClock size={16} />, theme: '#D4A373' },
-    { label: 'Revenue This Month', value: inr(kpis.revenue_this_month), sub: 'From confirmed packages', icon: <Wallet size={16} />, theme: '#D4A373' },
-    { label: 'Upcoming Departures', value: kpis.upcoming_departures, sub: 'Confirmed & scheduled', icon: <Plane size={16} />, theme: 'sky' },
-    { label: 'Pending Payments', value: inr(kpis.pending_payments_value), sub: `${kpis.pending_payments_count} booking${kpis.pending_payments_count === '1' ? '' : 's'} awaiting balance`, icon: <Clock size={16} />, theme: 'rose' },
+    { label: 'Total Bookings', value: kpis.total_bookings, sub: 'Active + completed', icon: <CalendarClock size={16} />, theme: 'orange', graphicIndex: 0, pct: null },
+    { label: 'Revenue This Month', value: shortInr(kpis.revenue_this_month), sub: 'From confirmed packages', icon: <Wallet size={16} />, theme: 'emerald', graphicIndex: 1, pct: null },
+    { label: 'Upcoming Departures', value: kpis.upcoming_departures, sub: 'Confirmed & scheduled', icon: <Plane size={16} />, theme: 'sky', graphicIndex: 2, pct: null },
+    { label: 'Pending Payments', value: shortInr(kpis.pending_payments_value), sub: `${kpis.pending_payments_count} booking${kpis.pending_payments_count === '1' ? '' : 's'} awaiting balance`, icon: <Clock size={16} />, theme: 'rose', graphicIndex: 3, pct: null },
   ] : [];
 
   return (
@@ -425,13 +501,14 @@ export default function TravelDashboard() {
         .group:hover .fd-icon-btn { transform: translateY(-1px) scale(1.12) rotate(-6deg); }
         .fd-glass-backdrop { background: rgba(24, 24, 27, 0.4); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
         .fd-glass-modal { background: rgba(255, 255, 255, 0.98); border: 1px solid rgba(226, 232, 240, 0.8); box-shadow: 0 30px 70px -12px rgba(112, 144, 176, 0.25); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
-        .fd-input { width: 100%; padding: 0.75rem 1.1rem; background: #F4F7FE; border: 1px solid #E2E8F0; border-radius: 1rem; font-size: 0.875rem; font-weight: 500; }
+        .fd-input { width: 100%; padding: 0.75rem 1.1rem; background: #F4F7FE; border: 1px solid #E2E8F0; border-radius: 1rem; font-size: 0.875rem; font-weight: 500; outline: none; transition: border 0.3s; }
+        .fd-input:focus { border-color: #D4A373; }
       `}</style>
 
       {/* ═══════════════════════════════════════════════════════
           LEFT FLOATING SIDEBAR
           ═══════════════════════════════════════════════════════ */}
-      <div className="w-full lg:w-72 shrink-0 rounded-[2rem] p-6 flex flex-col gap-6 fd-dealdeck-sidebar lg:fixed lg:top-30 lg:left-6 z-30 lg:h-[calc(100vh-7.8rem)]">
+      <div className="w-full lg:w-72 shrink-0 rounded-[2rem] p-6 flex flex-col gap-6 fd-dealdeck-sidebar lg:fixed lg:top-[7.5rem] lg:left-6 z-30 lg:h-[calc(100vh-7.8rem)]">
         <div className="flex items-center gap-3 px-2">
           <div className="w-10 h-10 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center justify-center shadow-xs shrink-0">
             <Plane size={19} className="text-[#D4A373]" />
@@ -474,7 +551,7 @@ export default function TravelDashboard() {
           </div>
         </div>
 
-        <div className="rounded-2xl bg-gradient-to-br from-zinc-50 to-white border border-zinc-100 p-4 flex items-start gap-3">
+        <div className="rounded-2xl bg-gradient-to-br from-zinc-50 to-white border border-zinc-100 p-4 flex items-start gap-3 mt-auto">
           <ShieldCheck size={18} className="text-[#D4A373] shrink-0 mt-0.5" />
           <div>
             <p className="text-[11px] font-bold text-zinc-900 leading-tight">Season pacing on track</p>
@@ -620,15 +697,45 @@ export default function TravelDashboard() {
                     <>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                         {overviewKpis.map((kpi, i) => {
-                          const t = themeMap[kpi.theme];
+                          const t = enhancedThemeMap[kpi.theme] || enhancedThemeMap['orange'];
+                          const dotColor = { sky: '#0ea5e9', rose: '#e11d48', emerald: '#10b981', violet: '#8b5cf6', orange: '#D4A373' }[kpi.theme] || '#D4A373';
+                          
                           return (
-                            <motion.div key={i} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, type: 'spring', stiffness: 300, damping: 24 }}
-                              whileHover={{ y: -5, scale: 1.015 }} className="relative overflow-hidden bg-white rounded-[1.75rem] p-5 border border-zinc-200/60"
-                              style={{ boxShadow: `0 1px 2px rgba(0,0,0,0.04), 0 14px 30px -18px ${t.glow}` }}>
-                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${t.iconBg}`}>{kpi.icon}</div>
-                              <p className="text-2xl font-black text-zinc-900 tracking-tight leading-none mb-1.5 truncate">{kpi.value}</p>
-                              <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 leading-none">{kpi.label}</p>
-                              <p className="text-[10px] text-zinc-400 mt-1">{kpi.sub}</p>
+                            <motion.div
+                              key={i}
+                              initial={{ opacity: 0, y: 16 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: i * 0.08, type: 'spring', stiffness: 200, damping: 20 }}
+                              whileHover={{ y: -8, scale: 1.02 }}
+                              style={{ '--kpi-glow': t.glow }}
+                              className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between border border-zinc-200/70 bg-gradient-to-br ${t.gradient} shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_24px_-16px_rgba(0,0,0,0.15)] transition-shadow duration-500 hover:shadow-[0_20px_45px_-18px_var(--kpi-glow)] ring-1 ${t.ring}`}
+                            >
+                              <div
+                                className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
+                                style={{ background: t.glow }}
+                              />
+                              <div className="relative flex-1 min-w-0 pr-1">
+                                <div className="flex items-start justify-between mb-3">
+                                  <motion.div
+                                    whileHover={{ rotate: -8, scale: 1.1 }}
+                                    transition={{ type: 'spring', stiffness: 400, damping: 14 }}
+                                    className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${t.iconBg}`}
+                                  >
+                                    {kpi.icon}
+                                  </motion.div>
+                                </div>
+                                <motion.p
+                                  initial={{ opacity: 0 }}
+                                  animate={{ opacity: 1 }}
+                                  transition={{ delay: i * 0.08 + 0.2 }}
+                                  className="text-2xl lg:text-xl xl:text-2xl font-black text-zinc-900 tracking-tight leading-none mb-1.5"
+                                >
+                                  {kpi.value}
+                                </motion.p>
+                                <p className="text-[11px] lg:text-[9px] xl:text-[10px] font-bold uppercase tracking-wider text-zinc-500 leading-tight mb-1 break-words">{kpi.label}</p>
+                                <p className="text-[9px] text-zinc-400 leading-tight break-words">{kpi.sub}</p>
+                              </div>
+                              <div className="relative shrink-0">{kpiGraphic(kpi.graphicIndex ?? i, dotColor, kpi.pct ?? null)}</div>
                             </motion.div>
                           );
                         })}
@@ -662,7 +769,7 @@ export default function TravelDashboard() {
                                 <motion.div key={i} initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.08 }} className="flex items-center gap-2">
                                   <span className="w-2.5 h-2.5 rounded-full shrink-0 ring-2 ring-white shadow-sm" style={{ backgroundColor: d.color, boxShadow: `0 0 8px ${d.color}66` }} />
                                   <span className="text-[11px] text-zinc-500 font-semibold truncate max-w-[130px]">{d.label}</span>
-                                  <span className="text-xs font-black text-zinc-900 ml-auto">{inr(d.value)}</span>
+                                  <span className="text-xs font-black text-zinc-900 ml-auto">{shortInr(d.value)}</span>
                                 </motion.div>
                               ))}
                             </div>
@@ -770,7 +877,7 @@ export default function TravelDashboard() {
                             <div className="flex items-center justify-between pt-3 border-t border-zinc-100 mt-1">
                               <div>
                                 <p className="text-lg font-black text-zinc-900">{inr(p.price)}</p>
-                                <p className="text-[10px] text-zinc-400">{p.bookings_count} bookings · {inr(p.revenue)} revenue</p>
+                                <p className="text-[10px] text-zinc-400">{p.bookings_count} bookings · {shortInr(p.revenue)} revenue</p>
                               </div>
                               <button onClick={() => handleTogglePackage(p.id)} className="text-[11px] font-bold text-zinc-500 hover:text-[#D4A373] px-3 py-1.5 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors">
                                 {p.is_active ? 'Deactivate' : 'Activate'}
