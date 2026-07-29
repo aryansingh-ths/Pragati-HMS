@@ -42,9 +42,12 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
         else if (role === 'FRONT_DESK' || role === 'RECEPTION') redirectPath = '/dashboard/front-desk';
         else if (role === 'HOUSEKEEPING') redirectPath = '/dashboard/housekeeping';
         else if (role === 'FINANCE') redirectPath = '/dashboard/finance';
-        else if (role === 'SALES') redirectPath = '/dashboard/sales';
         else if (role === 'TRAVEL') redirectPath = '/dashboard/travel';
-        else if (role === 'RESTAURANT') redirectPath = '/dashboard/dining'; // <-- ADD THIS LINE
+        else if (role === 'RESTAURANT') redirectPath = '/dashboard/dining';
+        
+        // Treat Sales Leadership and Sales Executives as completely separate routing destinations
+        else if (role === 'SALES_HEAD') redirectPath = '/dashboard/sales';
+        else if (role === 'SALES_EXECUTIVE' || role === 'SALES') redirectPath = '/dashboard/sales-executive';
 
         completeLogin(role, token, redirectPath);
 

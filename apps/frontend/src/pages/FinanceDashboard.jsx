@@ -747,7 +747,7 @@ export default function FinanceDashboard() {
   if (budgetByDept.length === 0) budgetByDept.push({ dept: 'No Budgets Set', budget: 1, actual: 0, color: '#ccc' });
 
   // --- Payroll ---
-  const payrollByDept = (apiPayroll || []).map(p => ({ ...p, color: themeMap[p.theme]?.ring || '#6366f1' }));
+  const payrollByDept = (apiPayroll || []).map(p => ({ ...p, color: '#6366f1' }));
   const totalHeadcount = payrollByDept.reduce((s, d) => s + (d.headcount || 0), 0);
   const totalGrossPayroll = payrollByDept.reduce((s, d) => s + (d.gross || 0), 0);
   const totalPfLiability = payrollByDept.reduce((s, d) => s + (d.pf || 0), 0);
@@ -1489,7 +1489,6 @@ export default function FinanceDashboard() {
                           { label: 'Operating', value: cfOperating, theme: '#D4A373' }, { label: 'Investing', value: cfInvesting, theme: 'rose' },
                           { label: 'Financing', value: cfFinancing, theme: '#D4A373' }, { label: 'Net Cash Flow', value: netCashFlow, theme: 'indigo' },
                         ].map((c, i) => {
-                          const t = themeMap[c.theme] || themeMap['#D4A373'];
                           return (
                             <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }} className="group relative overflow-hidden bg-white rounded-[1.5rem] p-5 border border-zinc-200 shadow-sm"><div className="fd-sheen" /><p className="relative text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2 break-words">{c.label}</p><p className={`relative text-2xl font-black break-words ${c.value < 0 ? 'text-rose-600' : 'text-zinc-900'}`}>{c.value < 0 ? '-' : ''}₹{Math.abs(c.value).toLocaleString('en-IN')}</p></motion.div>
                           );

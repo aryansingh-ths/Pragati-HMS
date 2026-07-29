@@ -23,8 +23,9 @@ import HousekeepingDashboard from './pages/HousekeepingDashboard';
 import FinanceDashboard from './pages/FinanceDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import SalesDashboard from './pages/SalesDashboard';
+import SalesExecutiveDashboard from './pages/SalesExecutiveDashboard';
 import TravelDashboard from './pages/TravelDashboard';
-import DiningDashboard from './pages/DiningDashboard'; // Ensure this matches your file name (e.g., DinningDashboard if you kept the double 'n')
+import DiningDashboard from './pages/DiningDashboard';
 
 export default function App() {
   const [viewMode, setViewMode] = useState('guest');
@@ -150,9 +151,14 @@ export default function App() {
               <Route path="/dashboard/Admin" element={<AdminDashboard />} />
             </Route>
 
-            {/* ROUTE 7: PROTECTED SALES DASHBOARD */}
-            <Route element={<ProtectedRoute isAllowed={userRole?.toUpperCase() === 'SALES' || userRole?.toUpperCase() === 'ADMIN'} />}>
+            {/* ROUTE 7a: PROTECTED SALES LEADERSHIP COMMAND CENTER */}
+            <Route element={<ProtectedRoute isAllowed={userRole?.toUpperCase() === 'SALES_HEAD' || userRole?.toUpperCase() === 'ADMIN'} />}>
               <Route path="/dashboard/sales" element={<SalesDashboard />} />
+            </Route>
+
+            {/* ROUTE 7b: PROTECTED SALES EXECUTIVE CRM */}
+            <Route element={<ProtectedRoute isAllowed={userRole?.toUpperCase() === 'SALES_EXECUTIVE' || userRole?.toUpperCase() === 'SALES' || userRole?.toUpperCase() === 'ADMIN'} />}>
+              <Route path="/dashboard/sales-executive" element={<SalesExecutiveDashboard />} /> 
             </Route>
 
             {/* ROUTE 8: PROTECTED TRAVEL DESK ROUTE */}
@@ -160,7 +166,7 @@ export default function App() {
               <Route path="/dashboard/travel" element={<TravelDashboard />} />
             </Route>
 
-            {/* ROUTE 9: CORRECTED SINGLE PROTECTED DINING ROUTE */}
+            {/* ROUTE 9: PROTECTED DINING ROUTE */}
             <Route element={<ProtectedRoute isAllowed={userRole?.toUpperCase() === 'RESTAURANT' || userRole?.toUpperCase() === 'ADMIN'} />}>
               <Route path="/dashboard/dining" element={<DiningDashboard />} />
             </Route>

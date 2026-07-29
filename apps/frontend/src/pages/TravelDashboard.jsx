@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Plane, MapPin, Users, Wallet, Clock, CheckCircle2, AlertTriangle, RefreshCw,
   Download, Plus, X, Loader2, Search, Filter, TrendingUp, Building2, ArrowUpRight,
-  ShieldCheck, PieChart, Compass, CalendarClock, Phone, Mail, Star, Ban, CreditCard, LogOut, Zap } from 'lucide-react';
+  ShieldCheck, PieChart, Compass, CalendarClock, Phone, Mail, Star, Ban, CreditCard, LogOut, Zap, Car } from 'lucide-react';
 
 const API_BASE = 'http://localhost:3000';
 const getToken = () => sessionStorage.getItem('hms_token');
@@ -300,6 +300,18 @@ export default function TravelDashboard() {
   const [customers, setCustomers] = useState([]);
   const [customersLoaded, setCustomersLoaded] = useState(false);
 
+  // Vehicles state
+  const [vehicles, setVehicles] = useState([]);
+  const [vehiclesLoaded, setVehiclesLoaded] = useState(false);
+  const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
+  const [vehicleForm, setVehicleForm] = useState({ model: '', type: 'Sedan', registration_number: '', capacity: 4, price_per_day: '' });
+
+  // Vehicle Bookings state
+  const [vehicleBookings, setVehicleBookings] = useState([]);
+  const [vehicleBookingsLoaded, setVehicleBookingsLoaded] = useState(false);
+  const [isVehicleBookingModalOpen, setIsVehicleBookingModalOpen] = useState(false);
+  const [vehicleBookingForm, setVehicleBookingForm] = useState({ vehicle_id: '', guest_name: '', guest_phone: '', travel_date: '', amount: '', payment_status: 'Pending' });
+
   // --- Data fetchers ---
   const fetchOverview = useCallback(async () => {
     try {
@@ -358,12 +370,40 @@ export default function TravelDashboard() {
     }
   }, []);
 
+  const fetchVehicles = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/travel/vehicles`, { headers: authHeaders() });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to load vehicles');
+      setVehicles(json.data.vehicles);
+      setVehiclesLoaded(true);
+      setErrorMsg('');
+    } catch (err) {
+      setErrorMsg(err.message);
+    }
+  }, []);
+
+  const fetchVehicleBookings = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/travel/vehicle-bookings`, { headers: authHeaders() });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to load vehicle bookings');
+      setVehicleBookings(json.data.bookings);
+      setVehicleBookingsLoaded(true);
+      setErrorMsg('');
+    } catch (err) {
+      setErrorMsg(err.message);
+    }
+  }, []);
+
   useEffect(() => { fetchOverview(); }, [fetchOverview]);
   useEffect(() => {
     if (activeTab === 'packages' && !packagesLoaded) fetchPackages();
     if (activeTab === 'bookings' && !bookingsLoaded) fetchBookings();
     if (activeTab === 'customers' && !customersLoaded) fetchCustomers();
-  }, [activeTab, packagesLoaded, bookingsLoaded, customersLoaded, fetchPackages, fetchBookings, fetchCustomers]);
+    if (activeTab === 'vehicles' && !vehiclesLoaded) fetchVehicles();
+    if (activeTab === 'vehicleBookings' && !vehicleBookingsLoaded) fetchVehicleBookings();
+  }, [activeTab, packagesLoaded, bookingsLoaded, customersLoaded, vehiclesLoaded, vehicleBookingsLoaded, fetchPackages, fetchBookings, fetchCustomers, fetchVehicles, fetchVehicleBookings]);
 
   // Re-fetch bookings whenever search/filter changes (only once loaded once)
   useEffect(() => {
@@ -379,6 +419,8 @@ export default function TravelDashboard() {
     else if (activeTab === 'packages') await fetchPackages();
     else if (activeTab === 'bookings') await fetchBookings();
     else if (activeTab === 'customers') await fetchCustomers();
+    else if (activeTab === 'vehicles') await fetchVehicles();
+    else if (activeTab === 'vehicleBookings') await fetchVehicleBookings();
     setTimeout(() => setIsLoading(false), 400);
   };
 
@@ -444,14 +486,81 @@ export default function TravelDashboard() {
     }
   };
 
+  const handleAddVehicle = async (e) => {
+    e.preventDefault();
+    if (!vehicleForm.model || !vehicleForm.price_per_day) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/travel/vehicles`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({
+          ...vehicleForm,
+          price_per_day: Number(vehicleForm.price_per_day),
+          capacity: Number(vehicleForm.capacity) || 4,
+        })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to create vehicle');
+      setIsVehicleModalOpen(false);
+      setVehicleForm({ model: '', type: 'Sedan', registration_number: '', capacity: 4, price_per_day: '' });
+      fetchVehicles();
+    } catch (err) {
+      setErrorMsg(err.message);
+    }
+  };
+
+  const handleToggleVehicle = async (id) => {
+    try {
+      await fetch(`${API_BASE}/api/travel/vehicles/${id}/toggle-active`, { method: 'PATCH', headers: authHeaders() });
+      fetchVehicles();
+    } catch (err) {
+      setErrorMsg(err.message);
+    }
+  };
+
+  const handleAddVehicleBooking = async (e) => {
+    e.preventDefault();
+    if (!vehicleBookingForm.vehicle_id || !vehicleBookingForm.guest_name || !vehicleBookingForm.travel_date || !vehicleBookingForm.amount) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/travel/vehicle-bookings`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ ...vehicleBookingForm, amount: Number(vehicleBookingForm.amount) })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to create vehicle booking');
+      setIsVehicleBookingModalOpen(false);
+      setVehicleBookingForm({ vehicle_id: '', guest_name: '', guest_phone: '', travel_date: '', amount: '', payment_status: 'Pending' });
+      fetchVehicleBookings();
+      fetchOverview();
+    } catch (err) {
+      setErrorMsg(err.message);
+    }
+  };
+
+  const handleUpdateVehicleBookingStatus = async (id, patch) => {
+    try {
+      await fetch(`${API_BASE}/api/travel/vehicle-bookings/${id}/status`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify(patch) });
+      fetchVehicleBookings();
+      fetchOverview();
+    } catch (err) {
+      setErrorMsg(err.message);
+    }
+  };
+
   const navGroups = [
     {
       heading: 'Packages & Sales',
       items: [
         { key: 'overview', label: 'Travel Overview', icon: <Compass size={15} /> },
         { key: 'packages', label: 'Package Catalog', icon: <Plane size={15} /> },
-        { key: 'bookings', label: 'Bookings & Purchases', icon: <CalendarClock size={15} /> },
+        { key: 'bookings', label: 'Package Bookings', icon: <CalendarClock size={15} /> },
         { key: 'customers', label: 'Customers', icon: <Users size={15} /> },
+      ],
+    },
+    {
+      heading: 'Vehicle Fleet',
+      items: [
+        { key: 'vehicles', label: 'Private Vehicles', icon: <Car size={15} /> },
+        { key: 'vehicleBookings', label: 'Vehicle Bookings', icon: <CalendarClock size={15} /> },
       ],
     },
   ];
@@ -1037,6 +1146,150 @@ export default function TravelDashboard() {
                   </div>
                 </motion.div>
               )}
+
+              {/* ============================================ */}
+              {/* TAB: PRIVATE VEHICLES                           */}
+              {/* ============================================ */}
+              {activeTab === 'vehicles' && (
+                <motion.div key="vehicles" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider">
+                      <Car size={16} className="text-[#D4A373]" /> Vehicle Fleet
+                    </h3>
+                    <button onClick={() => setIsVehicleModalOpen(true)} className="bg-zinc-900 text-white px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-[#D4A373] transition-colors flex items-center gap-2 shadow-sm">
+                      <Plus size={13} /> Add Vehicle
+                    </button>
+                  </div>
+
+                  {!vehiclesLoaded ? (
+                    <div className="h-40 flex items-center justify-center text-zinc-400 text-xs font-semibold uppercase tracking-wider">
+                      <Loader2 className="animate-spin mr-2" size={16} /> Loading vehicles…
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {vehicles.map((v) => (
+                        <div key={v.id} className="fd-dealdeck-card rounded-[1.5rem] p-5 flex flex-col group hover:shadow-lg transition-all relative">
+                          <div className="flex justify-between items-start mb-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#D4A373] to-[#D4A373] text-white shadow-md shadow-[#D4A373]/20 flex items-center justify-center shrink-0">
+                                <Car size={18} />
+                              </div>
+                              <div>
+                                <h4 className="text-sm font-bold text-zinc-900">{v.model}</h4>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-[#D4A373]">{v.type}</span>
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-bold text-zinc-400">Cap: {v.capacity}</span>
+                          </div>
+                          
+                          <div className="mb-4">
+                            <p className="text-xs text-zinc-500 font-semibold mb-1">Reg No: {v.registration_number || 'N/A'}</p>
+                            <div className="flex items-baseline gap-1 mt-3">
+                              <span className="text-xl font-black text-zinc-900">{inr(v.price_per_day)}</span>
+                              <span className="text-xs text-zinc-400 font-medium">/ day</span>
+                            </div>
+                          </div>
+
+                          <div className="mt-auto flex items-center justify-between pt-4 border-t border-zinc-100">
+                            <span className={`px-2 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
+                              v.is_active ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-zinc-100 text-zinc-500 border-zinc-200'
+                            }`}>
+                              {v.is_active ? 'Active' : 'Disabled'}
+                            </span>
+                            <button onClick={() => handleToggleVehicle(v.id)} className="text-[10px] font-bold text-[#D4A373] hover:text-[#D4A373]">
+                              {v.is_active ? 'Deactivate' : 'Activate'}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      {vehicles.length === 0 && (
+                        <div className="col-span-full h-32 flex items-center justify-center text-zinc-400 text-xs font-medium border-2 border-dashed border-zinc-200 rounded-[2rem]">
+                          No vehicles found. Add one to get started.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </motion.div>
+              )}
+
+              {/* ============================================ */}
+              {/* TAB: VEHICLE BOOKINGS                           */}
+              {/* ============================================ */}
+              {activeTab === 'vehicleBookings' && (
+                <motion.div key="vehicleBookings" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
+                  <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
+                    <div className="p-5 border-b border-zinc-150 flex flex-col lg:flex-row gap-3 lg:items-center justify-between bg-white/40">
+                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><CalendarClock size={16} className="text-[#D4A373]" /> Vehicle Bookings</h3>
+                      <button onClick={() => setIsVehicleBookingModalOpen(true)} className="bg-zinc-900 text-white px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-[#D4A373] transition-colors flex items-center justify-center gap-2 shrink-0">
+                        <Plus size={13} /> New Booking
+                      </button>
+                    </div>
+
+                    {!vehicleBookingsLoaded ? (
+                      <div className="h-40 flex items-center justify-center text-zinc-400 text-xs font-semibold uppercase tracking-wider">
+                        <Loader2 className="animate-spin mr-2" size={16} /> Loading vehicle bookings…
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="border-b border-zinc-150 text-[10px] uppercase tracking-wider text-zinc-400 bg-zinc-50/50">
+                              <th className="p-4 font-bold">Guest / Entity</th>
+                              <th className="p-4 font-bold">Vehicle</th>
+                              <th className="p-4 font-bold">Travel Date</th>
+                              <th className="p-4 font-bold text-right">Amount</th>
+                              <th className="p-4 font-bold text-right">Payment</th>
+                              <th className="p-4 font-bold text-right">Status</th>
+                              <th className="p-4 font-bold text-right">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-zinc-100">
+                            {vehicleBookings.length === 0 && (<tr><td colSpan={7} className="p-8 text-center text-xs text-zinc-400">No vehicle bookings found.</td></tr>)}
+                            {vehicleBookings.map((b) => (
+                              <tr key={b.id} className="hover:bg-zinc-50/60 transition-colors">
+                                <td className="p-4 text-sm font-bold text-zinc-900">
+                                  {b.guest_name}
+                                  <span className="block text-[10px] font-normal text-zinc-400">{b.guest_phone || '—'}</span>
+                                </td>
+                                <td className="p-4 text-sm text-zinc-600">{b.vehicle_model || '—'}</td>
+                                <td className="p-4 text-sm text-zinc-600">{new Date(b.travel_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                                <td className="p-4 text-sm font-bold text-zinc-900 text-right">{inr(b.amount)}</td>
+                                <td className="p-4 text-right">
+                                  <span className={`px-2 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
+                                    b.payment_status === 'Paid' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                    : b.payment_status === 'Partial' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                    : 'bg-rose-50 text-rose-600 border-rose-200'
+                                  }`}>{b.payment_status}</span>
+                                </td>
+                                <td className="p-4 text-right">
+                                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
+                                    b.booking_status === 'Completed' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                    : b.booking_status === 'Cancelled' ? 'bg-rose-50 text-rose-600 border-rose-200'
+                                    : 'bg-sky-50 text-sky-600 border-sky-200'
+                                  }`}>
+                                    {b.booking_status === 'Completed' ? <CheckCircle2 size={12} /> : b.booking_status === 'Cancelled' ? <Ban size={12} /> : <Clock size={12} />}
+                                    {b.booking_status}
+                                  </span>
+                                </td>
+                                <td className="p-4 text-right">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    {b.payment_status !== 'Paid' && b.booking_status !== 'Cancelled' && (
+                                      <button onClick={() => handleUpdateVehicleBookingStatus(b.id, { payment_status: 'Paid' })} className="text-[10px] font-bold text-[#D4A373] hover:text-[#D4A373]">Mark Paid</button>
+                                    )}
+                                    {b.booking_status === 'Confirmed' && (
+                                      <button onClick={() => handleUpdateVehicleBookingStatus(b.id, { booking_status: 'Cancelled' })} className="text-[10px] font-bold text-rose-500 hover:text-rose-600">Cancel</button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
             </div>
           )}
         </AnimatePresence>
@@ -1160,6 +1413,121 @@ export default function TravelDashboard() {
                     <option value="Partial">Partial</option>
                     <option value="Paid">Paid</option>
                   </select>
+                </div>
+                <button type="submit" className="w-full bg-gradient-to-r from-[#D4A373] to-[#D4A373] hover:from-[#B38355] hover:to-[#B38355] text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-lg shadow-[#D4A373]/20 flex items-center justify-center gap-2 mt-4">
+                  <CreditCard size={16} /> Record Booking
+                </button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Add Vehicle Modal */}
+      <AnimatePresence>
+        {isVehicleModalOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1, transition: { duration: 0.25 } }} exit={{ opacity: 0, transition: { duration: 0.2 } }}
+            className="fixed inset-0 z-55 flex items-center justify-center fd-glass-backdrop p-4" onClick={() => setIsVehicleModalOpen(false)}>
+            <motion.div variants={modalVariants} initial="hidden" animate="visible" exit="exit" onClick={e => e.stopPropagation()}
+              className="w-full max-w-md fd-glass-modal rounded-3xl p-7 overflow-y-auto max-h-[90vh]">
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#D4A373]/10 text-[#D4A373] flex items-center justify-center"><Car size={20} /></div>
+                  <div>
+                    <h2 className="text-lg font-serif font-bold text-zinc-900">Add Vehicle</h2>
+                    <p className="text-xs text-zinc-500">Add a new private vehicle</p>
+                  </div>
+                </div>
+                <button onClick={() => setIsVehicleModalOpen(false)} className="p-2 rounded-xl hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-all"><X size={20} /></button>
+              </div>
+              <form onSubmit={handleAddVehicle} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Vehicle Model</label>
+                  <input required placeholder="e.g. Toyota Innova Crysta" value={vehicleForm.model} onChange={e => setVehicleForm({ ...vehicleForm, model: e.target.value })} className="fd-input bg-white" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Type</label>
+                    <select value={vehicleForm.type} onChange={e => setVehicleForm({ ...vehicleForm, type: e.target.value })} className="fd-input bg-white appearance-none cursor-pointer">
+                      <option>Sedan</option><option>SUV</option><option>Minivan</option><option>Luxury</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Reg Number</label>
+                    <input placeholder="e.g. MH-12-AB-1234" value={vehicleForm.registration_number} onChange={e => setVehicleForm({ ...vehicleForm, registration_number: e.target.value })} className="fd-input bg-white" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Capacity</label>
+                    <input type="number" placeholder="4" value={vehicleForm.capacity} onChange={e => setVehicleForm({ ...vehicleForm, capacity: e.target.value })} className="fd-input bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Price per Day (₹)</label>
+                    <input required type="number" placeholder="0.00" value={vehicleForm.price_per_day} onChange={e => setVehicleForm({ ...vehicleForm, price_per_day: e.target.value })} className="fd-input bg-white" />
+                  </div>
+                </div>
+                <button type="submit" className="w-full bg-gradient-to-r from-[#D4A373] to-[#D4A373] hover:from-[#B38355] hover:to-[#B38355] text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-lg shadow-[#D4A373]/20 flex items-center justify-center gap-2 mt-4">
+                  <Car size={16} /> Add Vehicle
+                </button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* New Vehicle Booking Modal */}
+      <AnimatePresence>
+        {isVehicleBookingModalOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1, transition: { duration: 0.25 } }} exit={{ opacity: 0, transition: { duration: 0.2 } }}
+            className="fixed inset-0 z-55 flex items-center justify-center fd-glass-backdrop p-4" onClick={() => setIsVehicleBookingModalOpen(false)}>
+            <motion.div variants={modalVariants} initial="hidden" animate="visible" exit="exit" onClick={e => e.stopPropagation()}
+              className="w-full max-w-md fd-glass-modal rounded-3xl p-7 overflow-y-auto max-h-[90vh]">
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#D4A373]/10 text-[#D4A373] flex items-center justify-center"><CalendarClock size={20} /></div>
+                  <div>
+                    <h2 className="text-lg font-serif font-bold text-zinc-900">New Vehicle Booking</h2>
+                    <p className="text-xs text-zinc-500">Record a vehicle rental</p>
+                  </div>
+                </div>
+                <button onClick={() => setIsVehicleBookingModalOpen(false)} className="p-2 rounded-xl hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-all"><X size={20} /></button>
+              </div>
+              <form onSubmit={handleAddVehicleBooking} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Vehicle</label>
+                  <select required value={vehicleBookingForm.vehicle_id} onChange={e => setVehicleBookingForm({ ...vehicleBookingForm, vehicle_id: e.target.value })} className="fd-input bg-white appearance-none cursor-pointer">
+                    <option value="">Select a vehicle…</option>
+                    {vehicles.filter(v => v.is_active).map(v => <option key={v.id} value={v.id}>{v.model} ({v.type}) — {inr(v.price_per_day)}/day</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Guest / Entity Name</label>
+                  <input required placeholder="e.g. Aryan Singh" value={vehicleBookingForm.guest_name} onChange={e => setVehicleBookingForm({ ...vehicleBookingForm, guest_name: e.target.value })} className="fd-input bg-white" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Phone</label>
+                    <input placeholder="+91 ..." value={vehicleBookingForm.guest_phone} onChange={e => setVehicleBookingForm({ ...vehicleBookingForm, guest_phone: e.target.value })} className="fd-input bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Travel Date</label>
+                    <input required type="date" value={vehicleBookingForm.travel_date} onChange={e => setVehicleBookingForm({ ...vehicleBookingForm, travel_date: e.target.value })} className="fd-input bg-white" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Amount (₹)</label>
+                    <input required type="number" placeholder="0.00" value={vehicleBookingForm.amount} onChange={e => setVehicleBookingForm({ ...vehicleBookingForm, amount: e.target.value })} className="fd-input bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Payment Status</label>
+                    <select value={vehicleBookingForm.payment_status} onChange={e => setVehicleBookingForm({ ...vehicleBookingForm, payment_status: e.target.value })} className="fd-input bg-white appearance-none cursor-pointer">
+                      <option value="Pending">Pending</option>
+                      <option value="Partial">Partial</option>
+                      <option value="Paid">Paid</option>
+                    </select>
+                  </div>
                 </div>
                 <button type="submit" className="w-full bg-gradient-to-r from-[#D4A373] to-[#D4A373] hover:from-[#B38355] hover:to-[#B38355] text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-lg shadow-[#D4A373]/20 flex items-center justify-center gap-2 mt-4">
                   <CreditCard size={16} /> Record Booking

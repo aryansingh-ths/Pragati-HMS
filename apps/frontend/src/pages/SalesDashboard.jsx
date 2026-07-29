@@ -1,3 +1,4 @@
+// SalesDashboard.jsx
 import React, { useState, useEffect, useId } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -9,7 +10,8 @@ import {
   PhoneCall, Mail, CheckSquare, ListTodo, Flame, Activity, ShieldCheck, Globe,
   User, Users, Building2, MapPin, BarChart3, ArrowRight, Percent, TrendingDown, LogOut,
   RefreshCw, Zap, BedDouble, PartyPopper, CalendarRange, Download, FileSpreadsheet,
-  Lock, ArrowRightLeft, FileSignature, LineChart, LayoutTemplate
+  Lock, ArrowRightLeft, FileSignature, LineChart, LayoutTemplate, Medal, ChevronDown,
+  Edit3, UserCog, ClipboardList, AlertOctagon
 } from 'lucide-react';
 
 // =============================================
@@ -112,36 +114,38 @@ function BarRankChart({ data = [], currency = true }) {
 // =============================================
 // SVG AREA GRAPH: TARGET VS REVENUE
 // =============================================
-function TargetVsRevenueChart({ period }) {
+function TargetVsRevenueChart({ period, isHeadView, activePersona }) {
+  const mul = isHeadView ? 4 : (activePersona === 'Rohan Desai' ? 0.4 : activePersona === 'Priya Patel' ? 0.75 : 1); 
+  
   const trendData = {
     Daily: [
-      { label: 'Mon', target: 20, revenue: 15 },
-      { label: 'Tue', target: 25, revenue: 30 },
-      { label: 'Wed', target: 30, revenue: 25 },
-      { label: 'Thu', target: 35, revenue: 45 },
-      { label: 'Fri', target: 40, revenue: 38 },
-      { label: 'Sat', target: 45, revenue: 55 },
-      { label: 'Sun', target: 50, revenue: 60 },
+      { label: 'Mon', target: 20*mul, revenue: 15*mul },
+      { label: 'Tue', target: 25*mul, revenue: 30*mul },
+      { label: 'Wed', target: 30*mul, revenue: 25*mul },
+      { label: 'Thu', target: 35*mul, revenue: 45*mul },
+      { label: 'Fri', target: 40*mul, revenue: 38*mul },
+      { label: 'Sat', target: 45*mul, revenue: 55*mul },
+      { label: 'Sun', target: 50*mul, revenue: 60*mul },
     ],
     Weekly: [
-      { label: 'Week 1', target: 150, revenue: 120 },
-      { label: 'Week 2', target: 180, revenue: 190 },
-      { label: 'Week 3', target: 200, revenue: 170 },
-      { label: 'Week 4', target: 250, revenue: 290 },
+      { label: 'Week 1', target: 150*mul, revenue: 120*mul },
+      { label: 'Week 2', target: 180*mul, revenue: 190*mul },
+      { label: 'Week 3', target: 200*mul, revenue: 170*mul },
+      { label: 'Week 4', target: 250*mul, revenue: 290*mul },
     ],
     Monthly: [
-      { label: 'Jan', target: 500, revenue: 450 },
-      { label: 'Feb', target: 550, revenue: 600 },
-      { label: 'Mar', target: 600, revenue: 580 },
-      { label: 'Apr', target: 700, revenue: 750 },
-      { label: 'May', target: 800, revenue: 720 },
-      { label: 'Jun', target: 900, revenue: 980 },
+      { label: 'Jan', target: 500*mul, revenue: 450*mul },
+      { label: 'Feb', target: 550*mul, revenue: 600*mul },
+      { label: 'Mar', target: 600*mul, revenue: 580*mul },
+      { label: 'Apr', target: 700*mul, revenue: 750*mul },
+      { label: 'May', target: 800*mul, revenue: 720*mul },
+      { label: 'Jun', target: 900*mul, revenue: 980*mul },
     ],
     Yearly: [
-      { label: '2023', target: 4000, revenue: 3800 },
-      { label: '2024', target: 5500, revenue: 5900 },
-      { label: '2025', target: 7000, revenue: 6800 },
-      { label: '2026', target: 8500, revenue: 9200 },
+      { label: '2023', target: 4000*mul, revenue: 3800*mul },
+      { label: '2024', target: 5500*mul, revenue: 5900*mul },
+      { label: '2025', target: 7000*mul, revenue: 6800*mul },
+      { label: '2026', target: 8500*mul, revenue: 9200*mul },
     ],
   };
 
@@ -269,10 +273,23 @@ const kpiGraphic = (i, color, pct = null) => {
 };
 
 // =============================================
-// MAIN COMPONENT - SALES EXECUTIVE VIEW
+// MAIN COMPONENT - UNIFIED SALES DASHBOARD
 // =============================================
-export default function SalesExecutiveDashboard() {
+export default function SalesDashboard() {
   const navigate = useNavigate();
+  
+  // ROLE TOGGLE STATE (Sales Head vs Executive)
+  const [viewRole, setViewRole] = useState(() => {
+    const currentName = sessionStorage.getItem('hms_name');
+    return currentName === 'Sales Head' ? 'HEAD' : 'EXEC';
+  }); 
+  const isHeadView = viewRole === 'HEAD';
+  
+  const [execPersona, setExecPersona] = useState(() => {
+    const currentName = sessionStorage.getItem('hms_name');
+    return currentName === 'Sales Head' ? 'Amit Sharma' : (currentName || 'Priya Patel');
+  }); 
+
   const [activeTab, setActiveTab] = useState('overview');
   const [isLoading, setIsLoading] = useState(true);
   const [timePeriod, setTimePeriod] = useState('Monthly');
@@ -280,7 +297,6 @@ export default function SalesExecutiveDashboard() {
   // ─── Pagination States ──────────────────────────────────────
   const [accountsPage, setAccountsPage] = useState(1);
   const ACCOUNTS_PER_PAGE = 6;
-  
   const [tasksPage, setTasksPage] = useState(1);
   const TASKS_PER_PAGE = 5;
 
@@ -294,40 +310,30 @@ export default function SalesExecutiveDashboard() {
     localStorage.setItem('hms_dismissed_broadcasts', JSON.stringify(dismissedBroadcasts));
   }, [dismissedBroadcasts]);
 
-  React.useEffect(() => {
-    const token = sessionStorage.getItem('hms_token');
-    
-    // 1. Fetch initial historical broadcasts
-    fetch(`${API_BASE_URL}/api/broadcasts`, { headers: getHeaders() })
-      .then(res => res.json())
-      .then(data => {
-        if(data?.data?.broadcasts) setBroadcasts(data.data.broadcasts);
-      })
-      .catch(e => console.error('Failed to fetch historical broadcasts:', e));
-
-    // 2. Open persistent Server-Sent Events (SSE) connection
-    const eventSource = new EventSource(`${API_BASE_URL}/api/broadcasts/stream?token=${token}`);
-
-    // Listen for real-time pushes from the server
-    eventSource.onmessage = (event) => {
-      const newBroadcast = JSON.parse(event.data);
-      setBroadcasts((prevBroadcasts) => [newBroadcast, ...prevBroadcasts]);
-      toast('New Department Broadcast!', { icon: '📣' });
-    };
-
-    eventSource.onerror = (error) => {
-      console.error('SSE Broadcast Stream disconnected:', error);
-      eventSource.close();
-    };
-
-    // Cleanup connection when component unmounts
-    return () => eventSource.close();
-  }, []);
-
   // Database Connected States
   const [currentUser, setCurrentUser] = useState({
     initials: 'ST', name: 'Loading...', target: 1200000, achieved: 0, baseIncentiveRate: 0.025
   });
+  
+  // Sales Head Specific State
+  const [teamPerformance, setTeamPerformance] = useState([]);
+  const TEAM_MEMBERS = [
+    { id: '1', name: 'Amit Sharma', role: 'Snr. Executive', achieved: 1850000, target: 2000000, avatar: 'AS', color: 'emerald', baseIncentiveRate: 0.03 },
+    { id: '2', name: 'Priya Patel', role: 'Executive', achieved: 1200000, target: 1500000, avatar: 'PP', color: 'indigo', baseIncentiveRate: 0.025 },
+    { id: '4', name: 'Rohan Desai', role: 'Trainee', achieved: 300000, target: 800000, avatar: 'RD', color: 'rose', baseIncentiveRate: 0.015 }
+  ];
+
+  // Team Management State
+  const [teamTasks, setTeamTasks] = useState([]);
+  const [selectedMember, setSelectedMember] = useState(null);
+  const [showAssignTaskModal, setShowAssignTaskModal] = useState(false);
+  const [isAssigningTask, setIsAssigningTask] = useState(false);
+  const [assignTaskForm, setAssignTaskForm] = useState({
+    title: '', type: 'Follow-up', assignee: 'Amit Sharma', priority: 'Medium', deadline: ''
+  });
+  const [showEditTargetModal, setShowEditTargetModal] = useState(false);
+  const [editTargetForm, setEditTargetForm] = useState({ id: '', name: '', target: '' });
+
   const [myLeads, setMyLeads] = useState([]);
   const [myAccounts, setMyAccounts] = useState([]);
   const [ongoingTasks, setOngoingTasks] = useState([]);
@@ -340,15 +346,14 @@ export default function SalesExecutiveDashboard() {
   const [inventoryDate, setInventoryDate] = useState(new Date().toISOString().split('T')[0]);
   const [inventoryData, setInventoryData] = useState(null);
 
-  // Add Lead Modal State
+  // Modals
   const [showAddLeadModal, setShowAddLeadModal] = useState(false);
   const [isSubmittingLead, setIsSubmittingLead] = useState(false);
   const [newLeadForm, setNewLeadForm] = useState({
     company: '', deal_name: '', value: '', stage: 'New', source: 'Hotel Website',
-    contact_name: '', contact_email: '', contact_phone: ''
+    contact_name: '', contact_email: '', contact_phone: '', assigned_to: 'Self'
   });
 
-  // Report & Block Modal State
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportForm, setReportForm] = useState({ type: 'Pipeline Analysis', format: 'PDF Document', dateRange: 'This Month' });
   const [showBlockModal, setShowBlockModal] = useState(false);
@@ -359,13 +364,15 @@ export default function SalesExecutiveDashboard() {
   const fetchData = async (silent = false) => {
     try {
       if (!silent) setIsLoading(true); 
-      const [userRes, leadsRes, accountsRes, tasksRes, otaRes, modesRes] = await Promise.all([
+      const [userRes, accountsRes, tasksRes, otaRes, modesRes, teamRes, teamTasksRes, leadsRes] = await Promise.all([
         fetch(`${API_BASE_URL}/api/sales/me`, { headers: getHeaders() }),
-        fetch(`${API_BASE_URL}/api/sales/leads`, { headers: getHeaders() }),
         fetch(`${API_BASE_URL}/api/sales/accounts`, { headers: getHeaders() }),
         fetch(`${API_BASE_URL}/api/sales/tasks`, { headers: getHeaders() }),
         fetch(`${API_BASE_URL}/api/sales/ota`, { headers: getHeaders() }),
-        fetch(`${API_BASE_URL}/api/sales/booking-modes`, { headers: getHeaders() })
+        fetch(`${API_BASE_URL}/api/sales/booking-modes`, { headers: getHeaders() }),
+        fetch(`${API_BASE_URL}/api/sales/team`, { headers: getHeaders() }),
+        fetch(`${API_BASE_URL}/api/sales/team-tasks`, { headers: getHeaders() }),
+        fetch(`${API_BASE_URL}/api/sales/leads`, { headers: getHeaders() })
       ]);
 
       if (userRes.ok) {
@@ -373,12 +380,38 @@ export default function SalesExecutiveDashboard() {
         setCurrentUser(data.data);
       }
 
+      if (teamRes.ok) {
+        const data = await teamRes.json();
+        setTeamPerformance(data.data.sort((a,b) => b.achieved - a.achieved));
+      }
+
       if (leadsRes.ok) {
         const data = await leadsRes.json();
         setMyLeads(data.data.map(lead => ({
-          id: lead.id, company: lead.company, deal: lead.deal_name,
-          value: parseFloat(lead.value), stage: lead.stage, source: lead.source,
-          contactName: lead.contact_name, contactEmail: lead.contact_email, contactPhone: lead.contact_phone
+          id: lead.id,
+          company: lead.company,
+          deal_name: lead.title,
+          value: parseFloat(lead.value),
+          stage: lead.stage,
+          source: lead.source,
+          contact_name: lead.contact_name,
+          contact_email: lead.contact_email,
+          contact_phone: lead.contact_phone,
+          assignee: lead.assignee_name || 'Self',
+          avatar: lead.assignee_name ? lead.assignee_name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase() : 'ME'
+        })));
+      }
+
+      if (teamTasksRes.ok) {
+        const data = await teamTasksRes.json();
+        setTeamTasks(data.data.map(task => ({
+          id: task.id,
+          title: task.title,
+          type: task.type,
+          assignee: task.assignee,
+          priority: task.priority,
+          deadline: new Date(task.deadline).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+          status: task.status
         })));
       }
 
@@ -428,7 +461,6 @@ export default function SalesExecutiveDashboard() {
         })));
       }
 
-      // Production-level Mock Inventory Data for Sales Executive
       setInventoryData({
         roomClasses: [
           { name: 'Standard Room', total: 45, available: 12, group_blocked: 10, out_of_order: 3, price: 3500 },
@@ -442,16 +474,12 @@ export default function SalesExecutiveDashboard() {
           { name: 'Sunset Terrace', capacity: 250, color: '#f59e0b', events: [{ name: 'Maintenance', start: 8, end: 22, type: 'maintenance' }] },
         ],
         groupBlocks: [
-          { company: 'Reliance Retreat', dates: '24 Jul - 26 Jul', blocked: 15, picked_up: 12, rm_step: 5 }, // Deposit Received
-          { company: 'TechNova Summit', dates: '01 Aug - 05 Aug', blocked: 25, picked_up: 5, rm_step: 3 }, // Approved
-          { company: 'Global Traders Meet', dates: '10 Aug - 12 Aug', blocked: 40, picked_up: 0, rm_step: 2 }, // Pending RM Approval
+          { company: 'Reliance Retreat', dates: '24 Jul - 26 Jul', blocked: 15, picked_up: 12, rm_step: 5 }, 
+          { company: 'TechNova Summit', dates: '01 Aug - 05 Aug', blocked: 25, picked_up: 5, rm_step: 3 }, 
+          { company: 'Global Traders Meet', dates: '10 Aug - 12 Aug', blocked: 40, picked_up: 0, rm_step: 2 }, 
         ],
-        marketPulse: {
-          cityOccupancy: 82, compAdr: 5200, demandTrend: '+12%'
-        },
-        yieldRecommendation: {
-          suggestedMinRate: 4100, standardRate: 5500, confidence: 'High'
-        }
+        marketPulse: { cityOccupancy: 82, compAdr: 5200, demandTrend: '+12%' },
+        yieldRecommendation: { suggestedMinRate: 4100, standardRate: 5500, confidence: 'High' }
       });
 
     } catch (error) {
@@ -474,12 +502,12 @@ export default function SalesExecutiveDashboard() {
     e.preventDefault();
     setIsSubmittingLead(true);
     
-    // Optimistic UI Update
     const previousLeads = [...myLeads];
     const optimisticLead = {
       id: 'temp-' + Date.now(), company: newLeadForm.company, deal: newLeadForm.deal_name,
       value: parseFloat(newLeadForm.value) || 0, stage: newLeadForm.stage, source: newLeadForm.source,
-      contactName: newLeadForm.contact_name, contactEmail: newLeadForm.contact_email, contactPhone: newLeadForm.contact_phone
+      contactName: newLeadForm.contact_name, contactEmail: newLeadForm.contact_email, contactPhone: newLeadForm.contact_phone,
+      assignee: isHeadView ? newLeadForm.assigned_to : execPersona
     };
     
     setMyLeads(prev => [optimisticLead, ...prev]);
@@ -493,8 +521,8 @@ export default function SalesExecutiveDashboard() {
       });
 
       if (res.ok) {
-        toast.success('Lead added successfully!');
-        setNewLeadForm({ company: '', deal_name: '', value: '', stage: 'New', source: 'Hotel Website', contact_name: '', contact_email: '', contact_phone: '' });
+        toast.success(`Lead added and assigned to ${optimisticLead.assignee}!`);
+        setNewLeadForm({ company: '', deal_name: '', value: '', stage: 'New', source: 'Hotel Website', contact_name: '', contact_email: '', contact_phone: '', assigned_to: 'Self' });
         fetchData(true);
       } else {
         throw new Error((await res.json()).error);
@@ -526,7 +554,7 @@ export default function SalesExecutiveDashboard() {
       });
 
       if (res.ok) {
-        toast.success(`${lead.company} moved to My Accounts!`);
+        toast.success(`${lead.company} moved to Accounts!`);
         fetchData(true);
       } else {
         throw new Error((await res.json()).error);
@@ -580,12 +608,108 @@ export default function SalesExecutiveDashboard() {
     }, 1200);
   };
 
-  // Derived Data & Pagination
-  const filteredLeads = myLeads.filter(l => (l.company + l.deal + l.contactName).toLowerCase().includes(leadSearch.toLowerCase()));
+  const handleAssignTask = async (e) => {
+    e.preventDefault();
+    setIsAssigningTask(true);
+    
+    // Find the ID of the selected assignee
+    const assigneeMember = teamPerformance.find(m => m.name === assignTaskForm.assignee);
+    const assignedToId = assigneeMember ? assigneeMember.id : currentUser.id;
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/sales/tasks`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          title: assignTaskForm.title,
+          type: assignTaskForm.type,
+          priority: assignTaskForm.priority,
+          deadline: assignTaskForm.deadline,
+          assigned_to: assignedToId
+        })
+      });
+      if (!res.ok) throw new Error('Failed to assign task');
+      toast.success(`Task assigned to ${assignTaskForm.assignee}!`);
+      setAssignTaskForm({ title: '', type: 'Follow-up', assignee: teamPerformance[0]?.name || 'Self', priority: 'Medium', deadline: '' });
+      setShowAssignTaskModal(false);
+      fetchData(true); // refresh data to show the new task
+    } catch (err) {
+      console.error(err);
+      toast.error('Could not assign task.');
+    } finally {
+      setIsAssigningTask(false);
+    }
+  };
+
+  const updateTeamTaskStatus = async (taskId, newStatus) => {
+    setTeamTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/sales/tasks/${taskId}/status`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (!res.ok) throw new Error('Failed to update');
+      toast.success('Task status updated');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to update task status');
+      fetchData(true); // rollback
+    }
+  };
+
+  const openEditTarget = (member) => {
+    setEditTargetForm({ id: member.id, name: member.name, target: member.target });
+    setShowEditTargetModal(true);
+  };
+
+  const handleUpdateTarget = async (e) => {
+    e.preventDefault();
+    const newTarget = parseFloat(editTargetForm.target) || 0;
+    const memberId = editTargetForm.id;
+    
+    // Optimistic update
+    setTeamPerformance(prev => prev.map(m => m.id === memberId ? { ...m, target: newTarget } : m).sort((a, b) => b.achieved - a.achieved));
+    
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/sales/team/${memberId}/target`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({ target: newTarget })
+      });
+      if (!res.ok) throw new Error('Failed to update target');
+      toast.success(`Updated monthly target for ${editTargetForm.name} to ₹${(newTarget / 100000).toFixed(1)}L`);
+      setShowEditTargetModal(false);
+      fetchData(true); // ensure we have fresh data
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to update target');
+      fetchData(true); // rollback
+    }
+  };
+
+  const getMemberStats = (member) => {
+    const leads = myLeads.filter(l => l.assignee === member.name);
+    const openLeads = leads.filter(l => l.stage !== 'Won' && l.stage !== 'Lost');
+    const tasks = teamTasks.filter(t => t.assignee === member.name);
+    return {
+      leads: openLeads,
+      tasks: tasks,
+      pipelineValue: member.pipelineValue,
+      conversion: member.conversion,
+      pendingTasks: member.pendingTasks,
+      pct: member.pct,
+      health: member.health,
+      healthColor: member.healthColor
+    };
+  };
+
+  // Dynamic Dervied Data based on Role
+  const effectiveLeads = isHeadView ? myLeads : myLeads.filter(l => l.assignee === execPersona || l.assignee === 'Self');
+  const filteredLeads = effectiveLeads.filter(l => (l.company + l.deal + l.contactName).toLowerCase().includes(leadSearch.toLowerCase()));
   
   const paginatedAccounts = myAccounts.slice((accountsPage - 1) * ACCOUNTS_PER_PAGE, accountsPage * ACCOUNTS_PER_PAGE);
   const totalAccountPages = Math.max(1, Math.ceil(myAccounts.length / ACCOUNTS_PER_PAGE));
-
   const paginatedTasks = ongoingTasks.slice((tasksPage - 1) * TASKS_PER_PAGE, tasksPage * TASKS_PER_PAGE);
   const totalTaskPages = Math.max(1, Math.ceil(ongoingTasks.length / TASKS_PER_PAGE));
 
@@ -597,11 +721,18 @@ export default function SalesExecutiveDashboard() {
   const otaBookingShare = otaData.map(ota => ({ label: ota.name, value: ota.bookings, color: ota.color }));
   const otaNetRevenueRank = otaData.map(ota => ({ label: ota.name, value: ota.grossRevenue - (ota.grossRevenue * (ota.commissionRate / 100)), color: ota.color }));
 
-  const myPipelineValue = myLeads.filter(l => l.stage !== 'Won' && l.stage !== 'Lost').reduce((s, l) => s + l.value, 0);
-  const activeDealsCount = myLeads.filter(l => l.stage !== 'Won' && l.stage !== 'Lost').length;
+  const myPipelineValue = effectiveLeads.filter(l => l.stage !== 'Won' && l.stage !== 'Lost').reduce((s, l) => s + l.value, 0);
+  const activeDealsCount = effectiveLeads.filter(l => l.stage !== 'Won' && l.stage !== 'Lost').length;
   const pendingTasksCount = ongoingTasks.filter(t => t.status !== 'Completed').length + assignedTasks.filter(t => !t.completed).length;
 
   const stageColors = { 'New': '#94a3b8', 'Contacted': '#0ea5e9', 'Proposal Sent': '#f59e0b', 'Negotiation': '#8b5cf6', 'Won': '#10b981', 'Lost': '#f43f5e' };
+
+  // Targets (If Head, multiply target, sum team revenue)
+  const displayTarget = isHeadView ? teamPerformance.reduce((s, t) => s + (t.target || 0), 0) : currentUser.target;
+  const displayAchieved = isHeadView ? teamPerformance.reduce((s, t) => s + (t.achieved || 0), 0) : currentUser.achieved;
+  const displayIncentiveRate = currentUser.baseIncentiveRate || 0.025;
+  const displayInitials = isHeadView ? 'SH' : (currentUser.name ? currentUser.name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase() : 'ME');
+  const displayName = isHeadView ? 'Sales Head' : currentUser.name;
 
   // Enhanced Theme Map
   const enhancedThemeMap = {
@@ -614,9 +745,14 @@ export default function SalesExecutiveDashboard() {
     orange: { gradient: 'from-orange-50 via-white to-white', ring: 'ring-orange-500/10', glow: 'rgba(212,163,115,0.35)', iconBg: 'bg-[#D4A373] text-white shadow-lg shadow-[#D4A373]/30' }
   };
 
-  const navGroups = [
+  const navGroups = isHeadView ? [
+    { heading: 'Leadership', items: [{ key: 'overview', label: 'Team Overview', icon: <TrendingUp size={15} /> }, { key: 'team', label: 'Manage Team', icon: <UserCog size={15} /> }] },
+    { heading: 'Global Pipeline', items: [{ key: 'pipeline', label: 'Master Pipeline', icon: <Target size={15} /> }, { key: 'accounts', label: 'Key Accounts', icon: <Briefcase size={15} /> }] },
+    { heading: 'Distribution', items: [{ key: 'modes', label: 'Booking Sources', icon: <Activity size={15} /> }, { key: 'ota', label: 'OTA Performance', icon: <Globe size={15} /> }] },
+    { heading: 'Property Assets', items: [{ key: 'inventory', label: 'Room & Banquet Inventory', icon: <BedDouble size={15} /> }] },
+  ] : [
     { heading: 'My Workspace', items: [{ key: 'overview', label: 'My Performance', icon: <TrendingUp size={15} /> }, { key: 'tasks', label: 'Task Management', icon: <ListTodo size={15} /> }] },
-    { heading: 'Pipeline & Accounts', items: [{ key: 'pipeline', label: 'Lead Pipeline', icon: <Target size={15} /> }, { key: 'accounts', label: 'My Accounts', icon: <Briefcase size={15} /> }] },
+    { heading: 'Pipeline & Accounts', items: [{ key: 'pipeline', label: 'My Pipeline', icon: <Target size={15} /> }, { key: 'accounts', label: 'My Accounts', icon: <Briefcase size={15} /> }] },
     { heading: 'Sources & Channels', items: [{ key: 'modes', label: 'Booking Modes', icon: <Activity size={15} /> }, { key: 'ota', label: 'OTA Performance', icon: <Globe size={15} /> }] },
     { heading: 'Property Assets', items: [{ key: 'inventory', label: 'Room & Banquet Inventory', icon: <BedDouble size={15} /> }] },
   ];
@@ -628,7 +764,6 @@ export default function SalesExecutiveDashboard() {
     exit: { opacity: 0, scale: 0.95, y: 20, transition: { duration: 0.2 } }
   };
 
-  // Helper component for workflow tracker
   const WorkflowStepper = ({ currentStep }) => {
     const steps = ['Draft', 'RM Review', 'Approved', 'Contract', 'Deposit'];
     return (
@@ -668,8 +803,8 @@ export default function SalesExecutiveDashboard() {
             <TrendingUp size={19} className="text-[#D4A373]" />
           </div>
           <div>
-            <h1 className="font-serif font-black text-[23px] text-zinc-600 text-base leading-none">Sales</h1>
-            <span className="text-[9px] font-bold text-[#D4A373] uppercase tracking-widest mt-1 block">Sales Operations</span>
+            <h1 className="font-serif font-black text-[23px] text-zinc-600 leading-none">Sales</h1>
+            <span className="text-[9px] font-bold text-[#D4A373] uppercase tracking-widest mt-1 block">{isHeadView ? 'Director / Head' : 'Sales Operations'}</span>
           </div>
         </div>
 
@@ -706,16 +841,31 @@ export default function SalesExecutiveDashboard() {
             <p className="text-xs text-zinc-500 mt-1">
               {activeTab === 'inventory' 
                 ? 'Monitor live room allotments, group blocks, and banquet availability.' 
-                : 'Manage your active deals, daily tasks, and track your quota.'}
+                : isHeadView 
+                  ? 'Manage your entire sales team, analyze global pipeline, and oversee distribution.'
+                  : 'Manage your active deals, daily tasks, and track your quota.'}
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
-              </span>
-              <span className="text-[9px] font-bold uppercase tracking-wider">Live System</span>
+          <div className="flex flex-wrap items-center gap-3">
+            
+            {/* DEV TOGGLE FOR PREVIEWING ROLES */}
+            <div className="flex bg-zinc-100 p-1 rounded-xl items-center shadow-inner gap-1">
+               <button onClick={() => { setViewRole('HEAD'); setActiveTab('overview'); }} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${isHeadView ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 hover:text-zinc-700'}`}>Sales Head</button>
+               <div className="relative flex items-center">
+                 <button onClick={() => { setViewRole('EXEC'); setActiveTab('overview'); }} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${!isHeadView ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 hover:text-zinc-700'}`}>Executive</button>
+                 {!isHeadView && (
+                   <div className="ml-1 relative flex items-center bg-white border border-zinc-200 rounded-lg px-2 shadow-sm">
+                     <select 
+                       value={execPersona} 
+                       onChange={(e) => setExecPersona(e.target.value)}
+                       className="appearance-none bg-transparent text-[10px] font-bold text-[#D4A373] py-1.5 pr-4 outline-none cursor-pointer"
+                     >
+                       {TEAM_MEMBERS.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
+                     </select>
+                     <ChevronDown size={10} className="text-zinc-400 absolute right-2 pointer-events-none" />
+                   </div>
+                 )}
+               </div>
             </div>
 
             <button onClick={() => refresh()} className={`p-2.5 rounded-xl border border-zinc-200/80 bg-white hover:bg-zinc-50 text-zinc-500 transition-all ${isLoading ? 'animate-spin' : ''}`}>
@@ -730,9 +880,6 @@ export default function SalesExecutiveDashboard() {
               <Plus size={14} /> Add Lead
             </button>
             {(() => {
-              const staffName = currentUser.name || sessionStorage.getItem('hms_name') || 'Staff';
-              const initials = currentUser.initials || 'ST';
-              const designation = 'Sales Executive';
               return (
                 <motion.button
                   whileHover={{ y: -2 }}
@@ -742,11 +889,11 @@ export default function SalesExecutiveDashboard() {
                   title="Sign Out"
                 >
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-fuchsia-500 to-purple-600 group-hover:from-rose-500 group-hover:to-rose-600 text-white font-bold text-xs flex items-center justify-center shadow-xs transition-colors">
-                    {initials}
+                    {displayInitials}
                   </div>
                   <div className="hidden sm:block text-left leading-none pr-1">
-                    <span className="text-xs font-bold text-zinc-900 group-hover:text-rose-600 transition-colors block">{staffName}</span>
-                    <span className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mt-0.5 block group-hover:text-rose-400 transition-colors">{designation}</span>
+                    <span className="text-xs font-bold text-zinc-900 group-hover:text-rose-600 transition-colors block">{displayName}</span>
+                    <span className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mt-0.5 block group-hover:text-rose-400 transition-colors">{isHeadView ? 'Director of Sales' : 'Sales Executive'}</span>
                   </div>
                   <LogOut size={16} className="text-zinc-400 group-hover:text-rose-500 transition-colors ml-1" />
                 </motion.button>
@@ -809,10 +956,10 @@ export default function SalesExecutiveDashboard() {
                 <motion.div key="overview" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                     {[
-                      { label: 'Target', value: `₹${(currentUser.target / 100000).toFixed(1)}L`, sub: 'Monthly Goal', icon: <Target size={16} />, theme: 'indigo', pct: currentUser.target ? Math.min(currentUser.achieved / currentUser.target, 1) : 0 },
-                      { label: 'Revenue Generated', value: `₹${(currentUser.achieved / 100000).toFixed(1)}L`, sub: `${Math.round((currentUser.achieved / currentUser.target) * 100)}% of Target`, icon: <TrendingUp size={16} />, theme: 'emerald' },
-                      { label: 'Deals In Pipeline', value: activeDealsCount, sub: `₹${(myPipelineValue / 100000).toFixed(1)}L Total Value`, icon: <Briefcase size={16} />, theme: 'amber' },
-                      { label: 'Pending Tasks', value: pendingTasksCount, sub: 'Ongoing & Assigned', icon: <CheckSquare size={16} />, theme: 'rose' },
+                      { label: isHeadView ? 'Team Target' : 'My Target', value: `₹${(displayTarget / 100000).toFixed(1)}L`, sub: 'Monthly Goal', icon: <Target size={16} />, theme: 'indigo', pct: displayTarget ? Math.min(displayAchieved / displayTarget, 1) : 0 },
+                      { label: isHeadView ? 'Team Revenue' : 'Revenue Generated', value: `₹${(displayAchieved / 100000).toFixed(1)}L`, sub: `${Math.round((displayAchieved / displayTarget) * 100)}% of Target`, icon: <TrendingUp size={16} />, theme: 'emerald' },
+                      { label: isHeadView ? 'Global Pipeline Deals' : 'Deals In Pipeline', value: activeDealsCount, sub: `₹${(myPipelineValue / 100000).toFixed(1)}L Total Value`, icon: <Briefcase size={16} />, theme: 'amber' },
+                      { label: isHeadView ? 'Overall Conversion' : 'Pending Tasks', value: isHeadView ? '28%' : pendingTasksCount, sub: isHeadView ? '+3% from last month' : 'Ongoing & Assigned', icon: isHeadView ? <Handshake size={16}/> : <CheckSquare size={16} />, theme: 'rose' },
                     ].map((kpi, i) => {
                       const t = enhancedThemeMap[kpi.theme];
                       const dotColor = { indigo: '#4f46e5', emerald: '#10b981', amber: '#f59e0b', rose: '#e11d48' }[kpi.theme] || '#D4A373';
@@ -849,8 +996,9 @@ export default function SalesExecutiveDashboard() {
                             >
                               {kpi.value}
                             </motion.p>
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 leading-tight mb-1 break-words whitespace-normal">{kpi.label}</p>
-                            <p className="text-[9px] text-zinc-400 leading-tight break-words whitespace-normal">{kpi.sub}</p>
+                            {/* Adjusted typography logic to resolve wrap issue documented in screenshot */}
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 leading-tight mb-1 truncate">{kpi.label}</p>
+                            <p className="text-[9px] text-zinc-400 leading-tight truncate">{kpi.sub}</p>
                           </div>
                           <div className="relative shrink-0">{kpiGraphic(i, dotColor, kpi.pct)}</div>
                         </motion.div>
@@ -865,7 +1013,8 @@ export default function SalesExecutiveDashboard() {
                           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#D4A373] to-[#D4A373] flex items-center justify-center shadow-md"><BarChart3 size={14} className="text-white" /></div>
                           <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Target vs Revenue Trend</h3>
                         </div>
-                        <div className="flex bg-zinc-100 p-1 rounded-xl">
+                        {/* Modified chart wrapper to resolve cramped sizing issues */}
+                        <div className="flex flex-wrap sm:flex-nowrap bg-zinc-100 p-1 rounded-xl gap-1 overflow-hidden">
                           {['Daily', 'Weekly', 'Monthly', 'Yearly'].map(period => (
                             <button
                               key={period}
@@ -879,20 +1028,184 @@ export default function SalesExecutiveDashboard() {
                         </div>
                       </div>
 
-                      <TargetVsRevenueChart period={timePeriod} />
+                      <TargetVsRevenueChart period={timePeriod} isHeadView={isHeadView} activePersona={execPersona} />
                     </motion.div>
 
-                    <motion.div whileHover={{ y: -6 }} className="relative overflow-hidden bg-gradient-to-br from-zinc-50 to-zinc-50 rounded-[2rem] p-6 shadow-sm border border-[#D4A373]/30 flex flex-col justify-center text-center">
-                      <Trophy size={40} className="mx-auto text-[#D4A373] mb-4" />
-                      <h3 className="text-sm font-black text-[#D4A373] uppercase tracking-wider mb-2">Incentive Status</h3>
-                      <p className="text-2xl font-black text-[#D4A373] mb-2">₹{(currentUser.achieved * currentUser.baseIncentiveRate).toLocaleString('en-IN')}</p>
-                      <p className="text-xs text-[#D4A373] font-medium">Earned so far this month.</p>
-                      <div className="mt-6">
-                        <button onClick={() => setActiveTab('pipeline')} className="w-full bg-[#D4A373] hover:bg-[#D4A373] text-white py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-colors shadow-sm">
-                          View Deals to Close
-                        </button>
-                      </div>
-                    </motion.div>
+                    {isHeadView ? (
+                      <motion.div whileHover={{ y: -6 }} className="relative overflow-hidden bg-white rounded-[2rem] p-6 shadow-sm border border-zinc-200/60 flex flex-col">
+                        <div className="flex items-center gap-2 mb-5">
+                          <div className="w-7 h-7 rounded-lg bg-amber-500 flex items-center justify-center shadow-md"><Medal size={14} className="text-white" /></div>
+                          <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Team Leaderboard</h3>
+                        </div>
+                        <div className="flex flex-col gap-3 flex-1 overflow-y-auto sd-scrollbar pr-1">
+                          {teamPerformance.map((member, idx) => {
+                            const isTop = idx === 0;
+                            return (
+                              <div key={member.id} className={`p-3 rounded-xl border ${isTop ? 'bg-amber-50 border-amber-200 shadow-sm' : 'bg-zinc-50 border-zinc-100'} flex items-center gap-3 relative overflow-hidden`}>
+                                {isTop && <div className="absolute top-0 right-0 w-12 h-12 bg-amber-400 blur-xl opacity-20 rounded-full"/>}
+                                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm bg-${member.color}-500 shrink-0`}>{member.avatar}</div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between mb-0.5">
+                                    <p className="text-xs font-bold text-zinc-900 truncate">{member.name}</p>
+                                    <p className="text-xs font-black text-zinc-900">₹{(member.achieved / 100000).toFixed(1)}L</p>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-[9px] text-zinc-500 font-semibold">{member.role}</p>
+                                    <p className="text-[9px] text-zinc-400 font-bold">{Math.round((member.achieved/member.target)*100)}% of quota</p>
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <motion.div whileHover={{ y: -6 }} className="relative overflow-hidden bg-gradient-to-br from-zinc-50 to-zinc-50 rounded-[2rem] p-6 shadow-sm border border-[#D4A373]/30 flex flex-col justify-center text-center">
+                        <Trophy size={40} className="mx-auto text-[#D4A373] mb-4" />
+                        <h3 className="text-sm font-black text-[#D4A373] uppercase tracking-wider mb-2">Incentive Status</h3>
+                        <p className="text-2xl font-black text-[#D4A373] mb-2">₹{(displayAchieved * displayIncentiveRate).toLocaleString('en-IN')}</p>
+                        <p className="text-xs text-[#D4A373] font-medium">Earned so far this month.</p>
+                        <div className="mt-6">
+                          <button onClick={() => setActiveTab('pipeline')} className="w-full bg-[#D4A373] hover:bg-[#D4A373] text-white py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-colors shadow-sm">
+                            View Deals to Close
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* TAB: TEAM MANAGEMENT (Head Only) */}
+              {isHeadView && activeTab === 'team' && (
+                <motion.div key="team" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+                      <Users size={16} className="text-[#D4A373]" /> Executive Roster
+                      <span className="text-[10px] font-bold text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full normal-case tracking-normal">{teamPerformance.length} on team</span>
+                    </h3>
+                    <button
+                      onClick={() => { setAssignTaskForm(f => ({ ...f, assignee: TEAM_MEMBERS[0].name })); setShowAssignTaskModal(true); }}
+                      className="bg-zinc-900 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#D4A373] transition-colors flex items-center gap-2 shadow-sm w-fit"
+                    >
+                      <Send size={14} /> Assign Task
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {teamPerformance.map((member, idx) => {
+                      const stats = getMemberStats(member);
+                      const healthTheme = {
+                        emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                        amber: 'bg-amber-50 text-amber-700 border-amber-200',
+                        rose: 'bg-rose-50 text-rose-700 border-rose-200'
+                      }[stats.healthColor];
+
+                      return (
+                        <motion.div
+                          key={member.id}
+                          initial={{ opacity: 0, y: 16 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: idx * 0.06, type: 'spring', stiffness: 200, damping: 20 }}
+                          whileHover={{ y: -6 }}
+                          className="relative bg-white rounded-[2rem] p-6 border border-zinc-200/70 shadow-sm overflow-hidden flex flex-col"
+                        >
+                          {idx === 0 && <Medal size={18} className="absolute top-5 right-5 text-amber-400" />}
+
+                          <div className="flex items-center gap-3 mb-4">
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black text-sm shadow-md bg-${member.color}-500 shrink-0`}>{member.avatar}</div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-black text-zinc-900 truncate">{member.name}</p>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">{member.role}</p>
+                            </div>
+                          </div>
+
+                          <span className={`self-start text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-lg border mb-4 ${healthTheme}`}>{stats.health}</span>
+
+                          <div className="mb-4">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-[10px] font-bold uppercase text-zinc-400">Target Achieved</span>
+                              <span className="text-xs font-black text-zinc-900">₹{(member.achieved / 100000).toFixed(1)}L <span className="text-zinc-400 font-semibold">/ ₹{(member.target / 100000).toFixed(1)}L</span></span>
+                            </div>
+                            <div className="h-2 rounded-full bg-zinc-100 overflow-hidden">
+                              <motion.div
+                                initial={{ width: 0 }} animate={{ width: `${stats.pct * 100}%` }}
+                                transition={{ duration: 0.9, delay: idx * 0.06, ease: 'easeOut' }}
+                                className={`h-full rounded-full bg-${member.color}-500`}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2 mb-5">
+                            <div className="bg-zinc-50 rounded-xl p-2.5 text-center">
+                              <p className="text-xs font-black text-zinc-900">₹{(stats.pipelineValue / 100000).toFixed(1)}L</p>
+                              <p className="text-[8px] font-bold uppercase text-zinc-400 tracking-wider mt-0.5">Pipeline</p>
+                            </div>
+                            <div className="bg-zinc-50 rounded-xl p-2.5 text-center">
+                              <p className="text-xs font-black text-zinc-900">{stats.conversion}%</p>
+                              <p className="text-[8px] font-bold uppercase text-zinc-400 tracking-wider mt-0.5">Win Rate</p>
+                            </div>
+                            <div className="bg-zinc-50 rounded-xl p-2.5 text-center">
+                              <p className="text-xs font-black text-zinc-900">{stats.pendingTasks}</p>
+                              <p className="text-[8px] font-bold uppercase text-zinc-400 tracking-wider mt-0.5">Tasks Due</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 mt-auto pt-4 border-t border-zinc-100">
+                            <button onClick={() => setSelectedMember(member)} className="flex-1 flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-700 bg-zinc-50 hover:bg-zinc-100 py-2.5 rounded-xl transition-colors">
+                              <Eye size={13} /> View Details
+                            </button>
+                            <button onClick={() => openEditTarget(member)} className="p-2.5 rounded-xl bg-zinc-50 hover:bg-zinc-100 text-zinc-500 transition-colors" title="Edit Target">
+                              <Edit3 size={14} />
+                            </button>
+                            <button onClick={() => { setAssignTaskForm(f => ({ ...f, assignee: member.name })); setShowAssignTaskModal(true); }} className="p-2.5 rounded-xl bg-zinc-900 hover:bg-[#D4A373] text-white transition-colors" title="Assign Task">
+                              <Send size={14} />
+                            </button>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Team Task Board */}
+                  <div className="bg-white border border-zinc-200/60 rounded-[2rem] p-6 shadow-sm">
+                    <div className="flex items-center justify-between mb-5">
+                      <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+                        <ClipboardList size={16} className="text-[#D4A373]" /> Team Task Board
+                      </h3>
+                      <span className="text-[10px] font-bold text-zinc-400">{teamTasks.filter(t => t.status !== 'Completed').length} open of {teamTasks.length}</span>
+                    </div>
+                    <div className="flex flex-col gap-2.5">
+                      {teamTasks.length === 0 && <div className="text-center text-zinc-400 text-xs py-6">No tasks assigned to the team yet.</div>}
+                      {teamTasks.map(task => {
+                        const member = TEAM_MEMBERS.find(m => m.name === task.assignee);
+                        const priorityTheme = { High: 'bg-rose-100 text-rose-700', Medium: 'bg-amber-100 text-amber-700', Low: 'bg-zinc-100 text-zinc-600' }[task.priority];
+                        return (
+                          <div key={task.id} className={`flex flex-col sm:flex-row sm:items-center gap-3 p-3.5 rounded-xl border transition-colors ${task.status === 'Completed' ? 'bg-zinc-50/50 border-zinc-100 opacity-60' : 'bg-white border-zinc-200'}`}>
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-[10px] shrink-0 bg-${member?.color || 'zinc'}-500`}>{member?.avatar || '?'}</div>
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-xs font-bold text-zinc-900 truncate ${task.status === 'Completed' ? 'line-through' : ''}`}>{task.title}</p>
+                              <div className="flex flex-wrap items-center gap-2 mt-1">
+                                <span className="text-[9px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded uppercase">{task.assignee}</span>
+                                <span className="text-[9px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded uppercase">{task.type}</span>
+                                <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${priorityTheme}`}>{task.priority}</span>
+                                <span className="text-[9px] text-zinc-400 flex items-center gap-1"><Clock size={10} /> {task.deadline}</span>
+                              </div>
+                            </div>
+                            <select
+                              value={task.status}
+                              onChange={(e) => updateTeamTaskStatus(task.id, e.target.value)}
+                              className="text-[10px] font-bold text-[#D4A373] bg-zinc-50 border-none rounded-lg py-1.5 px-2.5 cursor-pointer outline-none focus:ring-2 focus:ring-violet-200 shrink-0"
+                            >
+                              <option value="Pending">Pending</option>
+                              <option value="In Progress">In Progress</option>
+                              <option value="Completed">Completed</option>
+                            </select>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </motion.div>
               )}
@@ -1170,8 +1483,8 @@ export default function SalesExecutiveDashboard() {
                 </motion.div>
               )}
 
-              {/* TAB: TASKS */}
-              {activeTab === 'tasks' && (
+              {/* TAB: TASKS (Executive Only) */}
+              {!isHeadView && activeTab === 'tasks' && (
                 <motion.div key="tasks" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div className="bg-white border border-zinc-200/60 rounded-[2rem] overflow-hidden p-6 flex flex-col shadow-sm">
@@ -1241,7 +1554,7 @@ export default function SalesExecutiveDashboard() {
                 </motion.div>
               )}
 
-              {/* TAB: MY PIPELINE */}
+              {/* TAB: PIPELINE */}
               {activeTab === 'pipeline' && (
                 <motion.div key="pipeline" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
                   <div className="relative w-full sm:w-72 mb-4">
@@ -1271,6 +1584,11 @@ export default function SalesExecutiveDashboard() {
                                 <div className="pl-2">
                                   <div className="flex items-start justify-between mb-1">
                                     <p className="text-sm font-bold text-zinc-900 leading-snug truncate">{lead.company}</p>
+                                    {isHeadView && (
+                                      <span className="text-[8px] font-black uppercase tracking-widest text-zinc-500 bg-zinc-100 px-1.5 py-0.5 rounded truncate max-w-[80px]">
+                                        {lead.assignee}
+                                      </span>
+                                    )}
                                   </div>
                                   <p className="text-[11px] text-zinc-500 font-semibold mb-3">{lead.deal} • <span className="text-[#D4A373] font-black">₹{(lead.value / 1000).toFixed(0)}k</span></p>
 
@@ -1316,7 +1634,7 @@ export default function SalesExecutiveDashboard() {
                 <motion.div key="accounts" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
                   <div className="bg-white border border-zinc-200/60 rounded-[2rem] overflow-hidden p-6 shadow-sm flex flex-col">
                     <div>
-                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider mb-2"><Briefcase size={16} className="text-[#D4A373]" /> Accounts Managed By Me</h3>
+                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider mb-2"><Briefcase size={16} className="text-[#D4A373]" /> {isHeadView ? 'Key Accounts' : 'Accounts Managed By Me'}</h3>
                       <p className="text-xs text-zinc-500 mb-6">Leads you start working on heavily can be moved here for long-term management.</p>
                     </div>
 
@@ -1798,6 +2116,22 @@ export default function SalesExecutiveDashboard() {
                   </div>
                 </div>
 
+                {isHeadView && (
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Assign Lead To</label>
+                    <select
+                      value={newLeadForm.assigned_to}
+                      onChange={e => setNewLeadForm({ ...newLeadForm, assigned_to: e.target.value })}
+                      className="sd-input bg-white appearance-none cursor-pointer border-indigo-200 bg-indigo-50/30"
+                    >
+                      <option value="Self">Self (Unassigned)</option>
+                      {teamPerformance.map(m => (
+                         <option key={m.id} value={m.name}>{m.name} ({m.role})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <hr className="border-zinc-100 my-4" />
                 <h3 className="text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-3">Guest / Organizer Contact</h3>
 
@@ -1841,6 +2175,267 @@ export default function SalesExecutiveDashboard() {
                 >
                   {isSubmittingLead ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
                   {isSubmittingLead ? 'Saving...' : 'Add Lead to Pipeline'}
+                </motion.button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Executive Detail Drill-Down Modal */}
+      <AnimatePresence>
+        {selectedMember && (() => {
+          const stats = getMemberStats(selectedMember);
+          const healthTheme = {
+            emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+            amber: 'bg-amber-50 text-amber-700 border-amber-200',
+            rose: 'bg-rose-50 text-rose-700 border-rose-200'
+          }[stats.healthColor];
+          return (
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center sd-glass-backdrop p-4"
+              onClick={() => setSelectedMember(null)}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+                onClick={e => e.stopPropagation()}
+                className="w-full max-w-2xl sd-glass-modal rounded-3xl p-7 max-h-[85vh] overflow-y-auto sd-scrollbar"
+              >
+                <div className="flex items-center justify-between mb-6 border-b border-zinc-100 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black shadow-md bg-${selectedMember.color}-500`}>{selectedMember.avatar}</div>
+                    <div>
+                      <h2 className="text-lg font-serif font-black text-zinc-900">{selectedMember.name}</h2>
+                      <p className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 flex items-center gap-2">
+                        {selectedMember.role}
+                        <span className={`px-1.5 py-0.5 rounded border ${healthTheme} normal-case tracking-normal`}>{stats.health}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <button onClick={() => setSelectedMember(null)} className="p-2 rounded-xl hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-all">
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 mb-6">
+                  <div className="bg-zinc-50 rounded-xl p-3 text-center">
+                    <p className="text-sm font-black text-zinc-900">₹{(selectedMember.achieved / 100000).toFixed(1)}L</p>
+                    <p className="text-[8px] font-bold uppercase text-zinc-400 tracking-wider mt-0.5">of ₹{(selectedMember.target / 100000).toFixed(1)}L Target</p>
+                  </div>
+                  <div className="bg-zinc-50 rounded-xl p-3 text-center">
+                    <p className="text-sm font-black text-zinc-900">{stats.conversion}%</p>
+                    <p className="text-[8px] font-bold uppercase text-zinc-400 tracking-wider mt-0.5">Win Rate</p>
+                  </div>
+                  <div className="bg-zinc-50 rounded-xl p-3 text-center">
+                    <p className="text-sm font-black text-zinc-900">₹{Math.round(selectedMember.achieved * selectedMember.baseIncentiveRate).toLocaleString('en-IN')}</p>
+                    <p className="text-[8px] font-bold uppercase text-zinc-400 tracking-wider mt-0.5">Incentive Earned</p>
+                  </div>
+                </div>
+
+                <TargetVsRevenueChart period={timePeriod} isHeadView={false} activePersona={selectedMember.name} />
+
+                <div className="mt-6">
+                  <h3 className="text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-3">Open Pipeline ({stats.leads.length})</h3>
+                  <div className="flex flex-col gap-2">
+                    {stats.leads.length === 0 && <p className="text-xs text-zinc-400 text-center py-4">No open deals.</p>}
+                    {stats.leads.map(l => (
+                      <div key={l.id} className="flex items-center justify-between bg-zinc-50 rounded-xl p-3 gap-3">
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-zinc-900 truncate">{l.company}</p>
+                          <p className="text-[10px] text-zinc-500 truncate">{l.deal}</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-[9px] font-black uppercase px-2 py-1 rounded" style={{ background: `${stageColors[l.stage]}22`, color: stageColors[l.stage] }}>{l.stage}</span>
+                          <span className="text-xs font-black text-zinc-900">₹{(l.value / 1000).toFixed(0)}k</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-6">
+                  <h3 className="text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-3">Assigned Tasks ({stats.tasks.length})</h3>
+                  <div className="flex flex-col gap-2">
+                    {stats.tasks.length === 0 && <p className="text-xs text-zinc-400 text-center py-4">No tasks assigned yet.</p>}
+                    {stats.tasks.map(t => (
+                      <div key={t.id} className="flex items-center justify-between bg-zinc-50 rounded-xl p-3 gap-3">
+                        <p className={`text-xs font-bold text-zinc-900 truncate ${t.status === 'Completed' ? 'line-through text-zinc-400' : ''}`}>{t.title}</p>
+                        <span className="text-[9px] font-bold uppercase text-zinc-500 shrink-0">{t.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-7">
+                  <button onClick={() => openEditTarget(selectedMember)} className="flex-1 flex items-center justify-center gap-2 bg-zinc-50 hover:bg-zinc-100 text-zinc-700 font-bold text-xs py-3 rounded-xl transition-colors">
+                    <Edit3 size={14} /> Edit Target
+                  </button>
+                  <button
+                    onClick={() => { setAssignTaskForm(f => ({ ...f, assignee: selectedMember.name })); setShowAssignTaskModal(true); }}
+                    className="flex-1 flex items-center justify-center gap-2 bg-zinc-900 hover:bg-[#D4A373] text-white font-bold text-xs py-3 rounded-xl transition-colors"
+                  >
+                    <Send size={14} /> Assign Task
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* Assign Task Modal */}
+      <AnimatePresence>
+        {showAssignTaskModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center sd-glass-backdrop p-4"
+            onClick={() => setShowAssignTaskModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+              onClick={e => e.stopPropagation()}
+              className="w-full max-w-md sd-glass-modal rounded-3xl p-7"
+            >
+              <div className="flex items-center justify-between mb-6 border-b border-zinc-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#D4A373]/10 text-[#D4A373] flex items-center justify-center">
+                    <Send size={18} />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-serif font-black text-zinc-900">Assign Task</h2>
+                    <p className="text-[10px] uppercase font-bold tracking-wider text-zinc-400">Delegate work to your team</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowAssignTaskModal(false)} className="p-2 rounded-xl hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-all">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleAssignTask} className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Task Description</label>
+                  <input
+                    type="text" required placeholder="e.g. Follow up on Reliance Retreat proposal"
+                    value={assignTaskForm.title}
+                    onChange={e => setAssignTaskForm({ ...assignTaskForm, title: e.target.value })}
+                    className="sd-input bg-white"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Assign To</label>
+                    <select
+                      value={assignTaskForm.assignee}
+                      onChange={e => setAssignTaskForm({ ...assignTaskForm, assignee: e.target.value })}
+                      className="sd-input bg-white appearance-none cursor-pointer border-indigo-200 bg-indigo-50/30"
+                    >
+                      {TEAM_MEMBERS.map(m => <option key={m.name} value={m.name}>{m.name} ({m.role})</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Task Type</label>
+                    <select
+                      value={assignTaskForm.type}
+                      onChange={e => setAssignTaskForm({ ...assignTaskForm, type: e.target.value })}
+                      className="sd-input bg-white appearance-none cursor-pointer"
+                    >
+                      <option>Follow-up</option>
+                      <option>Site Visit</option>
+                      <option>Proposal</option>
+                      <option>Outreach</option>
+                      <option>Training</option>
+                      <option>Admin</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Priority</label>
+                    <select
+                      value={assignTaskForm.priority}
+                      onChange={e => setAssignTaskForm({ ...assignTaskForm, priority: e.target.value })}
+                      className="sd-input bg-white appearance-none cursor-pointer"
+                    >
+                      <option>High</option>
+                      <option>Medium</option>
+                      <option>Low</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Deadline</label>
+                    <input
+                      type="date" required
+                      value={assignTaskForm.deadline}
+                      onChange={e => setAssignTaskForm({ ...assignTaskForm, deadline: e.target.value })}
+                      className="sd-input bg-white"
+                    />
+                  </div>
+                </div>
+
+                <motion.button
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                  type="submit" disabled={isAssigningTask}
+                  className="w-full mt-4 bg-zinc-900 hover:bg-[#D4A373] text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {isAssigningTask ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                  {isAssigningTask ? 'Assigning...' : 'Assign Task'}
+                </motion.button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Target Modal */}
+      <AnimatePresence>
+        {showEditTargetModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center sd-glass-backdrop p-4"
+            onClick={() => setShowEditTargetModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+              onClick={e => e.stopPropagation()}
+              className="w-full max-w-sm sd-glass-modal rounded-3xl p-7"
+            >
+              <div className="flex items-center justify-between mb-6 border-b border-zinc-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#D4A373]/10 text-[#D4A373] flex items-center justify-center">
+                    <Target size={18} />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-serif font-black text-zinc-900">Edit Monthly Target</h2>
+                    <p className="text-[10px] uppercase font-bold tracking-wider text-zinc-400">{editTargetForm.name}</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowEditTargetModal(false)} className="p-2 rounded-xl hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-all">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdateTarget} className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">New Monthly Target (₹)</label>
+                  <input
+                    type="number" required min="0" step="10000"
+                    value={editTargetForm.target}
+                    onChange={e => setEditTargetForm({ ...editTargetForm, target: e.target.value })}
+                    className="sd-input bg-white"
+                  />
+                </div>
+                <motion.button
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                  type="submit"
+                  className="w-full mt-2 bg-zinc-900 hover:bg-[#D4A373] text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
+                >
+                  <CheckCircle2 size={16} /> Save Target
                 </motion.button>
               </form>
             </motion.div>
