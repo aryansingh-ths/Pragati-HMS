@@ -18,8 +18,59 @@ export default function Header({
   const [isScrolled, setIsScrolled] = useState(false);
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [hotels, setHotels] = useState([]);
+  const [selectedHotelId, setSelectedHotelId] = useState(sessionStorage.getItem('hms_selected_hotel_id') || '');
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    const fetchHotels = async () => {
+      try {
+        const res = await fetch('http://localhost:3000/api/hotels'); // open endpoint
+        const data = await res.json();
+        if (data.status === 'success') {
+          setHotels(data.data);
+          if (data.data.length === 1) {
+            const singleId = data.data[0].id;
+            if (sessionStorage.getItem('hms_selected_hotel_id') !== singleId) {
+              setSelectedHotelId(singleId);
+              sessionStorage.setItem('hms_selected_hotel_id', singleId);
+              window.location.reload();
+            }
+          } else if (data.data.length === 0) {
+            if (sessionStorage.getItem('hms_selected_hotel_id')) {
+              sessionStorage.removeItem('hms_selected_hotel_id');
+              window.location.reload();
+            }
+          }
+        }
+      } catch(e) { console.error('Failed to fetch hotels:', e); }
+    };
+
+    if (userRole === 'SUPER_ADMIN') {
+      fetchHotels();
+    }
+
+    const handleHotelsUpdated = () => {
+      if (userRole === 'SUPER_ADMIN') {
+        fetchHotels();
+      }
+    };
+    window.addEventListener('hotels_updated', handleHotelsUpdated);
+    return () => window.removeEventListener('hotels_updated', handleHotelsUpdated);
+  }, [userRole]);
+
+  const handleHotelChange = (e) => {
+    const val = e.target.value;
+    setSelectedHotelId(val);
+    if (val) {
+      sessionStorage.setItem('hms_selected_hotel_id', val);
+    } else {
+      sessionStorage.removeItem('hms_selected_hotel_id');
+    }
+    // Refresh the page or trigger event to reload dashboards
+    window.location.reload();
+  };
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
@@ -34,6 +85,7 @@ export default function Header({
 
   const getDashboardPath = (role) => {
     const r = role.toLowerCase();
+    if (r === 'super_admin') return '/dashboard/super-admin';
     if (r === 'admin') return '/dashboard/Admin';
     if (r === 'housekeeping') return '/dashboard/housekeeping';
     if (r === 'finance') return '/dashboard/finance';
@@ -44,7 +96,7 @@ export default function Header({
   };
 
   const isStaffRole = (role) =>
-    ['admin', 'staff', 'reception', 'front_desk', 'housekeeping', 'finance', 'sales', 'travel', 'restaurant'].includes(
+    ['super_admin', 'admin', 'staff', 'reception', 'front_desk', 'housekeeping', 'finance', 'sales', 'travel', 'restaurant'].includes(
       role?.toLowerCase()
     );
 
@@ -69,11 +121,10 @@ export default function Header({
     setUserRole(null);
     setAuthToken(null);
     setViewMode('guest');
-    // sessionStorage is per-tab, so this only logs out the current tab
-    // and leaves other tabs' sessions untouched.
-    sessionStorage.removeItem('hms_token');
-    sessionStorage.removeItem('hms_role');
-    navigate('/');
+    // Clear ALL session storage keys to prevent data leakage between users
+    sessionStorage.clear();
+    // Force a full page reload so React state is completely reset
+    window.location.href = '/login';
   };
 
   return (
@@ -151,6 +202,22 @@ export default function Header({
 
         {/* Right cluster: account controls + mobile nav toggle */}
         <div className="flex items-center gap-3 shrink-0">
+          
+          {userRole === 'SUPER_ADMIN' && isDashboard && hotels.length > 1 && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="hidden md:block">
+              <select 
+                value={selectedHotelId} 
+                onChange={handleHotelChange}
+                className="px-3 py-1.5 rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-700 bg-white shadow-sm hover:border-orange-300 transition-colors cursor-pointer outline-none"
+              >
+                <option value="">🏢 Chain Overview (All Properties)</option>
+                {hotels.map(h => (
+                  <option key={h.id} value={h.id}>🏨 {h.name}</option>
+                ))}
+              </select>
+            </motion.div>
+          )}
+
           <AnimatePresence mode="wait">
             {userRole ? (
               <motion.div

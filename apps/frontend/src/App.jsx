@@ -145,7 +145,12 @@ export default function App() {
               <Route path="/dashboard/finance" element={<FinanceDashboard />} />
             </Route>
 
-            {/* ROUTE 6: PROTECTED AdminIAL COMMAND CENTER */}
+            {/* ROUTE: PORTFOLIO COMMAND CENTER */}
+            <Route element={<ProtectedRoute isAllowed={userRole?.toUpperCase() === 'SUPER_ADMIN'} />}>
+              <Route path="/dashboard/super-admin" element={<AdminDashboard />} />
+            </Route>
+
+            {/* ROUTE 6: PROTECTED ADMIN DASHBOARD */}
             <Route element={<ProtectedRoute isAllowed={userRole?.toUpperCase() === 'ADMIN'} />}>
               <Route path="/dashboard/Admin" element={<AdminDashboard />} />
             </Route>

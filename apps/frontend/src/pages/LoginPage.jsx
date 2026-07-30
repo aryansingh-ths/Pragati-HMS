@@ -38,13 +38,14 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
         const role = user.role.toUpperCase();
         let redirectPath = '/';
         
-        if (role === 'ADMIN') redirectPath = '/dashboard/Admin';
+        if (role === 'SUPER_ADMIN') redirectPath = '/dashboard/super-admin';
+        else if (role === 'ADMIN') redirectPath = '/dashboard/Admin';
         else if (role === 'FRONT_DESK' || role === 'RECEPTION') redirectPath = '/dashboard/front-desk';
         else if (role === 'HOUSEKEEPING') redirectPath = '/dashboard/housekeeping';
         else if (role === 'FINANCE') redirectPath = '/dashboard/finance';
         else if (role === 'SALES') redirectPath = '/dashboard/sales';
         else if (role === 'TRAVEL') redirectPath = '/dashboard/travel';
-        else if (role === 'RESTAURANT') redirectPath = '/dashboard/dining'; // <-- ADD THIS LINE
+        else if (role === 'RESTAURANT') redirectPath = '/dashboard/dining';
 
         completeLogin(role, token, redirectPath);
 
@@ -63,7 +64,9 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
     setUserRole(role);
     setAuthToken(token);
     setIsLoading(false);
-    navigate(redirectPath, { replace: true });
+    // Force a full page reload to ensure all React state is cleared between user sessions.
+    // Using navigate() keeps stale data from the previous user in memory.
+    window.location.href = redirectPath;
   };
 
   return (

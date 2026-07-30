@@ -2,14 +2,20 @@
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
 -- 2. Define our ENUMs (Fixed sets of statuses)
-CREATE TYPE user_role AS ENUM ('ADMIN', 'RECEPTION', 'HOUSEKEEPING', 'FINANCE', 'RESTAURANT');
+CREATE TYPE user_role AS ENUM ('SUPER_ADMIN', 'ADMIN', 'RECEPTION', 'HOUSEKEEPING', 'FINANCE', 'RESTAURANT');
 CREATE TYPE room_status AS ENUM ('AVAILABLE', 'OCCUPIED', 'CLEANING', 'DIRTY', 'INSPECTING', 'MAINTENANCE');
 CREATE TYPE booking_status AS ENUM ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT', 'CANCELLED');
 
 -- 3. Core Tables
+CREATE TABLE hotels (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    address TEXT NOT NULL
+);
+
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email VARCHAR(255) UNIQUE NOT NULL,
+    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
     password_hash VARCHAR(255) NOT NULL,
     name VARCHAR(255) NOT NULL,
     role user_role DEFAULT 'RECEPTION',
@@ -27,12 +33,6 @@ CREATE TABLE guests (
     is_blacklisted BOOLEAN DEFAULT false
 );
 
-CREATE TABLE hotels (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(255) NOT NULL,
-    address TEXT NOT NULL
-);
-
 CREATE TABLE room_types (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
@@ -44,6 +44,7 @@ CREATE TABLE room_types (
 
 CREATE TABLE rooms (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
     room_type_id UUID REFERENCES room_types(id) ON DELETE CASCADE,
     room_number VARCHAR(50) UNIQUE NOT NULL,
     status room_status DEFAULT 'AVAILABLE',
@@ -53,6 +54,7 @@ CREATE TABLE rooms (
 -- 4. Maintenance Tables
 CREATE TABLE maintenance_tickets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
     room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
     issue TEXT NOT NULL,
     priority VARCHAR(50) NOT NULL,
@@ -64,6 +66,7 @@ CREATE TABLE maintenance_tickets (
 -- 5. The Core Booking Engine Table
 CREATE TABLE bookings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
     guest_id UUID REFERENCES guests(id) ON DELETE CASCADE,
     room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
     check_in_date DATE NOT NULL,
@@ -100,6 +103,7 @@ CREATE TABLE room_expenses (
 -- System Audit Trail (Watchdog Log)
 CREATE TABLE IF NOT EXISTS system_audit_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
     user_name VARCHAR(255) NOT NULL,
     user_role VARCHAR(100) NOT NULL,
     action VARCHAR(255) NOT NULL,
@@ -124,6 +128,7 @@ CREATE TABLE IF NOT EXISTS user_permissions (
 -- Staff Shifts & Active Sessions Monitoring
 CREATE TABLE IF NOT EXISTS staff_shifts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     login_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     logout_time TIMESTAMP WITH TIME ZONE
@@ -176,6 +181,7 @@ CREATE TABLE IF NOT EXISTS travel_bookings (
 -- 1. Operational & Department Expenses Table (Extends basic room_expenses)
 CREATE TABLE IF NOT EXISTS operational_expenses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
     category VARCHAR(100) NOT NULL, -- e.g., 'Kitchen Items', 'Utilities', 'Maintenance'
     vendor VARCHAR(255) NOT NULL,
     amount DECIMAL(10, 2) NOT NULL,
@@ -189,6 +195,7 @@ CREATE TABLE IF NOT EXISTS operational_expenses (
 -- 2. Invoices & Guest Folios Table
 CREATE TABLE IF NOT EXISTS invoices (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
     invoice_number VARCHAR(100) UNIQUE NOT NULL,
     booking_id UUID REFERENCES bookings(id) ON DELETE CASCADE,
     bill_to VARCHAR(255) NOT NULL,
@@ -205,6 +212,7 @@ CREATE TABLE IF NOT EXISTS invoices (
 -- 3. Accounts Payable / Vendor Bills Table
 CREATE TABLE IF NOT EXISTS vendor_bills (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
     bill_number VARCHAR(100) UNIQUE NOT NULL,
     vendor VARCHAR(255) NOT NULL,
     category VARCHAR(100) NOT NULL,
@@ -287,4 +295,19 @@ INSERT INTO accounting_balances (key_name, balance) VALUES
 ('owners_equity', 14260850)
 ON CONFLICT (key_name) DO NOTHING;
 
+CREATE TABLE IF NOT EXISTS broadcasts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
+    message TEXT NOT NULL,
+    type VARCHAR(50) DEFAULT 'info',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
 
+CREATE INDEX IF NOT EXISTS idx_users_hotel_id ON users(hotel_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_hotel_id ON bookings(hotel_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_hotel_id ON invoices(hotel_id);
+CREATE INDEX IF NOT EXISTS idx_operational_expenses_hotel_id ON operational_expenses(hotel_id);
+CREATE INDEX IF NOT EXISTS idx_vendor_bills_hotel_id ON vendor_bills(hotel_id);
+CREATE INDEX IF NOT EXISTS idx_system_audit_logs_hotel_id ON system_audit_logs(hotel_id);
+CREATE INDEX IF NOT EXISTS idx_broadcasts_hotel_id ON broadcasts(hotel_id);
+CREATE INDEX IF NOT EXISTS idx_staff_shifts_hotel_id ON staff_shifts(hotel_id);

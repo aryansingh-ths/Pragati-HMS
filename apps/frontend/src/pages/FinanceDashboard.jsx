@@ -368,7 +368,7 @@ export default function FinanceDashboard() {
         const token = sessionStorage.getItem('hms_token');
         const headers = { 'Authorization': `Bearer ${token}` };
 
-        const [overviewRes, expensesRes, invoicesRes, payablesRes, reconRes, ledgerRes, stmtRes, budgetRes] = await Promise.all([
+        const [overviewRes, expensesRes, invoicesRes, payablesRes, reconRes, ledgerRes, stmtRes, budgetRes, cashRegisterRes] = await Promise.all([
           fetch('http://localhost:3000/api/finance/overview', { headers }),
           fetch('http://localhost:3000/api/finance/expenses', { headers }),
           fetch('http://localhost:3000/api/finance/invoices', { headers }),
@@ -452,6 +452,11 @@ export default function FinanceDashboard() {
   // --- Audit Trail ---
   const [auditSearch, setAuditSearch] = useState('');
   const [auditActionFilter, setAuditActionFilter] = useState('All');
+  const allAuditLog = [];
+  const auditLog = [];
+  const pendingApprovalsCount = 0;
+  const flaggedHighValueCount = 0;
+  const auditActionTypes = ['Approve', 'Reject', 'Escalate'];
 
   // --- Bank Accounts ---
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
