@@ -170,6 +170,17 @@ const modalVariants = {
 // MAIN COMPONENT
 // =============================================
 export default function TravelDashboard() {
+  const getAccessLevel = () => {
+    let raw = sessionStorage.getItem('hms_access_level');
+    if (raw && raw !== 'undefined' && raw !== 'null') return raw;
+    let role = (sessionStorage.getItem('hms_role') || '').toUpperCase();
+    if (role === 'SUPER_ADMIN') return 'SUPER_ADMIN';
+    if (role === 'ADMIN') return 'ADMIN';
+    if (role === 'MANAGER') return 'MANAGER';
+    return 'EXECUTIVE';
+  };
+  const accessLevel = getAccessLevel();
+
   // ─── Broadcast States ──────────────────────────────────────
   const [broadcasts, setBroadcasts] = React.useState([]);
   const [dismissedBroadcasts, setDismissedBroadcasts] = React.useState(() => {
@@ -199,7 +210,7 @@ export default function TravelDashboard() {
     return () => clearInterval(interval);
   }, [fetchBroadcasts]);
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(accessLevel === 'EXECUTIVE' ? 'bookings' : 'overview');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -375,10 +386,10 @@ export default function TravelDashboard() {
     {
       heading: 'Packages & Sales',
       items: [
-        { key: 'overview', label: 'Travel Overview', icon: <Compass size={15} /> },
+        ...(accessLevel !== 'EXECUTIVE' ? [{ key: 'overview', label: 'Travel Overview', icon: <Compass size={15} /> }] : []),
         { key: 'packages', label: 'Package Catalog', icon: <Plane size={15} /> },
         { key: 'bookings', label: 'Bookings & Purchases', icon: <CalendarClock size={15} /> },
-        { key: 'customers', label: 'Customers', icon: <Users size={15} /> },
+        ...(accessLevel !== 'EXECUTIVE' ? [{ key: 'customers', label: 'Customers', icon: <Users size={15} /> }] : []),
       ],
     },
   ];
@@ -525,7 +536,11 @@ export default function TravelDashboard() {
             {(() => {
               const staffName = sessionStorage.getItem('hms_name') || 'Staff';
               const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
-              const designation = 'Travel Desk admin';
+              let designation = 'Travel Desk admin';
+              try {
+                const user = JSON.parse(sessionStorage.getItem('hms_user'));
+                if (user && user.designation) designation = user.designation;
+              } catch(e) {}
               return (
                 <motion.button
                   whileHover={{ y: -2 }}

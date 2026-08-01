@@ -318,6 +318,16 @@ function BarRankChart({ data = [] }) {
 // =============================================
 export default function FinanceDashboard() {
   const navigate = useNavigate();
+  const getAccessLevel = () => {
+    let raw = sessionStorage.getItem('hms_access_level');
+    if (raw && raw !== 'undefined' && raw !== 'null') return raw;
+    let role = (sessionStorage.getItem('hms_role') || '').toUpperCase();
+    if (role === 'SUPER_ADMIN') return 'SUPER_ADMIN';
+    if (role === 'ADMIN') return 'ADMIN';
+    if (role === 'MANAGER') return 'MANAGER';
+    return 'EXECUTIVE';
+  };
+  const accessLevel = getAccessLevel();
 
   // ─── Broadcast States ──────────────────────────────────────
   const [broadcasts, setBroadcasts] = React.useState([]);
@@ -347,7 +357,7 @@ export default function FinanceDashboard() {
     const interval = setInterval(fetchBroadcasts, 30000);
     return () => clearInterval(interval);
   }, [fetchBroadcasts]);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(accessLevel === 'EXECUTIVE' ? 'invoices' : 'overview');
   const [isLoading, setIsLoading] = useState(false);
   const [apiOverview, setApiOverview] = useState(null);
   const [apiExpenses, setApiExpenses] = useState([]);
@@ -368,7 +378,7 @@ export default function FinanceDashboard() {
         const token = sessionStorage.getItem('hms_token');
         const headers = { 'Authorization': `Bearer ${token}` };
 
-        const [overviewRes, expensesRes, invoicesRes, payablesRes, reconRes, ledgerRes, stmtRes, budgetRes] = await Promise.all([
+        const [overviewRes, expensesRes, invoicesRes, payablesRes, reconRes, ledgerRes, stmtRes, budgetRes, cashRegisterRes] = await Promise.all([
           fetch('http://localhost:3000/api/finance/overview', { headers }),
           fetch('http://localhost:3000/api/finance/expenses', { headers }),
           fetch('http://localhost:3000/api/finance/invoices', { headers }),
@@ -452,6 +462,11 @@ export default function FinanceDashboard() {
   // --- Audit Trail ---
   const [auditSearch, setAuditSearch] = useState('');
   const [auditActionFilter, setAuditActionFilter] = useState('All');
+  const allAuditLog = [];
+  const auditLog = [];
+  const pendingApprovalsCount = 0;
+  const flaggedHighValueCount = 0;
+  const auditActionTypes = ['Approve', 'Reject', 'Escalate'];
 
   // --- Bank Accounts ---
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
@@ -896,25 +911,27 @@ export default function FinanceDashboard() {
     {
       heading: 'Accounts & Finance',
       items: [
-        { key: 'overview', label: 'Financial Overview', icon: <Building2 size={15} /> },
+        ...(accessLevel !== 'EXECUTIVE' ? [{ key: 'overview', label: 'Financial Overview', icon: <Building2 size={15} /> }] : []),
         { key: 'invoices', label: 'Invoices & Billing', icon: <FileText size={15} /> },
         { key: 'expenses', label: 'Expenses & Payables', icon: <PieChart size={15} /> },
-        { key: 'reconciliation', label: 'Reconciliation', icon: <Link2 size={15} /> },
+        ...(accessLevel !== 'EXECUTIVE' ? [{ key: 'reconciliation', label: 'Reconciliation', icon: <Link2 size={15} /> }] : []),
       ],
     },
-    {
-      heading: 'Planning & Reporting',
-      items: [
-        { key: 'statements', label: 'Financial Statements', icon: <Scale size={15} /> },
-      ],
-    },
-    {
-      heading: 'Treasury & HR',
-      items: [
-        { key: 'payroll', label: 'Payroll & Staff Costs', icon: <Users size={15} /> },
-        { key: 'bank', label: 'Bank & Deposits', icon: <Landmark size={15} /> },
-      ],
-    },
+    ...(accessLevel !== 'EXECUTIVE' ? [
+      {
+        heading: 'Planning & Reporting',
+        items: [
+          { key: 'statements', label: 'Financial Statements', icon: <Scale size={15} /> },
+        ],
+      },
+      {
+        heading: 'Treasury & HR',
+        items: [
+          { key: 'payroll', label: 'Payroll & Staff Costs', icon: <Users size={15} /> },
+          { key: 'bank', label: 'Bank & Deposits', icon: <Landmark size={15} /> },
+        ],
+      }
+    ] : [])
   ];
   const navItems = navGroups.flatMap(g => g.items);
 
@@ -1084,7 +1101,11 @@ export default function FinanceDashboard() {
             {(() => {
               const staffName = sessionStorage.getItem('hms_name') || 'Staff';
               const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
-              const designation = 'Finance Officer';
+              let designation = 'Finance Officer';
+              try {
+                const user = JSON.parse(sessionStorage.getItem('hms_user'));
+                if (user && user.designation) designation = user.designation;
+              } catch(e) {}
               return (
                 <motion.button
                   whileHover={{ y: -2 }}

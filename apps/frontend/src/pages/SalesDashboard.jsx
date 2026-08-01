@@ -197,6 +197,17 @@ function TargetVsRevenueChart({ period }) {
 // MAIN COMPONENT - SALES EXECUTIVE VIEW
 // =============================================
 export default function SalesExecutiveDashboard() {
+  const getAccessLevel = () => {
+    let raw = sessionStorage.getItem('hms_access_level');
+    if (raw && raw !== 'undefined' && raw !== 'null') return raw;
+    let role = (sessionStorage.getItem('hms_role') || '').toUpperCase();
+    if (role === 'SUPER_ADMIN') return 'SUPER_ADMIN';
+    if (role === 'ADMIN') return 'ADMIN';
+    if (role === 'MANAGER') return 'MANAGER';
+    return 'EXECUTIVE';
+  };
+  const accessLevel = getAccessLevel();
+
   // ─── Broadcast States ──────────────────────────────────────
   const [broadcasts, setBroadcasts] = React.useState([]);
   const [dismissedBroadcasts, setDismissedBroadcasts] = React.useState(() => {
@@ -226,7 +237,7 @@ export default function SalesExecutiveDashboard() {
     return () => clearInterval(interval);
   }, [fetchBroadcasts]);
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(accessLevel === 'EXECUTIVE' ? 'tasks' : 'overview');
   const [isLoading, setIsLoading] = useState(true);
   const [timePeriod, setTimePeriod] = useState('Monthly');
   
@@ -476,7 +487,7 @@ export default function SalesExecutiveDashboard() {
     {
       heading: 'My Workspace',
       items: [
-        { key: 'overview', label: 'My Performance', icon: <TrendingUp size={15} /> },
+        ...(accessLevel !== 'EXECUTIVE' ? [{ key: 'overview', label: 'My Performance', icon: <TrendingUp size={15} /> }] : []),
         { key: 'tasks', label: 'Task Management', icon: <ListTodo size={15} /> },
       ],
     },
@@ -487,13 +498,15 @@ export default function SalesExecutiveDashboard() {
         { key: 'accounts', label: 'My Accounts', icon: <Briefcase size={15} /> },
       ],
     },
-    {
-      heading: 'Sources & Channels',
-      items: [
-        { key: 'modes', label: 'Booking Modes', icon: <Activity size={15} /> },
-        { key: 'ota', label: 'OTA Performance', icon: <Globe size={15} /> },
-      ],
-    },
+    ...(accessLevel !== 'EXECUTIVE' ? [
+      {
+        heading: 'Sources & Channels',
+        items: [
+          { key: 'modes', label: 'Booking Modes', icon: <Activity size={15} /> },
+          { key: 'ota', label: 'OTA Performance', icon: <Globe size={15} /> },
+        ],
+      }
+    ] : [])
   ];
   const navItems = navGroups.flatMap(g => g.items);
 
@@ -590,7 +603,11 @@ export default function SalesExecutiveDashboard() {
             {(() => {
               const staffName = sessionStorage.getItem('hms_name') || 'Staff';
               const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
-              const designation = 'Sales admin';
+              let designation = 'Sales admin';
+              try {
+                const user = JSON.parse(sessionStorage.getItem('hms_user'));
+                if (user && user.designation) designation = user.designation;
+              } catch(e) {}
               return (
                 <motion.button
                   whileHover={{ y: -2 }}

@@ -6,7 +6,7 @@ import {
   Sliders, Wrench, Loader2, Plus, Trash2, X, ChevronDown, ChevronUp, Edit,
   TrendingUp, AlertTriangle, Clock, BedDouble, Zap, ArrowUpRight, ArrowDownRight,
   UserCheck, UserX, ShieldAlert, Hammer, Eye, CircleDot, RefreshCw, CheckCircle,
-  LogIn, DoorOpen, Maximize2, Search, LogOut
+  LogIn, DoorOpen, Maximize2, Search, LogOut, Building2
 } from 'lucide-react';
 
 // SVG DONUT CHART COMPONENT (Pure SVG, no deps)
@@ -430,7 +430,18 @@ function SlaCountdownTimer({ createdAt, priority, status }) {
 
 // MAIN Admin DASHBOARD
 export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState('overview');
+  const isSuperAdmin = sessionStorage.getItem('hms_access_level') === 'SUPER_ADMIN' || (sessionStorage.getItem('hms_role') || '').toUpperCase() === 'SUPER_ADMIN';
+  const getAccessLevel = () => {
+    let raw = sessionStorage.getItem('hms_access_level');
+    if (raw && raw !== 'undefined' && raw !== 'null') return raw;
+    let role = (sessionStorage.getItem('hms_role') || '').toUpperCase();
+    if (role === 'SUPER_ADMIN') return 'SUPER_ADMIN';
+    if (role === 'ADMIN') return 'ADMIN';
+    if (role === 'MANAGER') return 'MANAGER';
+    return 'EXECUTIVE';
+  };
+  const accessLevel = getAccessLevel();
+  const [activeTab, setActiveTab] = useState(accessLevel === 'EXECUTIVE' ? 'activity_monitor' : 'overview');
   const navigate = useNavigate();
   const [expandedQueueCol, setExpandedQueueCol] = useState(null);  // Live Operations state
   const [expandedCard, setExpandedCard] = useState(null); // 'frontdesk' | 'housekeeping' | 'engineering' | null
@@ -442,6 +453,8 @@ export default function AdminDashboard() {
   const [shiftDateFilter, setShiftDateFilter] = useState('');
 
   // Properties state  
+  const [hotels, setHotels] = useState([]);
+  const [selectedHotelId, setSelectedHotelId] = useState(sessionStorage.getItem('hms_selected_hotel_id') || '');
   const [roomsList, setRoomsList] = useState([]);
   const [roomTypes, setRoomTypes] = useState([]);
   const [maintenanceTickets, setMaintenanceTickets] = useState([]);
@@ -471,7 +484,7 @@ export default function AdminDashboard() {
   const [analyticsData, setAnalyticsData] = useState(null);
 
   // Forms & Actions state
-  const [broadcastForm, setBroadcastForm] = useState({ targetDept: 'ALL', message: '' });
+  const [broadcastForm, setBroadcastForm] = useState({ targetDept: 'ALL', message: '', hotel_id: '' });
   const [broadcastSuccess, setBroadcastSuccess] = useState(false);
 
   // ─── Broadcast States ──────────────────────────────────────
@@ -490,24 +503,70 @@ export default function AdminDashboard() {
   const [staffFilter, setStaffFilter] = useState('ALL');
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [showOnboardModal, setShowOnboardModal] = useState(false);
+  const [systemAdmins, setSystemAdmins] = useState([]);
   const [salarySlipData, setSalarySlipData] = useState(null);
+
+  // Property & Admin Management state (Super Admin)
+  const [showAddPropertyModal, setShowAddPropertyModal] = useState(false);
+  const [showAddAdminModal, setShowAddAdminModal] = useState(false);
+  const [addPropertyForm, setAddPropertyForm] = useState({ name: '', location: '' });
+  const [addAdminForm, setAddAdminForm] = useState({ name: '', email: '', password: '', role: 'ADMIN', hotel_id: '' });
+  const [editingUser, setEditingUser] = useState(null);
+  const [editAccessForm, setEditAccessForm] = useState({ access_level: 'EXECUTIVE', department: ['FRONT_DESK'], hotel_id: '', designation: '' });
+  const [managementSubTab, setManagementSubTab] = useState('properties');
 
   // Salary Drawer state
   const [staffSalaries, setStaffSalaries] = useState([]);
   const [salaryForm, setSalaryForm] = useState({ base_salary_monthly: 0, daily_deduction: 0 });
 
+  // Profile Edit state
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState({ 
+    name: sessionStorage.getItem('hms_name') || '', 
+    designation: sessionStorage.getItem('hms_designation') || 'Administrator' 
+  });
+
   const fetchWithAuth = useCallback(async (url, options = {}) => {
     const token = sessionStorage.getItem('hms_token');
-    if (!token) { navigate('/login'); return null; }
+    if (!token) { 
+      sessionStorage.clear();
+      window.location.href = '/login'; 
+      return null; 
+    }
     try {
-      const res = await fetch(url, {
+      let finalUrl = url;
+      if (isSuperAdmin && selectedHotelId) {
+        const separator = finalUrl.includes('?') ? '&' : '?';
+        finalUrl = `${finalUrl}${separator}hotel_id=${selectedHotelId}`;
+      }
+      const res = await fetch(finalUrl, {
         ...options,
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...options.headers }
       });
-      if (res.status === 401 || res.status === 403) { navigate('/login'); return null; }
+      if (res.status === 401 || res.status === 403) { 
+        sessionStorage.clear();
+        window.location.href = '/login'; 
+        return null; 
+      }
       return res;
     } catch (err) { return null; }
-  }, [navigate]);
+  }, [isSuperAdmin, selectedHotelId]);
+
+  useEffect(() => {
+    if (isSuperAdmin) {
+      const fetchHotels = async () => {
+        const token = sessionStorage.getItem('hms_token');
+        try {
+          const res = await fetch('http://localhost:3000/api/super-admin/hotels', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const json = await res.json();
+          if (json.data && json.data.hotels) setHotels(json.data.hotels);
+        } catch (err) {}
+      };
+      fetchHotels();
+    }
+  }, [isSuperAdmin]);
 
   const loadAdminData = async () => {
     setIsLoading(true);
@@ -575,6 +634,19 @@ export default function AdminDashboard() {
         const analyticsRes = await fetchWithAuth('http://localhost:3000/api/Admin/analytics');
         if (analyticsRes?.ok) setAnalyticsData((await analyticsRes.json()).data || null);
       }
+
+
+      if (activeTab === 'system_admins') {
+        const [adminRes, hotelsDetailRes] = await Promise.all([
+          fetchWithAuth('http://localhost:3000/api/super-admin/users'),
+          fetch('http://localhost:3000/api/super-admin/hotels', { headers: { 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` } }),
+        ]);
+        if (adminRes?.ok) setSystemAdmins((await adminRes.json()).data?.users || []);
+        if (hotelsDetailRes?.ok) {
+          const hData = await hotelsDetailRes.json();
+          setHotels(hData.data?.hotels || []);
+        }
+      }
     } catch (e) {
       console.error("Dashboard Load Error", e);
     } finally {
@@ -600,7 +672,7 @@ export default function AdminDashboard() {
     return () => clearInterval(interval);
   }, [fetchBroadcasts]);
 
-  useEffect(() => { loadAdminData(); }, [activeTab]);
+  useEffect(() => { loadAdminData(); }, [activeTab, selectedHotelId]);
 
   useEffect(() => {
     setAuditPage(1);
@@ -721,15 +793,28 @@ export default function AdminDashboard() {
 
   // --- ADVANCED CONTROLS ACTIONS ---
 
-  const handleSaveYieldRule = async (key, value) => {
+  const handleSaveYieldRule = async (key, value, applyToAll = false, showNotification = true) => {
     const res = await fetchWithAuth('http://localhost:3000/api/Admin/yield-rules', {
-      method: 'POST', body: JSON.stringify({ key, value })
+      method: 'POST', body: JSON.stringify({ key, value, apply_to_all: applyToAll })
     });
     if (res?.ok) {
+      if (applyToAll && showNotification) alert(`✅ Successfully pushed rule ${key} to all properties!`);
       const yieldRes = await fetchWithAuth('http://localhost:3000/api/Admin/yield-rules');
       if (yieldRes?.ok) setYieldRules((await yieldRes.json()).data.rules || null);
     } else {
-      alert("❌ Failed to update yield engine rule configuration.");
+      if (showNotification) alert("❌ Failed to update yield engine rule configuration.");
+    }
+  };
+
+  const handlePushAllToAll = async () => {
+    if(!window.confirm("CAUTION: This will overwrite ALL yield rules for ALL properties. Continue?")) return;
+    try {
+      for (const key of Object.keys(yieldRules)) {
+        await handleSaveYieldRule(key, yieldRules[key], true, false);
+      }
+      alert("✅ Successfully pushed all yield rules to all properties!");
+    } catch (err) {
+      alert("❌ Error pushing rules to all properties.");
     }
   };
 
@@ -789,12 +874,179 @@ export default function AdminDashboard() {
     });
     if (res?.ok) {
       setBroadcastSuccess(true);
-      setBroadcastForm({ targetDept: 'ALL', message: '' });
+      setBroadcastForm({ targetDept: 'ALL', message: '', hotel_id: '' });
       setTimeout(() => setBroadcastSuccess(false), 3000);
       const auditRes = await fetchWithAuth('http://localhost:3000/api/Admin/audit-logs');
       if (auditRes?.ok) setAuditLogs((await auditRes.json()).data.logs || []);
     } else {
       alert("❌ Failed to send operational broadcast alert.");
+    }
+  };
+
+  const handleRemoveAdmin = async (id) => {
+    if (!confirm('Are you sure you want to terminate this Administrator? This action is irreversible.')) return;
+    try {
+      const res = await fetch(`http://localhost:3000/api/super-admin/users/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}`
+        }
+      });
+      if (res.ok) {
+        setSystemAdmins(prev => prev.filter(u => u.id !== id));
+      } else {
+        alert('Failed to terminate administrator.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error terminating administrator.');
+    }
+  };
+
+  const refreshManagementData = async () => {
+    const [hotelsRes, usersRes] = await Promise.all([
+      fetch('http://localhost:3000/api/super-admin/hotels', { headers: { 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` } }),
+      fetch('http://localhost:3000/api/super-admin/users', { headers: { 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` } }),
+    ]);
+    if (hotelsRes.ok) {
+      const hData = await hotelsRes.json();
+      setHotels(hData.data?.hotels || []);
+      // Notify Header component that properties list has changed
+      window.dispatchEvent(new Event('hotels_updated'));
+    }
+    if (usersRes.ok) {
+      const uData = await usersRes.json();
+      setSystemAdmins(uData.data?.users || []);
+    }
+  };
+
+  const handleProfileSave = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetchWithAuth('http://localhost:3000/api/users/profile', {
+        method: 'PATCH',
+        body: JSON.stringify(profileForm)
+      });
+      if (res?.ok) {
+        const json = await res.json();
+        sessionStorage.setItem('hms_name', json.data.user.name);
+        sessionStorage.setItem('hms_designation', json.data.user.designation || 'Administrator');
+        setIsProfileDropdownOpen(false);
+        // Force header update if needed, but session is updated.
+      } else {
+        alert('Failed to update profile');
+      }
+    } catch (err) {
+      alert('Error updating profile');
+    }
+  };
+
+  const handleAddProperty = async (e) => {
+    e.preventDefault();
+    if (!addPropertyForm.name.trim() || !addPropertyForm.location.trim()) return;
+    try {
+      const res = await fetch('http://localhost:3000/api/super-admin/hotels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
+        body: JSON.stringify(addPropertyForm),
+      });
+      if (res.ok) {
+        setAddPropertyForm({ name: '', location: '' });
+        setShowAddPropertyModal(false);
+        await refreshManagementData();
+      } else {
+        const json = await res.json();
+        alert(json.error || 'Failed to create property');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error creating property.');
+    }
+  };
+
+  const handleDeleteProperty = async (id, name) => {
+    if (!confirm(`⚠️ DANGER: Permanently delete property "${name}"?\n\nThis will remove ALL rooms, bookings, staff, and data associated with this property. This action is IRREVERSIBLE.`)) return;
+    try {
+      const res = await fetch(`http://localhost:3000/api/super-admin/hotels/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
+      });
+      if (res.ok) {
+        await refreshManagementData();
+      } else {
+        alert('Failed to remove property.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error removing property.');
+    }
+  };
+
+  const handleAddAdmin = async (e) => {
+    e.preventDefault();
+    if (!addAdminForm.name.trim() || !addAdminForm.email.trim() || !addAdminForm.password.trim()) return;
+    try {
+      const res = await fetch('http://localhost:3000/api/super-admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
+        body: JSON.stringify(addAdminForm),
+      });
+      if (res.ok) {
+        setAddAdminForm({ name: '', email: '', password: '', role: 'ADMIN', hotel_id: '' });
+        setShowAddAdminModal(false);
+        await refreshManagementData();
+      } else {
+        const json = await res.json();
+        alert(json.error || 'Failed to create user');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error creating user.');
+    }
+  };
+
+  const handleUpdateStaffAccess = async (e) => {
+    if (e) e.preventDefault();
+    if (!editingUser) return;
+    try {
+      const res = await fetch(`http://localhost:3000/api/super-admin/users/${editingUser.id}/access`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
+        body: JSON.stringify(editAccessForm),
+      });
+      if (res.ok) {
+        setEditingUser(null);
+        await refreshManagementData();
+      } else {
+        const json = await res.json();
+        alert(json.error || 'Failed to update access');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error updating user access.');
+    }
+  };
+
+  const handleTogglePermission = async (userId, permKey, currentVal) => {
+    const user = systemAdmins.find(u => u.id === userId);
+    if (!user) return;
+    const updated = {
+      can_process_refunds: user.can_process_refunds,
+      can_apply_discounts: user.can_apply_discounts,
+      can_overbook: user.can_overbook,
+      [permKey]: !currentVal,
+    };
+    try {
+      const res = await fetch(`http://localhost:3000/api/super-admin/users/${userId}/permissions`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
+        body: JSON.stringify(updated),
+      });
+      if (res.ok) {
+        setSystemAdmins(prev => prev.map(u => u.id === userId ? { ...u, ...updated } : u));
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -942,34 +1194,39 @@ export default function AdminDashboard() {
             <Sliders className="text-[#D4A373]" size={20} />
           </div>
           <div>
-            <h1 className="font-serif font-black text-[25px] text-zinc-500 text-base leading-none">Admin</h1>
+            <h1 className="font-serif font-black text-[25px] text-zinc-500 text-base leading-none whitespace-nowrap">{isSuperAdmin ? 'Super Admin' : 'Admin'}</h1>
             <span className="text-[9px] font-bold text-[#D4A373] uppercase tracking-widest mt-1 block">Command Center</span>
           </div>
         </div>
+
 
         {/* Navigation Categories */}
         <div className="flex flex-col gap-4 flex-1 overflow-y-auto fd-sidebar-scroll pr-1">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Control Room</p>
             <div className="flex flex-col gap-1">
-              <button
-                onClick={() => setActiveTab('overview')}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === 'overview'
-                  ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
-                  : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
-                  }`}
-              >
-                <Activity size={15} /> Live Operations
-              </button>
-              <button
-                onClick={() => setActiveTab(activeTab === 'properties' || activeTab === 'properties_yield' ? 'overview' : 'properties')}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === 'properties' || activeTab === 'properties_yield'
-                  ? 'bg-[#D4A373]/40 text-zinc-900 border border-[#D4A373] shadow-xs'
-                  : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
-                  }`}
-              >
-                <Sliders size={15} /> Property Controls
-              </button>
+              {accessLevel !== 'EXECUTIVE' && (
+                <button
+                  onClick={() => setActiveTab('overview')}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === 'overview'
+                    ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+                    : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
+                    }`}
+                >
+                  <Activity size={15} /> Live Operations
+                </button>
+              )}
+              {accessLevel !== 'EXECUTIVE' && (
+                <button
+                  onClick={() => setActiveTab(activeTab === 'properties' || activeTab === 'properties_yield' ? 'overview' : 'properties')}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === 'properties' || activeTab === 'properties_yield'
+                    ? 'bg-[#D4A373]/40 text-zinc-900 border border-[#D4A373] shadow-xs'
+                    : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
+                    }`}
+                >
+                  <Sliders size={15} /> Property Controls
+                </button>
+              )}
 
               {/* Sub-tabs under Property Controls */}
               {(activeTab === 'properties' || activeTab === 'properties_yield') && (
@@ -1003,24 +1260,28 @@ export default function AdminDashboard() {
               >
                 <CircleDot size={15} /> Activity Monitor
               </button>
-              <button
-                onClick={() => setActiveTab('maintenance')}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === 'maintenance'
-                  ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
-                  : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
-                  }`}
-              >
-                <Wrench size={15} /> Repairs and Automations
-              </button>
-              <button
-                onClick={() => setActiveTab('analytics')}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === 'analytics'
-                  ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
-                  : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
-                  }`}
-              >
-                <TrendingUp size={15} /> Predictive Analysis
-              </button>
+              {!isSuperAdmin && accessLevel !== 'EXECUTIVE' && (
+                <>
+                  <button
+                    onClick={() => setActiveTab('maintenance')}
+                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === 'maintenance'
+                      ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+                      : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
+                      }`}
+                  >
+                    <Wrench size={15} /> Repairs and Automations
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('analytics')}
+                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === 'analytics'
+                      ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+                      : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
+                      }`}
+                  >
+                    <TrendingUp size={15} /> Predictive Analysis
+                  </button>
+                </>
+              )}
               <button
                 onClick={() => setActiveTab('broadcasting')}
                 className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === 'broadcasting'
@@ -1067,6 +1328,18 @@ export default function AdminDashboard() {
               >
                 <Clock size={15} /> Operations Log
               </button>
+              
+              {isSuperAdmin && (
+                <button
+                  onClick={() => setActiveTab('system_admins')}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === 'system_admins'
+                    ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+                    : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
+                    }`}
+                >
+                  <Building2 size={15} className="text-rose-500" /> Property & Admins
+                </button>
+              )}
             </div>
           </div>
 
@@ -1156,27 +1429,69 @@ export default function AdminDashboard() {
             {(() => {
               const staffName = sessionStorage.getItem('hms_name') || 'Staff';
               const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
-              const designation = 'Administrator';
+              const designation = sessionStorage.getItem('hms_designation') || 'Administrator';
               return (
-                <motion.button
-                  whileHover={{ y: -2 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => {
-                    localStorage.clear();
-                    window.location.href = '/login';
-                  }}
-                  className="group flex items-center gap-3 bg-white pl-3 pr-4 py-1.5 rounded-2xl border border-zinc-200/60 shadow-xs hover:shadow-md hover:border-rose-200 hover:bg-rose-50 transition-all duration-300 cursor-pointer"
-                  title="Sign Out"
-                >
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-600 to-indigo-700 group-hover:from-rose-500 group-hover:to-rose-600 text-white font-bold text-xs flex items-center justify-center shadow-xs transition-colors">
-                    {initials}
-                  </div>
-                  <div className="hidden sm:block text-left leading-none pr-1">
-                    <span className="text-xs font-bold text-zinc-900 group-hover:text-rose-600 transition-colors block">{staffName}</span>
-                    <span className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mt-0.5 block group-hover:text-rose-400 transition-colors">{designation}</span>
-                  </div>
-                  <LogOut size={16} className="text-zinc-400 group-hover:text-rose-500 transition-colors ml-1" />
-                </motion.button>
+                <div className="relative">
+                  <motion.button
+                    whileHover={{ y: -2 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
+                    className="group flex items-center gap-3 bg-white pl-3 pr-4 py-1.5 rounded-2xl border border-zinc-200/60 shadow-xs hover:shadow-md hover:border-indigo-200 hover:bg-indigo-50 transition-all duration-300 cursor-pointer"
+                    title="Profile Settings"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-600 to-indigo-700 group-hover:from-indigo-500 group-hover:to-indigo-600 text-white font-bold text-xs flex items-center justify-center shadow-xs transition-colors">
+                      {initials}
+                    </div>
+                    <div className="hidden sm:block text-left leading-none pr-1">
+                      <span className="text-xs font-bold text-zinc-900 group-hover:text-indigo-700 transition-colors block">{staffName}</span>
+                      <span className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mt-0.5 block group-hover:text-indigo-500 transition-colors">{designation}</span>
+                    </div>
+                  </motion.button>
+
+                  <AnimatePresence>
+                    {isProfileDropdownOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="absolute right-0 top-full mt-2 w-64 fd-glass-modal rounded-2xl p-4 shadow-xl z-50 border border-zinc-200/80"
+                      >
+                        <form onSubmit={handleProfileSave} className="flex flex-col gap-3">
+                          <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1">Edit Profile</h3>
+                          <div>
+                            <label className="block text-[10px] font-bold text-zinc-500 uppercase mb-1">Name</label>
+                            <input 
+                              type="text" 
+                              value={profileForm.name} 
+                              onChange={e => setProfileForm({...profileForm, name: e.target.value})} 
+                              className="w-full bg-zinc-50 border border-zinc-200 rounded-lg py-1.5 px-3 text-xs font-bold text-zinc-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-zinc-500 uppercase mb-1">Designation</label>
+                            <input 
+                              type="text" 
+                              value={profileForm.designation} 
+                              onChange={e => setProfileForm({...profileForm, designation: e.target.value})} 
+                              className="w-full bg-zinc-50 border border-zinc-200 rounded-lg py-1.5 px-3 text-xs font-bold text-zinc-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20" 
+                            />
+                          </div>
+                          <div className="flex gap-2 mt-2">
+                            <button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-1.5 rounded-lg transition-colors">Save</button>
+                            <button type="button" onClick={() => setIsProfileDropdownOpen(false)} className="px-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 text-xs font-bold rounded-lg transition-colors">Cancel</button>
+                          </div>
+                        </form>
+                        <hr className="my-3 border-zinc-200/60" />
+                        <button
+                          onClick={() => { localStorage.clear(); window.location.href = '/login'; }}
+                          className="w-full flex items-center justify-center gap-2 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold py-1.5 rounded-lg transition-colors"
+                        >
+                          <LogOut size={14} /> Sign Out
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               );
             })()}
           </div>
@@ -1549,7 +1864,7 @@ export default function AdminDashboard() {
                             >
                               <div>
                                 <p className="text-xs font-bold text-zinc-800">{p.guest_name}</p>
-                                <p className="text-[9px] text-zinc-400">{p.room_type} · Rm {p.room_number}</p>
+                                <p className="text-[9px] text-zinc-400">{p.room_type} · Rm {p.room_number}{!selectedHotelId && p.hotel_name ? " · " + p.hotel_name : ""}</p>
                               </div>
                               <Clock size={12} className="text-indigo-400" />
                             </motion.div>
@@ -1575,7 +1890,7 @@ export default function AdminDashboard() {
                             >
                               <div>
                                 <p className="text-xs font-bold text-rose-700">{o.guest_name}</p>
-                                <p className="text-[9px] text-rose-500">Rm {o.room_number} · Expired: {new Date(o.check_out_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
+                                <p className="text-[9px] text-rose-500">Rm {o.room_number}{!selectedHotelId && o.hotel_name ? " · " + o.hotel_name : ""} · Expired: {new Date(o.check_out_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
                               </div>
                               <AlertTriangle size={12} className="text-rose-500" />
                             </motion.div>
@@ -1636,7 +1951,7 @@ export default function AdminDashboard() {
                             >
                               <div>
                                 <p className="text-xs font-bold text-zinc-800">Room {r.room_number}</p>
-                                <p className="text-[9px] text-zinc-400">{r.room_type}</p>
+                                <p className="text-[9px] text-zinc-400">{r.room_type}{!selectedHotelId && r.hotel_name ? " · " + r.hotel_name : ""}</p>
                               </div>
                               <span className="text-[9px] font-bold uppercase tracking-wider text-rose-600 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md">Dirty</span>
                             </motion.div>
@@ -1696,7 +2011,7 @@ export default function AdminDashboard() {
                               className="p-2 rounded-xl bg-rose-50/60 border border-rose-100"
                             >
                               <div className="flex justify-between items-center mb-1">
-                                <p className="text-xs font-bold text-zinc-800">Room {t.room_number}</p>
+                                <p className="text-xs font-bold text-zinc-800">Room {t.room_number}{!selectedHotelId && t.hotel_name ? " · " + t.hotel_name : ""}</p>
                                 <span className="text-[9px] font-bold uppercase tracking-wider text-rose-600 bg-rose-100 px-1.5 py-0.5 rounded">High</span>
                               </div>
                               <p className="text-[9px] text-zinc-500 truncate">{t.issue}</p>
@@ -1754,7 +2069,7 @@ export default function AdminDashboard() {
                                       <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0, transition: { delay: i * 0.03 } }} className="flex items-center justify-between p-3 rounded-xl bg-indigo-50/60 border border-indigo-100">
                                         <div>
                                           <p className="text-xs font-bold text-zinc-800">{p.guest_name}</p>
-                                          <p className="text-[10px] text-zinc-400">{p.room_type} · Rm {p.room_number}</p>
+                                          <p className="text-[10px] text-zinc-400">{p.room_type} · Rm {p.room_number}{!selectedHotelId && p.hotel_name ? " · " + p.hotel_name : ""}</p>
                                         </div>
                                         <Clock size={13} className="text-indigo-400" />
                                       </motion.div>
@@ -1775,7 +2090,7 @@ export default function AdminDashboard() {
                                       <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0, transition: { delay: i * 0.03 } }} className="flex items-center justify-between p-3 rounded-xl bg-rose-50 border border-rose-100">
                                         <div>
                                           <p className="text-xs font-bold text-rose-700">{o.guest_name}</p>
-                                          <p className="text-[10px] text-rose-500">Rm {o.room_number} · Expired: {new Date(o.check_out_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
+                                          <p className="text-[10px] text-rose-500">Rm {o.room_number}{!selectedHotelId && o.hotel_name ? " · " + o.hotel_name : ""} · Expired: {new Date(o.check_out_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
                                         </div>
                                         <AlertTriangle size={13} className="text-rose-500" />
                                       </motion.div>
@@ -1818,7 +2133,7 @@ export default function AdminDashboard() {
                                       <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0, transition: { delay: i * 0.03 } }} className="flex items-center justify-between p-3 rounded-xl bg-amber-50/60 border border-amber-100">
                                         <div>
                                           <p className="text-xs font-bold text-zinc-800">Room {r.room_number}</p>
-                                          <p className="text-[10px] text-zinc-400">{r.room_type}</p>
+                                          <p className="text-[10px] text-zinc-400">{r.room_type}{!selectedHotelId && r.hotel_name ? " · " + r.hotel_name : ""}</p>
                                         </div>
                                         <span className="text-[9px] font-bold uppercase tracking-wider text-rose-600 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md">Dirty</span>
                                       </motion.div>
@@ -1860,7 +2175,7 @@ export default function AdminDashboard() {
                                     {liveData.departmental.highPriorityTickets.map((t, i) => (
                                       <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0, transition: { delay: i * 0.03 } }} className="p-3 rounded-xl bg-rose-50/60 border border-rose-100">
                                         <div className="flex justify-between items-center mb-1">
-                                          <p className="text-xs font-bold text-zinc-800">Room {t.room_number}</p>
+                                          <p className="text-xs font-bold text-zinc-800">Room {t.room_number}{!selectedHotelId && t.hotel_name ? " · " + t.hotel_name : ""}</p>
                                           <span className="text-[9px] font-bold uppercase tracking-wider text-rose-600 bg-rose-100 px-1.5 py-0.5 rounded">High</span>
                                         </div>
                                         <p className="text-[10px] text-zinc-500">{t.issue}</p>
@@ -1956,7 +2271,14 @@ export default function AdminDashboard() {
                                             <span className="text-zinc-400 font-normal mx-1.5">·</span>
                                             <span className="text-zinc-500 font-normal">{formatActivityAction(item.action)}</span>
                                           </p>
-                                          <p className="text-[9px] text-zinc-400">Room {item.room_number} ({item.room_type})</p>
+                                          <p className="text-[9px] text-zinc-400">
+                                            Room {item.room_number} ({item.room_type})
+                                            {!selectedHotelId && item.hotel_name && (
+                                              <span className="ml-1 text-indigo-500 font-bold uppercase tracking-widest bg-indigo-50 px-1 py-0.5 rounded border border-indigo-100">
+                                                {item.hotel_name}
+                                              </span>
+                                            )}
+                                          </p>
                                         </div>
                                         <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border shrink-0 shadow-sm ${actionClass}`}>
                                           {item.action.replace('_', ' ')}
@@ -2281,6 +2603,21 @@ export default function AdminDashboard() {
                               <option value="TRAVEL">Travel Desk</option>
                             </select>
                           </div>
+                          {isSuperAdmin && !selectedHotelId && (
+                            <div className="sm:w-1/3">
+                              <label className="block text-[10px] font-bold uppercase text-indigo-500 tracking-wider mb-2">Target Property</label>
+                              <select
+                                value={broadcastForm.hotel_id}
+                                onChange={e => setBroadcastForm({ ...broadcastForm, hotel_id: e.target.value })}
+                                className="w-full bg-indigo-50/50 border border-indigo-200/60 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/30 rounded-xl py-2.5 px-3 text-xs font-bold text-zinc-700 outline-none transition-shadow shadow-sm appearance-none cursor-pointer"
+                              >
+                                <option value="">Global (All Properties)</option>
+                                {hotels.map(h => (
+                                  <option key={h.id} value={h.id}>{h.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
                           <div className="flex-1">
                             <label className="block text-[10px] font-bold uppercase text-amber-600 tracking-wider mb-2">Broadcast Message</label>
                             <input
@@ -2392,6 +2729,11 @@ export default function AdminDashboard() {
                                     }`}>
                                     {broadcast.target_dept === 'ALL' ? 'Global' : broadcast.target_dept}
                                   </span>
+                                  {!selectedHotelId && broadcast.hotel_name && (
+                                    <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border shadow-sm bg-teal-50 text-teal-600 border-teal-100">
+                                      {broadcast.hotel_name}
+                                    </span>
+                                  )}
                                   <span className="text-[10px] text-zinc-400 font-mono bg-white/60 px-1.5 rounded">
                                     {broadcast.created_at ? new Date(broadcast.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'Unknown Date'}
                                   </span>
@@ -2589,6 +2931,11 @@ export default function AdminDashboard() {
                                             <span className="bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-zinc-600">
                                               {log.user_role}
                                             </span>
+                                            {!selectedHotelId && log.hotel_name && (
+                                              <span className="ml-2 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-indigo-600">
+                                                {log.hotel_name}
+                                              </span>
+                                            )}
                                           </td>
                                           <td className="py-2.5 px-3">
                                             <span className={`px-2 py-0.5 rounded border text-[9px] font-bold uppercase tracking-wider inline-flex items-center gap-1 ${actionBadge}`}>
@@ -2751,17 +3098,19 @@ export default function AdminDashboard() {
                               </div>
 
                               <div className="flex items-center gap-3">
-                                <motion.button
-                                  whileHover={{ scale: 1.05, y: -1 }}
-                                  whileTap={{ scale: 0.95 }}
-                                  onClick={(e) => { e.stopPropagation(); setNewRoomForm({ room_number: '', room_type_id: type.id }); setIsAddRoomModalOpen(true); }}
-                                  className="relative flex items-center gap-1 bg-gradient-to-r from-teal-400 to-emerald-500 hover:shadow-lg hover:shadow-teal-500/30 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-shadow shadow-sm overflow-hidden"
-                                >
-                                  <motion.span animate={{ rotate: [0, 90, 0] }} transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }} className="inline-flex">
-                                    <Plus size={14} />
-                                  </motion.span>
-                                  Add Room
-                                </motion.button>
+                                {(!isSuperAdmin || selectedHotelId) && (
+                                  <motion.button
+                                    whileHover={{ scale: 1.05, y: -1 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={(e) => { e.stopPropagation(); setNewRoomForm({ room_number: '', room_type_id: type.id }); setIsAddRoomModalOpen(true); }}
+                                    className="relative flex items-center gap-1 bg-gradient-to-r from-teal-400 to-emerald-500 hover:shadow-lg hover:shadow-teal-500/30 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-shadow shadow-sm overflow-hidden"
+                                  >
+                                    <motion.span animate={{ rotate: [0, 90, 0] }} transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }} className="inline-flex">
+                                      <Plus size={14} />
+                                    </motion.span>
+                                    Add Room
+                                  </motion.button>
+                                )}
                               </div>
                             </div>
 
@@ -2815,6 +3164,11 @@ export default function AdminDashboard() {
                                               <div className="relative flex flex-col items-start gap-2 pl-2">
                                                 <p className="font-bold text-zinc-900 text-sm flex items-center gap-1.5">
                                                   <span className="text-xs">🛏️</span> Room {room.room_number}
+                                                  {!selectedHotelId && room.hotel_name && (
+                                                    <span className="text-[9px] font-bold uppercase tracking-widest text-indigo-500 bg-indigo-50 border border-indigo-100 shadow-sm px-1.5 py-0.5 rounded ml-1">
+                                                      {room.hotel_name}
+                                                    </span>
+                                                  )}
                                                 </p>
 
                                                 {room.room_blocked ? (
@@ -2951,15 +3305,26 @@ export default function AdminDashboard() {
                         <div className="yld-orb -top-14 -right-14 w-48 h-48 bg-[#D4A373]/10" />
                         <div className="yld-orb -bottom-14 -left-14 w-40 h-40 bg-[#D4A373]/5" />
 
-                        <div className="relative flex items-center gap-3 border-b border-zinc-100/80 pb-4">
-                          <motion.div
-                            whileHover={{ rotate: -10, scale: 1.1 }}
-                            transition={{ type: 'spring', stiffness: 400, damping: 14 }}
-                            className="bg-[#D4A373] p-2.5 rounded-xl shadow-sm"
-                          >
-                            <TrendingUp size={20} className="text-white" />
-                          </motion.div>
-                          <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Dynamic Pricing &amp; Yield Engine</h3>
+                        <div className="relative flex items-center justify-between border-b border-zinc-100/80 pb-4">
+                          <div className="flex items-center gap-3">
+                            <motion.div
+                              whileHover={{ rotate: -10, scale: 1.1 }}
+                              transition={{ type: 'spring', stiffness: 400, damping: 14 }}
+                              className="bg-[#D4A373] p-2.5 rounded-xl shadow-sm"
+                            >
+                              <TrendingUp size={20} className="text-white" />
+                            </motion.div>
+                            <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Dynamic Pricing &amp; Yield Engine</h3>
+                          </div>
+                          
+                          {isSuperAdmin && (
+                            <button
+                              onClick={handlePushAllToAll}
+                              className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 text-xs font-bold uppercase tracking-wider rounded-lg border border-red-200 hover:bg-red-100 hover:text-red-700 transition-colors shadow-sm"
+                            >
+                              Push Config To All Properties
+                            </button>
+                          )}
                         </div>
 
                         <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -4594,6 +4959,569 @@ export default function AdminDashboard() {
                           </div>
                         </motion.div>
                       </>
+                    )}
+                  </AnimatePresence>
+
+                </motion.div>
+              )}
+              
+              {/* TAB: PROPERTY & ADMIN MANAGEMENT (SUPER ADMIN ONLY) */}
+              {isSuperAdmin && activeTab === 'system_admins' && (
+                <motion.div key="system_admins" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
+
+                  {/* Sub-tab Navigation */}
+                  <div className="bg-white rounded-2xl border border-zinc-200 p-1.5 flex gap-1 shadow-sm">
+                    {[
+                      { key: 'properties', label: 'Properties', icon: <Building2 size={14} /> },
+                      { key: 'staff', label: 'Staff & Admins', icon: <Users size={14} /> },
+                      { key: 'permissions', label: 'Permissions', icon: <ShieldAlert size={14} /> },
+                    ].map(tab => (
+                      <button
+                        key={tab.key}
+                        onClick={() => setManagementSubTab(tab.key)}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                          managementSubTab === tab.key
+                            ? 'bg-gradient-to-r from-[#D4A373] to-[#c49060] text-white shadow-md shadow-[#D4A373]/25'
+                            : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800'
+                        }`}
+                      >
+                        {tab.icon} {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* ═══ SUB-TAB: PROPERTIES ═══ */}
+                  {managementSubTab === 'properties' && (
+                    <div className="space-y-6">
+                      <div className="bg-white rounded-[2rem] border border-zinc-200 p-8 shadow-sm">
+                        <div className="flex justify-between items-center mb-8">
+                          <div>
+                            <h2 className="text-2xl font-black text-zinc-900 tracking-tight">Property Portfolio</h2>
+                            <p className="text-zinc-500 text-sm mt-1">Manage all hotel properties under your ownership</p>
+                          </div>
+                          <motion.button
+                            whileHover={{ scale: 1.04, y: -1 }}
+                            whileTap={{ scale: 0.96 }}
+                            onClick={() => setShowAddPropertyModal(true)}
+                            className="bg-gradient-to-r from-emerald-600 to-teal-500 hover:shadow-lg hover:shadow-emerald-500/25 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition-shadow shadow-md flex items-center gap-2"
+                          >
+                            <Plus size={14} /> Add Property
+                          </motion.button>
+                        </div>
+
+                        {hotels.length === 0 ? (
+                          <div className="text-center py-16 text-zinc-400">
+                            <Building2 size={40} className="mx-auto mb-3 opacity-20" />
+                            <p className="text-sm font-medium">No properties registered yet.</p>
+                            <p className="text-xs mt-1">Click "Add Property" to register your first hotel.</p>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {hotels.map(hotel => (
+                              <motion.div
+                                key={hotel.id}
+                                whileHover={{ y: -3, boxShadow: '0 12px 32px -8px rgba(212,163,115,0.18)' }}
+                                className="relative p-6 bg-gradient-to-br from-white to-zinc-50/80 border border-zinc-200 rounded-2xl flex flex-col gap-4 group transition-all overflow-hidden"
+                              >
+                                <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-[#D4A373]/10 to-transparent rounded-bl-[3rem]" />
+
+                                <div className="flex items-start gap-4">
+                                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#D4A373] to-[#b8895a] text-white flex items-center justify-center font-black text-lg shadow-md shadow-[#D4A373]/20 shrink-0">
+                                    <Building2 size={20} />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <h3 className="font-bold text-zinc-900 text-lg truncate">{hotel.name}</h3>
+                                    <p className="text-xs text-zinc-500 truncate">{hotel.location || hotel.address || '—'}</p>
+                                  </div>
+                                </div>
+
+                                <div className="flex gap-3 mt-1">
+                                  <div className="flex-1 bg-indigo-50/70 border border-indigo-100 rounded-xl p-3 text-center">
+                                    <p className="text-lg font-black text-indigo-700">{hotel.room_count || 0}</p>
+                                    <p className="text-[9px] font-bold uppercase tracking-wider text-indigo-400">Rooms</p>
+                                  </div>
+                                  <div className="flex-1 bg-emerald-50/70 border border-emerald-100 rounded-xl p-3 text-center">
+                                    <p className="text-lg font-black text-emerald-700">{hotel.admin_count || 0}</p>
+                                    <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-400">Admins</p>
+                                  </div>
+                                </div>
+
+                                <div className="mt-auto pt-4 border-t border-zinc-100 flex justify-end">
+                                  <button
+                                    onClick={() => handleDeleteProperty(hotel.id, hotel.name)}
+                                    className="text-[10px] font-bold text-red-400 hover:text-white hover:bg-red-500 px-3 py-1.5 rounded-lg transition-all border border-red-200 hover:border-red-500 hover:shadow-sm uppercase tracking-wider"
+                                  >
+                                    Remove Property
+                                  </button>
+                                </div>
+                              </motion.div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ═══ SUB-TAB: STAFF & ADMINS ═══ */}
+                  {managementSubTab === 'staff' && (
+                    <div className="space-y-6">
+                      <div className="bg-white rounded-[2rem] border border-zinc-200 p-8 shadow-sm">
+                        <div className="flex justify-between items-center mb-8">
+                          <div>
+                            <h2 className="text-2xl font-black text-zinc-900 tracking-tight">Staff & Administrators</h2>
+                            <p className="text-zinc-500 text-sm mt-1">Manage all users across your properties</p>
+                          </div>
+                          <motion.button
+                            whileHover={{ scale: 1.04, y: -1 }}
+                            whileTap={{ scale: 0.96 }}
+                            onClick={() => setShowAddAdminModal(true)}
+                            className="bg-gradient-to-r from-indigo-600 to-violet-500 hover:shadow-lg hover:shadow-indigo-500/25 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition-shadow shadow-md flex items-center gap-2"
+                          >
+                            <Plus size={14} /> Add User
+                          </motion.button>
+                        </div>
+
+                        {systemAdmins.length === 0 ? (
+                          <div className="text-center py-16 text-zinc-400">
+                            <Users size={40} className="mx-auto mb-3 opacity-20" />
+                            <p className="text-sm font-medium">No users found.</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-8">
+                            {/* Group by hotel */}
+                            {[...new Set(hotels.map(h => h.id)), null].map(hotelId => {
+                              const hotelName = hotelId ? (hotels.find(h => h.id === hotelId)?.name || 'Unknown') : 'Unassigned / Global';
+                              const usersInGroup = systemAdmins.filter(u => hotelId ? u.hotel_id === hotelId : !u.hotel_id);
+                              if (usersInGroup.length === 0) return null;
+
+                              return (
+                                <div key={hotelId || 'global'}>
+                                  <div className="flex items-center gap-2 mb-4">
+                                    <Building2 size={14} className="text-[#D4A373]" />
+                                    <h3 className="text-sm font-black uppercase tracking-wider text-zinc-700">{hotelName}</h3>
+                                    <span className="text-[9px] font-bold bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded-full">{usersInGroup.length}</span>
+                                  </div>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {usersInGroup.map(user => {
+                                      const roleColors = {
+                                        SUPER_ADMIN: 'from-rose-500 to-fuchsia-600',
+                                        ADMIN: 'from-indigo-500 to-violet-600',
+                                        RECEPTION: 'from-sky-500 to-blue-600',
+                                        FRONT_DESK: 'from-sky-500 to-blue-600',
+                                        HOUSEKEEPING: 'from-amber-500 to-orange-500',
+                                        FINANCE: 'from-emerald-500 to-teal-600',
+                                        RESTAURANT: 'from-pink-500 to-rose-500',
+                                        SALES: 'from-violet-500 to-purple-600',
+                                        TRAVEL: 'from-cyan-500 to-teal-500',
+                                      };
+                                      const gradient = roleColors[user.role] || 'from-zinc-500 to-zinc-600';
+                                      return (
+                                        <motion.div
+                                          key={user.id}
+                                          whileHover={{ y: -2 }}
+                                          className="p-5 bg-zinc-50/60 border border-zinc-200 rounded-2xl flex flex-col gap-3 transition-all hover:shadow-md"
+                                        >
+                                          <div className="flex items-center gap-3">
+                                            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradient} text-white flex items-center justify-center font-bold text-xs shadow-sm shrink-0`}>
+                                              {user.name.substring(0, 2).toUpperCase()}
+                                            </div>
+                                            <div className="min-w-0">
+                                              <h4 className="font-bold text-zinc-900 text-sm truncate">{user.name}</h4>
+                                              <p className="text-[10px] font-mono text-zinc-400 truncate">{user.designation || user.email}</p>
+                                              <div className="flex flex-wrap gap-1 mt-1">
+                                                {(Array.isArray(user.department) ? user.department : (user.department ? [user.department] : [])).map(d => (
+                                                  <span key={d} className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-500">
+                                                    {String(d).replace(/_/g, ' ')}
+                                                  </span>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          </div>
+
+                                          <div className="flex items-center justify-between gap-2">
+                                            <button
+                                              onClick={() => {
+                                                setEditingUser(user);
+                                                setEditAccessForm({
+                                                  access_level: user.access_level || 'EXECUTIVE',
+                                                  department: Array.isArray(user.department) ? user.department : (user.department ? [user.department] : ['FRONT_DESK']),
+                                                  hotel_id: user.hotel_id || '',
+                                                  designation: user.designation || ''
+                                                });
+                                              }}
+                                              disabled={user.role === 'SUPER_ADMIN'}
+                                              className="text-[10px] font-bold uppercase tracking-wider bg-indigo-50 border border-indigo-200 text-indigo-600 hover:bg-indigo-100 rounded-lg px-3 py-1.5 outline-none transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                                            >
+                                              Edit Access
+                                            </button>
+
+                                            {user.role !== 'SUPER_ADMIN' && (
+                                              <button
+                                                onClick={() => handleRemoveAdmin(user.id)}
+                                                className="text-[9px] font-bold text-red-400 hover:text-white hover:bg-red-500 px-2.5 py-1.5 rounded-lg transition-all border border-red-200 hover:border-red-500 uppercase tracking-wider shrink-0"
+                                              >
+                                                Remove
+                                              </button>
+                                            )}
+                                          </div>
+                                        </motion.div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ═══ SUB-TAB: PERMISSIONS ═══ */}
+                  {managementSubTab === 'permissions' && (
+                    <div className="space-y-6">
+                      <div className="bg-white rounded-[2rem] border border-zinc-200 p-8 shadow-sm">
+                        <div className="mb-8">
+                          <h2 className="text-2xl font-black text-zinc-900 tracking-tight">Global Staff Permissions</h2>
+                          <p className="text-zinc-500 text-sm mt-1">Control what each staff member is authorised to do across all properties</p>
+                        </div>
+
+                        {systemAdmins.filter(u => u.role !== 'SUPER_ADMIN').length === 0 ? (
+                          <div className="text-center py-16 text-zinc-400">
+                            <ShieldAlert size={40} className="mx-auto mb-3 opacity-20" />
+                            <p className="text-sm font-medium">No staff members to configure.</p>
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto rounded-2xl border border-zinc-200">
+                            <table className="w-full text-left">
+                              <thead>
+                                <tr className="bg-zinc-50 border-b border-zinc-200">
+                                  <th className="py-3 px-4 text-[10px] font-black uppercase tracking-wider text-zinc-500">Staff Member</th>
+                                  <th className="py-3 px-4 text-[10px] font-black uppercase tracking-wider text-zinc-500">Role</th>
+                                  <th className="py-3 px-4 text-[10px] font-black uppercase tracking-wider text-zinc-500">Property</th>
+                                  <th className="py-3 px-4 text-[10px] font-black uppercase tracking-wider text-zinc-500 text-center">Process Refunds</th>
+                                  <th className="py-3 px-4 text-[10px] font-black uppercase tracking-wider text-zinc-500 text-center">Apply Discounts</th>
+                                  <th className="py-3 px-4 text-[10px] font-black uppercase tracking-wider text-zinc-500 text-center">Overbook</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {systemAdmins.filter(u => u.role !== 'SUPER_ADMIN').map((user, i) => (
+                                  <tr key={user.id} className={`border-b border-zinc-100 hover:bg-[#D4A373]/5 transition-colors ${i % 2 === 0 ? 'bg-white' : 'bg-zinc-50/40'}`}>
+                                    <td className="py-3 px-4">
+                                      <div className="flex items-center gap-2.5">
+                                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#D4A373] to-[#b8895a] text-white flex items-center justify-center text-[9px] font-bold shrink-0">
+                                          {user.name.substring(0, 2).toUpperCase()}
+                                        </div>
+                                        <div>
+                                          <p className="text-xs font-bold text-zinc-800 truncate">{user.name}</p>
+                                          <p className="text-[9px] text-zinc-400 font-mono truncate">{user.email}</p>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="py-3 px-4">
+                                      <span className="text-[9px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full">
+                                        {user.role?.replace('_', ' ')}
+                                      </span>
+                                    </td>
+                                    <td className="py-3 px-4">
+                                      <span className="text-[10px] font-bold text-zinc-500">
+                                        {user.hotel_name || 'Global'}
+                                      </span>
+                                    </td>
+                                    {['can_process_refunds', 'can_apply_discounts', 'can_overbook'].map(perm => (
+                                      <td key={perm} className="py-3 px-4 text-center">
+                                        <button
+                                          onClick={() => handleTogglePermission(user.id, perm, user[perm])}
+                                          className={`relative w-10 h-5 rounded-full transition-colors duration-300 ${user[perm] ? 'bg-emerald-500' : 'bg-zinc-300'}`}
+                                        >
+                                          <motion.div
+                                            layout
+                                            className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm"
+                                            style={{ left: user[perm] ? '22px' : '2px' }}
+                                            transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                                          />
+                                        </button>
+                                      </td>
+                                    ))}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ═══ ADD PROPERTY MODAL ═══ */}
+                  <AnimatePresence>
+                    {showAddPropertyModal && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+                        onClick={() => setShowAddPropertyModal(false)}
+                      >
+                        <motion.div
+                          initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                          animate={{ scale: 1, opacity: 1, y: 0 }}
+                          exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                          onClick={e => e.stopPropagation()}
+                          className="bg-white rounded-3xl border border-zinc-200 shadow-2xl w-full max-w-md p-8"
+                        >
+                          <div className="flex items-center gap-3 mb-6">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 text-white flex items-center justify-center shadow-md">
+                              <Building2 size={18} />
+                            </div>
+                            <div>
+                              <h3 className="text-lg font-black text-zinc-900">Register New Property</h3>
+                              <p className="text-xs text-zinc-500">Default room types will be auto-created</p>
+                            </div>
+                          </div>
+
+                          <form onSubmit={handleAddProperty} className="space-y-4">
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Property Name</label>
+                              <input
+                                type="text" required
+                                placeholder="e.g. The Grand Palace Hotel"
+                                value={addPropertyForm.name}
+                                onChange={e => setAddPropertyForm({ ...addPropertyForm, name: e.target.value })}
+                                className="w-full bg-zinc-50 border border-zinc-200 rounded-xl py-2.5 px-3 text-sm font-medium text-zinc-800 outline-none focus:ring-2 focus:ring-emerald-400/30 focus:border-emerald-400 transition-shadow placeholder:text-zinc-400"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Location / Address</label>
+                              <input
+                                type="text" required
+                                placeholder="e.g. 42 Marine Drive, Mumbai"
+                                value={addPropertyForm.location}
+                                onChange={e => setAddPropertyForm({ ...addPropertyForm, location: e.target.value })}
+                                className="w-full bg-zinc-50 border border-zinc-200 rounded-xl py-2.5 px-3 text-sm font-medium text-zinc-800 outline-none focus:ring-2 focus:ring-emerald-400/30 focus:border-emerald-400 transition-shadow placeholder:text-zinc-400"
+                              />
+                            </div>
+                            <div className="flex gap-3 pt-2">
+                              <button type="button" onClick={() => setShowAddPropertyModal(false)} className="flex-1 py-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-500 hover:bg-zinc-50 transition-colors">Cancel</button>
+                              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white text-xs font-bold shadow-md hover:shadow-lg transition-shadow">Create Property</motion.button>
+                            </div>
+                          </form>
+                        </motion.div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* ═══ ADD USER MODAL ═══ */}
+                  <AnimatePresence>
+                    {showAddAdminModal && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+                        onClick={() => setShowAddAdminModal(false)}
+                      >
+                        <motion.div
+                          initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                          animate={{ scale: 1, opacity: 1, y: 0 }}
+                          exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                          onClick={e => e.stopPropagation()}
+                          className="bg-white rounded-3xl border border-zinc-200 shadow-2xl w-full max-w-md p-8"
+                        >
+                          <div className="flex items-center gap-3 mb-6">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white flex items-center justify-center shadow-md">
+                              <UserCheck size={18} />
+                            </div>
+                            <div>
+                              <h3 className="text-lg font-black text-zinc-900">Provision New User</h3>
+                              <p className="text-xs text-zinc-500">Create a staff account and assign to a property</p>
+                            </div>
+                          </div>
+
+                          <form onSubmit={handleAddAdmin} className="space-y-4">
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Full Name</label>
+                              <input
+                                type="text" required
+                                placeholder="e.g. Rahul Sharma"
+                                value={addAdminForm.name}
+                                onChange={e => setAddAdminForm({ ...addAdminForm, name: e.target.value })}
+                                className="w-full bg-zinc-50 border border-zinc-200 rounded-xl py-2.5 px-3 text-sm font-medium text-zinc-800 outline-none focus:ring-2 focus:ring-indigo-400/30 focus:border-indigo-400 transition-shadow placeholder:text-zinc-400"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Email</label>
+                              <input
+                                type="email" required
+                                placeholder="e.g. rahul@hotelgroup.com"
+                                value={addAdminForm.email}
+                                onChange={e => setAddAdminForm({ ...addAdminForm, email: e.target.value })}
+                                className="w-full bg-zinc-50 border border-zinc-200 rounded-xl py-2.5 px-3 text-sm font-medium text-zinc-800 outline-none focus:ring-2 focus:ring-indigo-400/30 focus:border-indigo-400 transition-shadow placeholder:text-zinc-400"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Password</label>
+                              <input
+                                type="password" required
+                                placeholder="••••••••"
+                                value={addAdminForm.password}
+                                onChange={e => setAddAdminForm({ ...addAdminForm, password: e.target.value })}
+                                className="w-full bg-zinc-50 border border-zinc-200 rounded-xl py-2.5 px-3 text-sm font-medium text-zinc-800 outline-none focus:ring-2 focus:ring-indigo-400/30 focus:border-indigo-400 transition-shadow placeholder:text-zinc-400"
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Role</label>
+                                <select
+                                  value={addAdminForm.role}
+                                  onChange={e => setAddAdminForm({ ...addAdminForm, role: e.target.value })}
+                                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl py-2.5 px-3 text-xs font-bold text-zinc-700 outline-none focus:ring-2 focus:ring-indigo-400/30 cursor-pointer appearance-none"
+                                >
+                                  <option value="ADMIN">Admin</option>
+                                  <option value="RECEPTION">Reception</option>
+                                  <option value="FRONT_DESK">Front Desk</option>
+                                  <option value="HOUSEKEEPING">Housekeeping</option>
+                                  <option value="FINANCE">Finance</option>
+                                  <option value="RESTAURANT">Restaurant</option>
+                                  <option value="SALES">Sales</option>
+                                  <option value="TRAVEL">Travel</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Property</label>
+                                <select
+                                  value={addAdminForm.hotel_id}
+                                  onChange={e => setAddAdminForm({ ...addAdminForm, hotel_id: e.target.value })}
+                                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl py-2.5 px-3 text-xs font-bold text-zinc-700 outline-none focus:ring-2 focus:ring-indigo-400/30 cursor-pointer appearance-none"
+                                >
+                                  <option value="">None (Global)</option>
+                                  {hotels.map(h => (
+                                    <option key={h.id} value={h.id}>{h.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                            <div className="flex gap-3 pt-2">
+                              <button type="button" onClick={() => setShowAddAdminModal(false)} className="flex-1 py-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-500 hover:bg-zinc-50 transition-colors">Cancel</button>
+                              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-500 text-white text-xs font-bold shadow-md hover:shadow-lg transition-shadow">Create User</motion.button>
+                            </div>
+                          </form>
+                        </motion.div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* ═══ EDIT STAFF ACCESS MODAL ═══ */}
+                  <AnimatePresence>
+                    {editingUser && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+                        onClick={() => setEditingUser(null)}
+                      >
+                        <motion.div
+                          initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                          animate={{ scale: 1, opacity: 1, y: 0 }}
+                          exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                          onClick={e => e.stopPropagation()}
+                          className="bg-white rounded-3xl border border-zinc-200 shadow-2xl w-full max-w-md p-8"
+                        >
+                          <div className="flex items-center gap-3 mb-6">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white flex items-center justify-center shadow-md">
+                              <ShieldAlert size={18} />
+                            </div>
+                            <div>
+                              <h3 className="text-lg font-black text-zinc-900">Edit Staff Access</h3>
+                              <p className="text-xs text-zinc-500">Modify permissions and property for {editingUser.name}</p>
+                            </div>
+                          </div>
+
+                          <form onSubmit={handleUpdateStaffAccess} className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Clearance Level</label>
+                                <select
+                                  value={editAccessForm.access_level}
+                                  onChange={e => setEditAccessForm({ ...editAccessForm, access_level: e.target.value })}
+                                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl py-2.5 px-3 text-xs font-bold text-zinc-700 outline-none focus:ring-2 focus:ring-indigo-400/30 cursor-pointer appearance-none"
+                                >
+                                  <option value="EXECUTIVE">Executive</option>
+                                  <option value="MANAGER">Manager</option>
+                                  <option value="ADMIN">Admin</option>
+                                </select>
+                              </div>
+                              <div className="col-span-2">
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Departments</label>
+                                  <div className="grid grid-cols-2 gap-2 bg-zinc-50 border border-zinc-200 rounded-xl p-3">
+                                    {[
+                                      { value: 'GLOBAL', label: 'Global / All' },
+                                      { value: 'FRONT_DESK', label: 'Front Desk' },
+                                      { value: 'HOUSEKEEPING', label: 'Housekeeping' },
+                                      { value: 'FINANCE', label: 'Finance' },
+                                      { value: 'RESTAURANT', label: 'Dining' },
+                                      { value: 'SALES', label: 'Sales' },
+                                      { value: 'TRAVEL', label: 'Travel' }
+                                    ].map(dept => (
+                                      <label key={dept.value} className="flex items-center gap-2 cursor-pointer group">
+                                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${editAccessForm.department?.includes(dept.value) ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300 bg-white group-hover:border-indigo-400'}`}>
+                                          {editAccessForm.department?.includes(dept.value) && (
+                                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                          )}
+                                        </div>
+                                        <input
+                                          type="checkbox"
+                                          className="hidden"
+                                          checked={editAccessForm.department?.includes(dept.value) || false}
+                                          onChange={(e) => {
+                                            const currentDepts = editAccessForm.department || [];
+                                            if (e.target.checked) {
+                                              setEditAccessForm({ ...editAccessForm, department: [...currentDepts, dept.value] });
+                                            } else {
+                                              setEditAccessForm({ ...editAccessForm, department: currentDepts.filter(d => d !== dept.value) });
+                                            }
+                                          }}
+                                        />
+                                        <span className="text-xs font-medium text-zinc-700">{dept.label}</span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Designation (Title)</label>
+                              <input
+                                type="text"
+                                value={editAccessForm.designation}
+                                onChange={e => setEditAccessForm({ ...editAccessForm, designation: e.target.value })}
+                                placeholder="e.g. Senior Housekeeper"
+                                className="w-full bg-zinc-50 border border-zinc-200 rounded-xl py-2.5 px-3 text-xs font-bold text-zinc-700 outline-none focus:ring-2 focus:ring-indigo-400/30"
+                              />
+                            </div>
+                            
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Property Assignment</label>
+                              <select
+                                value={editAccessForm.hotel_id || ''}
+                                onChange={e => setEditAccessForm({ ...editAccessForm, hotel_id: e.target.value })}
+                                className="w-full bg-zinc-50 border border-zinc-200 rounded-xl py-2.5 px-3 text-xs font-bold text-zinc-700 outline-none focus:ring-2 focus:ring-indigo-400/30 cursor-pointer appearance-none"
+                              >
+                                <option value="">None (Global)</option>
+                                {hotels.map(h => (
+                                  <option key={h.id} value={h.id}>{h.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                            
+                            <div className="flex gap-3 pt-2">
+                              <button type="button" onClick={() => setEditingUser(null)} className="flex-1 py-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-500 hover:bg-zinc-50 transition-colors">Cancel</button>
+                              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-500 text-white text-xs font-bold shadow-md hover:shadow-lg transition-shadow">Save Changes</motion.button>
+                            </div>
+                          </form>
+                        </motion.div>
+                      </motion.div>
                     )}
                   </AnimatePresence>
 
