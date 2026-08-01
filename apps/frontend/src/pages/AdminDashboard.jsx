@@ -3052,8 +3052,11 @@ export default function AdminDashboard() {
 
                   {/* Room Classes Accordion */}
                   <div className="space-y-5">
-                    {roomTypes.map((type, typeIdx) => {
-                      const classRooms = roomsList.filter(r => r.room_type_id === type.id);
+                    {Array.from(new Set(roomTypes.map(t => t.name.trim()))).map((name, typeIdx) => {
+                      const matchingTypes = roomTypes.filter(t => t.name.trim() === name);
+                      const type = matchingTypes[0];
+                      const matchingIds = matchingTypes.map(t => t.id);
+                      const classRooms = roomsList.filter(r => matchingIds.includes(r.room_type_id));
                       const isExpanded = expandedClasses[type.id];
                       const accentSets = [
                         { grad: 'from-indigo-500 to-blue-500', ring: 'rgba(99,102,241,0.25)', chip: 'bg-indigo-50 text-indigo-600 border-indigo-100', blob: 'bg-indigo-300/20' },
