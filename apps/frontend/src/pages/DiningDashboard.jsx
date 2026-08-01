@@ -127,9 +127,19 @@ export default function DiningDashboard() {
   }, [fetchBroadcasts]);
   const navigate = useNavigate();
   const location = useLocation();
-  const isAdmin = location.state?.fromAdmin === true || sessionStorage.getItem('hms_role')?.toUpperCase() === 'Admin';
+  const isAdmin = location.state?.fromAdmin === true || sessionStorage.getItem('hms_role')?.toUpperCase() === 'ADMIN';
+  const getAccessLevel = () => {
+    let raw = sessionStorage.getItem('hms_access_level');
+    if (raw && raw !== 'undefined' && raw !== 'null') return raw;
+    let role = (sessionStorage.getItem('hms_role') || '').toUpperCase();
+    if (role === 'SUPER_ADMIN') return 'SUPER_ADMIN';
+    if (role === 'ADMIN') return 'ADMIN';
+    if (role === 'MANAGER') return 'MANAGER';
+    return 'EXECUTIVE';
+  };
+  const accessLevel = getAccessLevel();
 
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(accessLevel === 'EXECUTIVE' ? 'kots' : 'overview');
   const [isLoading, setIsLoading] = useState(true);
 
   // Filters & State connected to the DB
@@ -282,8 +292,21 @@ export default function DiningDashboard() {
   };
 
   const navGroups = [
-    { heading: 'F&B Operations', items: [{ key: 'overview', label: 'Dashboard', icon: <PieChart size={15} /> }, { key: 'kots', label: 'Kitchen Orders (KOT)', icon: <ChefHat size={15} /> }, { key: 'tables', label: 'Table Management', icon: <LayoutGrid size={15} /> }] },
-    { heading: 'Management', items: [{ key: 'menu', label: 'Menu & Inventory', icon: <Utensils size={15} /> }, { key: 'billing', label: 'Billing & Settlements', icon: <Receipt size={15} /> }] }
+    { 
+      heading: 'F&B Operations', 
+      items: [
+        ...(accessLevel !== 'EXECUTIVE' ? [{ key: 'overview', label: 'Dashboard', icon: <PieChart size={15} /> }] : []),
+        { key: 'kots', label: 'Kitchen Orders (KOT)', icon: <ChefHat size={15} /> }, 
+        { key: 'tables', label: 'Table Management', icon: <LayoutGrid size={15} /> }
+      ] 
+    },
+    ...(accessLevel !== 'EXECUTIVE' ? [{ 
+      heading: 'Management', 
+      items: [
+        { key: 'menu', label: 'Menu & Inventory', icon: <Utensils size={15} /> }, 
+        { key: 'billing', label: 'Billing & Settlements', icon: <Receipt size={15} /> }
+      ] 
+    }] : [])
   ];
 
   return (
@@ -367,7 +390,11 @@ export default function DiningDashboard() {
             {(() => {
               const staffName = sessionStorage.getItem('hms_name') || 'Staff';
               const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
-              const designation = 'Restaurant admin';
+              let designation = 'Restaurant admin';
+              try {
+                const user = JSON.parse(sessionStorage.getItem('hms_user'));
+                if (user && user.designation) designation = user.designation;
+              } catch(e) {}
               return (
                 <motion.button
                   whileHover={{ y: -2 }}

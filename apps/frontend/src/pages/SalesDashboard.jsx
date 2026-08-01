@@ -35,8 +35,6 @@ function DonutChart({ data, size = 180, centerLabel = 'Total' }) {
   const strokeWidth = 24;
   const cx = size / 2;
   const cy = size / 2;
-  let cumulativePercent = 0;
-
   const getCoord = (percent) => {
     const angle = percent * 2 * Math.PI - Math.PI / 2;
     return { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) };
@@ -45,19 +43,19 @@ function DonutChart({ data, size = 180, centerLabel = 'Total' }) {
   return (
     <div className="relative flex items-center justify-center">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        {data.map((segment, i) => {
+        {data.reduce((acc, segment, i) => {
           const percent = segment.value / total;
-          if (percent === 0) return null;
-          const startAngle = cumulativePercent;
-          cumulativePercent += percent;
-          const endAngle = cumulativePercent;
+          if (percent === 0) return acc;
+          const startAngle = acc.cumulativePercent;
+          acc.cumulativePercent += percent;
+          const endAngle = acc.cumulativePercent;
 
           const start = getCoord(startAngle);
           const end = getCoord(endAngle);
           const largeArc = percent > 0.5 ? 1 : 0;
           const d = `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 1 ${end.x} ${end.y}`;
 
-          return (
+          acc.elements.push(
             <motion.path
               key={i} d={d} fill="none" stroke={segment.color} strokeWidth={strokeWidth} strokeLinecap="round"
               initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: 1 }}
@@ -66,7 +64,8 @@ function DonutChart({ data, size = 180, centerLabel = 'Total' }) {
               whileHover={{ strokeWidth: strokeWidth + 4, filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.15))' }}
             />
           );
-        })}
+          return acc;
+        }, { cumulativePercent: 0, elements: [] }).elements}
         <text x={cx} y={cy - 6} textAnchor="middle" className="fill-zinc-900" style={{ fontSize: '18px', fontWeight: 900 }}>
           {centerLabel === 'Bookings' || centerLabel === 'Rooms' ? total : `₹${(total / 100000).toFixed(1)}L`}
         </text>
@@ -112,40 +111,102 @@ function BarRankChart({ data = [], currency = true }) {
 }
 
 // =============================================
+// KPI GRAPHIC HELPER
+// =============================================
+const kpiGraphic = (i, color, pct = null) => {
+  const kind = i % 4;
+  if (kind === 0) {
+    return (
+      <div className="relative flex items-center justify-center shrink-0 ml-2 sm:ml-4">
+        <svg className="w-12 h-12 sm:w-14 sm:h-14 rotate-[-90deg]">
+          <circle cx="50%" cy="50%" r="20" fill="none" stroke={`${color}22`} strokeWidth="4" />
+          <motion.circle cx="50%" cy="50%" r="20" fill="none" strokeWidth="4.5" stroke={color}
+            strokeDasharray={2 * Math.PI * 20}
+            initial={{ strokeDashoffset: 2 * Math.PI * 20 }}
+            animate={{ strokeDashoffset: pct !== null ? (2 * Math.PI * 20) * (1 - pct) : (2 * Math.PI * 20) * 0.28 }}
+            transition={{ duration: 1.3, ease: 'easeOut' }}
+            strokeLinecap="round" />
+        </svg>
+        {pct !== null && <span className="absolute text-[9px] font-black" style={{ color }}>{Math.round(pct * 100)}%</span>}
+      </div>
+    );
+  }
+  if (kind === 1) {
+    return (
+      <div className="shrink-0 ml-2 sm:ml-4 border rounded-xl bg-white p-1.5 shadow-sm" style={{ borderColor: `${color}33` }}>
+        <svg className="w-12 h-8 sm:w-16 sm:h-9 overflow-visible" viewBox="0 0 60 32">
+          <motion.path d="M0 22 Q8 6, 16 16 T32 3 T48 12 T60 8" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"
+            initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: 'easeOut' }} />
+          <motion.circle cx="60" cy="8" r="3" fill={color} initial={{ scale: 0 }} animate={{ scale: [0, 1.4, 1] }} transition={{ duration: 0.5, delay: 1.3 }} />
+        </svg>
+      </div>
+    );
+  }
+  if (kind === 2) {
+    return (
+      <div className="flex gap-1 sm:gap-1.5 h-6 sm:h-7 items-end shrink-0 ml-2 sm:ml-4 border rounded-xl bg-white px-2 py-1.5 shadow-sm" style={{ borderColor: `${color}33` }}>
+        {[...Array(5)].map((_, idx) => (
+          <motion.div key={idx} className="w-2 sm:w-2.5 rounded-t-md" style={{ background: idx < 3 ? color : '#e4e4e7' }}
+            initial={{ height: 0 }} animate={{ height: idx < 3 ? '16px' : '6px' }}
+            transition={{ duration: 0.6, delay: idx * 0.08, type: 'spring', stiffness: 200 }} />
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="shrink-0 ml-2 sm:ml-4 border rounded-xl bg-white p-1.5 shadow-sm" style={{ borderColor: `${color}33` }}>
+      <svg className="w-12 h-8 sm:w-16 sm:h-9 overflow-visible" viewBox="0 0 60 32">
+        <defs>
+          <linearGradient id={`kpiYieldFill-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <motion.path d="M0 25 L12 18 L24 22 L36 10 L48 14 L60 4 V32 H0 Z" fill={`url(#kpiYieldFill-${color.replace('#', '')})`}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1, delay: 0.2 }} />
+        <motion.path d="M0 25 L12 18 L24 22 L36 10 L48 14 L60 4" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"
+          initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: 'easeOut', delay: 0.2 }} />
+        <motion.circle cx="60" cy="4" r="3" fill={color} initial={{ scale: 0 }} animate={{ scale: [0, 1.4, 1] }} transition={{ duration: 0.5, delay: 1.5 }} />
+      </svg>
+    </div>
+  );
+};
+
+// =============================================
 // SVG AREA GRAPH: TARGET VS REVENUE
 // =============================================
 function TargetVsRevenueChart({ period, isHeadView, activePersona }) {
-  const mul = isHeadView ? 4 : (activePersona === 'Rohan Desai' ? 0.4 : activePersona === 'Priya Patel' ? 0.75 : 1); 
-  
+  const mul = isHeadView ? 4 : (activePersona === 'Rohan Desai' ? 0.4 : activePersona === 'Priya Patel' ? 0.75 : 1);
+
   const trendData = {
     Daily: [
-      { label: 'Mon', target: 20*mul, revenue: 15*mul },
-      { label: 'Tue', target: 25*mul, revenue: 30*mul },
-      { label: 'Wed', target: 30*mul, revenue: 25*mul },
-      { label: 'Thu', target: 35*mul, revenue: 45*mul },
-      { label: 'Fri', target: 40*mul, revenue: 38*mul },
-      { label: 'Sat', target: 45*mul, revenue: 55*mul },
-      { label: 'Sun', target: 50*mul, revenue: 60*mul },
+      { label: 'Mon', target: 20 * mul, revenue: 15 * mul },
+      { label: 'Tue', target: 25 * mul, revenue: 30 * mul },
+      { label: 'Wed', target: 30 * mul, revenue: 25 * mul },
+      { label: 'Thu', target: 35 * mul, revenue: 45 * mul },
+      { label: 'Fri', target: 40 * mul, revenue: 38 * mul },
+      { label: 'Sat', target: 45 * mul, revenue: 55 * mul },
+      { label: 'Sun', target: 50 * mul, revenue: 60 * mul },
     ],
     Weekly: [
-      { label: 'Week 1', target: 150*mul, revenue: 120*mul },
-      { label: 'Week 2', target: 180*mul, revenue: 190*mul },
-      { label: 'Week 3', target: 200*mul, revenue: 170*mul },
-      { label: 'Week 4', target: 250*mul, revenue: 290*mul },
+      { label: 'Week 1', target: 150 * mul, revenue: 120 * mul },
+      { label: 'Week 2', target: 180 * mul, revenue: 190 * mul },
+      { label: 'Week 3', target: 200 * mul, revenue: 170 * mul },
+      { label: 'Week 4', target: 250 * mul, revenue: 290 * mul },
     ],
     Monthly: [
-      { label: 'Jan', target: 500*mul, revenue: 450*mul },
-      { label: 'Feb', target: 550*mul, revenue: 600*mul },
-      { label: 'Mar', target: 600*mul, revenue: 580*mul },
-      { label: 'Apr', target: 700*mul, revenue: 750*mul },
-      { label: 'May', target: 800*mul, revenue: 720*mul },
-      { label: 'Jun', target: 900*mul, revenue: 980*mul },
+      { label: 'Jan', target: 500 * mul, revenue: 450 * mul },
+      { label: 'Feb', target: 550 * mul, revenue: 600 * mul },
+      { label: 'Mar', target: 600 * mul, revenue: 580 * mul },
+      { label: 'Apr', target: 700 * mul, revenue: 750 * mul },
+      { label: 'May', target: 800 * mul, revenue: 720 * mul },
+      { label: 'Jun', target: 900 * mul, revenue: 980 * mul },
     ],
     Yearly: [
-      { label: '2023', target: 4000*mul, revenue: 3800*mul },
-      { label: '2024', target: 5500*mul, revenue: 5900*mul },
-      { label: '2025', target: 7000*mul, revenue: 6800*mul },
-      { label: '2026', target: 8500*mul, revenue: 9200*mul },
+      { label: '2023', target: 4000 * mul, revenue: 3800 * mul },
+      { label: '2024', target: 5500 * mul, revenue: 5900 * mul },
+      { label: '2025', target: 7000 * mul, revenue: 6800 * mul },
+      { label: '2026', target: 8500 * mul, revenue: 9200 * mul },
     ],
   };
 
@@ -212,95 +273,19 @@ function TargetVsRevenueChart({ period, isHeadView, activePersona }) {
 // =============================================
 // KPI GRAPHIC RENDERER
 // =============================================
-const kpiGraphic = (i, color, pct = null) => {
-  const kind = i % 4;
-  
-  if (kind === 0) {
-    return (
-      <div className="relative flex items-center justify-center shrink-0 ml-2 sm:ml-4">
-        <svg className="w-12 h-12 sm:w-14 sm:h-14 rotate-[-90deg]">
-          <circle cx="50%" cy="50%" r="20" fill="none" stroke={`${color}22`} strokeWidth="4" />
-          <motion.circle cx="50%" cy="50%" r="20" fill="none" strokeWidth="4.5" stroke={color}
-            strokeDasharray={2 * Math.PI * 20}
-            initial={{ strokeDashoffset: 2 * Math.PI * 20 }}
-            animate={{ strokeDashoffset: pct !== null ? (2 * Math.PI * 20) * (1 - pct) : (2 * Math.PI * 20) * 0.28 }}
-            transition={{ duration: 1.3, ease: 'easeOut' }}
-            strokeLinecap="round" />
-        </svg>
-        {pct !== null && <span className="absolute text-[9px] font-black" style={{ color }}>{Math.round(pct * 100)}%</span>}
-      </div>
-    );
-  }
-  if (kind === 1) {
-    return (
-      <div className="shrink-0 ml-2 sm:ml-4 border rounded-xl bg-white p-1.5 shadow-sm" style={{ borderColor: `${color}33` }}>
-        <svg className="w-12 h-8 sm:w-16 sm:h-9 overflow-visible" viewBox="0 0 60 32">
-          <motion.path d="M0 22 Q8 6, 16 16 T32 3 T48 12 T60 8" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"
-            initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: 'easeOut' }} />
-          <motion.circle cx="60" cy="8" r="3" fill={color} initial={{ scale: 0 }} animate={{ scale: [0, 1.4, 1] }} transition={{ duration: 0.5, delay: 1.3 }} />
-        </svg>
-      </div>
-    );
-  }
-  if (kind === 2) {
-    return (
-      <div className="flex gap-1 sm:gap-1.5 h-6 sm:h-7 items-end shrink-0 ml-2 sm:ml-4 border rounded-xl bg-white px-2 py-1.5 shadow-sm" style={{ borderColor: `${color}33` }}>
-        {[...Array(5)].map((_, idx) => (
-          <motion.div key={idx} className="w-2 sm:w-2.5 rounded-t-md" style={{ background: idx < 3 ? color : '#e4e4e7' }}
-            initial={{ height: 0 }} animate={{ height: idx < 3 ? '16px' : '6px' }}
-            transition={{ duration: 0.6, delay: idx * 0.08, type: 'spring', stiffness: 200 }} />
-        ))}
-      </div>
-    );
-  }
-  return (
-    <div className="shrink-0 ml-2 sm:ml-4 border rounded-xl bg-white p-1.5 shadow-sm" style={{ borderColor: `${color}33` }}>
-      <svg className="w-12 h-8 sm:w-16 sm:h-9 overflow-visible" viewBox="0 0 60 32">
-        <defs>
-          <linearGradient id={`kpiYieldFill-${color.replace('#','')}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.35" />
-            <stop offset="100%" stopColor={color} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <motion.path d="M0 25 L12 18 L24 22 L36 10 L48 14 L60 4 V32 H0 Z" fill={`url(#kpiYieldFill-${color.replace('#','')})`}
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1, delay: 0.2 }} />
-        <motion.path d="M0 25 L12 18 L24 22 L36 10 L48 14 L60 4" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"
-          initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: 'easeOut', delay: 0.2 }} />
-        <motion.circle cx="60" cy="4" r="3" fill={color} initial={{ scale: 0 }} animate={{ scale: [0, 1.4, 1] }} transition={{ duration: 0.5, delay: 1.5 }} />
-      </svg>
-    </div>
-  );
-};
+export default function SalesExecutiveDashboard() {
+  const getAccessLevel = () => {
+    let raw = sessionStorage.getItem('hms_access_level');
+    if (raw && raw !== 'undefined' && raw !== 'null') return raw;
+    let role = (sessionStorage.getItem('hms_role') || '').toUpperCase();
+    if (role === 'SUPER_ADMIN') return 'SUPER_ADMIN';
+    if (role === 'ADMIN') return 'ADMIN';
+    if (role === 'MANAGER') return 'MANAGER';
+    return 'EXECUTIVE';
+  };
+  const accessLevel = getAccessLevel();
 
-// =============================================
-// MAIN COMPONENT - UNIFIED SALES DASHBOARD
-// =============================================
-export default function SalesDashboard() {
-  const navigate = useNavigate();
-  
-  // ROLE TOGGLE STATE (Sales Head vs Executive)
-  const [viewRole, setViewRole] = useState(() => {
-    const currentName = sessionStorage.getItem('hms_name');
-    return currentName === 'Sales Head' ? 'HEAD' : 'EXEC';
-  }); 
-  const isHeadView = viewRole === 'HEAD';
-  
-  const [execPersona, setExecPersona] = useState(() => {
-    const currentName = sessionStorage.getItem('hms_name');
-    return currentName === 'Sales Head' ? 'Amit Sharma' : (currentName || 'Priya Patel');
-  }); 
-
-  const [activeTab, setActiveTab] = useState('overview');
-  const [isLoading, setIsLoading] = useState(true);
-  const [timePeriod, setTimePeriod] = useState('Monthly');
-  
-  // ─── Pagination States ──────────────────────────────────────
-  const [accountsPage, setAccountsPage] = useState(1);
-  const ACCOUNTS_PER_PAGE = 6;
-  const [tasksPage, setTasksPage] = useState(1);
-  const TASKS_PER_PAGE = 5;
-
-  // ─── Broadcast States (Real-Time SSE) ──────────────────────────────────────
+  // ─── Broadcast States ──────────────────────────────────────
   const [broadcasts, setBroadcasts] = React.useState([]);
   const [dismissedBroadcasts, setDismissedBroadcasts] = React.useState(() => {
     try { return JSON.parse(localStorage.getItem('hms_dismissed_broadcasts')) || []; } catch { return []; }
@@ -310,11 +295,34 @@ export default function SalesDashboard() {
     localStorage.setItem('hms_dismissed_broadcasts', JSON.stringify(dismissedBroadcasts));
   }, [dismissedBroadcasts]);
 
+  const fetchBroadcasts = React.useCallback(async () => {
+    try {
+      const token = sessionStorage.getItem('hms_token');
+      const res = await fetch(`http://localhost:3000/api/broadcasts`, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (res?.ok) {
+        const data = await res.json();
+        setBroadcasts(data.data.broadcasts || []);
+      }
+    } catch (e) {
+      console.error('Failed to fetch broadcasts:', e);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fetchBroadcasts();
+    const interval = setInterval(fetchBroadcasts, 30000);
+    return () => clearInterval(interval);
+  }, [fetchBroadcasts]);
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState(accessLevel === 'EXECUTIVE' ? 'tasks' : 'overview');
+  const [isLoading, setIsLoading] = useState(true);
+  const [timePeriod, setTimePeriod] = useState('Monthly');
+
   // Database Connected States
   const [currentUser, setCurrentUser] = useState({
     initials: 'ST', name: 'Loading...', target: 1200000, achieved: 0, baseIncentiveRate: 0.025
   });
-  
+
   // Sales Head Specific State
   const [teamPerformance, setTeamPerformance] = useState([]);
   const TEAM_MEMBERS = [
@@ -341,7 +349,9 @@ export default function SalesDashboard() {
   const [bookingModes, setBookingModes] = useState([]);
   const [otaData, setOtaData] = useState([]);
   const [leadSearch, setLeadSearch] = useState('');
-  
+  const [accountsPage, setAccountsPage] = useState(1);
+  const [tasksPage, setTasksPage] = useState(1);
+
   // Inventory State
   const [inventoryDate, setInventoryDate] = useState(new Date().toISOString().split('T')[0]);
   const [inventoryData, setInventoryData] = useState(null);
@@ -363,7 +373,7 @@ export default function SalesDashboard() {
 
   const fetchData = async (silent = false) => {
     try {
-      if (!silent) setIsLoading(true); 
+      if (!silent) setIsLoading(true);
       const [userRes, accountsRes, tasksRes, otaRes, modesRes, teamRes, teamTasksRes, leadsRes] = await Promise.all([
         fetch(`${API_BASE_URL}/api/sales/me`, { headers: getHeaders() }),
         fetch(`${API_BASE_URL}/api/sales/accounts`, { headers: getHeaders() }),
@@ -382,7 +392,7 @@ export default function SalesDashboard() {
 
       if (teamRes.ok) {
         const data = await teamRes.json();
-        setTeamPerformance(data.data.sort((a,b) => b.achieved - a.achieved));
+        setTeamPerformance(data.data.sort((a, b) => b.achieved - a.achieved));
       }
 
       if (leadsRes.ok) {
@@ -398,7 +408,7 @@ export default function SalesDashboard() {
           contact_email: lead.contact_email,
           contact_phone: lead.contact_phone,
           assignee: lead.assignee_name || 'Self',
-          avatar: lead.assignee_name ? lead.assignee_name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase() : 'ME'
+          avatar: lead.assignee_name ? lead.assignee_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'ME'
         })));
       }
 
@@ -427,8 +437,8 @@ export default function SalesDashboard() {
         const data = await tasksRes.json();
         const tasks = data.data;
         setOngoingTasks(tasks.filter(t => !t.assigner || t.assigner === 'Self').map(t => ({
-          id: t.id, title: t.title, type: t.type, status: t.status, 
-          client: t.client, time: new Date(t.deadline).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+          id: t.id, title: t.title, type: t.type, status: t.status,
+          client: t.client, time: new Date(t.deadline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         })));
         setAssignedTasks(tasks.filter(t => t.assigner && t.assigner !== 'Self').map(t => ({
           id: t.id, title: t.title, assigner: t.assigner, priority: t.priority,
@@ -440,7 +450,7 @@ export default function SalesDashboard() {
         const data = await otaRes.json();
         setOtaData(data.data.map(ota => ({
           name: ota.name, color: ota.color, bookings: ota.bookings, roomNights: ota.room_nights,
-          grossRevenue: parseFloat(ota.gross_revenue), commissionRate: parseFloat(ota.commission_rate), 
+          grossRevenue: parseFloat(ota.gross_revenue), commissionRate: parseFloat(ota.commission_rate),
           cancelRate: parseFloat(ota.cancel_rate), status: ota.status
         })));
       }
@@ -453,7 +463,7 @@ export default function SalesDashboard() {
           'Call Enquiry': { color: '#f59e0b', icon: <PhoneCall size={14} /> },
           'Different Websites': { color: '#10b981', icon: <Target size={14} /> },
         };
-        
+
         setBookingModes(data.data.map(mode => ({
           label: mode.label, value: parseFloat(mode.value),
           color: modeMeta[mode.label]?.color || '#94a3b8',
@@ -474,9 +484,9 @@ export default function SalesDashboard() {
           { name: 'Sunset Terrace', capacity: 250, color: '#f59e0b', events: [{ name: 'Maintenance', start: 8, end: 22, type: 'maintenance' }] },
         ],
         groupBlocks: [
-          { company: 'Reliance Retreat', dates: '24 Jul - 26 Jul', blocked: 15, picked_up: 12, rm_step: 5 }, 
-          { company: 'TechNova Summit', dates: '01 Aug - 05 Aug', blocked: 25, picked_up: 5, rm_step: 3 }, 
-          { company: 'Global Traders Meet', dates: '10 Aug - 12 Aug', blocked: 40, picked_up: 0, rm_step: 2 }, 
+          { company: 'Reliance Retreat', dates: '24 Jul - 26 Jul', blocked: 15, picked_up: 12, rm_step: 5 },
+          { company: 'TechNova Summit', dates: '01 Aug - 05 Aug', blocked: 25, picked_up: 5, rm_step: 3 },
+          { company: 'Global Traders Meet', dates: '10 Aug - 12 Aug', blocked: 40, picked_up: 0, rm_step: 2 },
         ],
         marketPulse: { cityOccupancy: 82, compAdr: 5200, demandTrend: '+12%' },
         yieldRecommendation: { suggestedMinRate: 4100, standardRate: 5500, confidence: 'High' }
@@ -501,7 +511,7 @@ export default function SalesDashboard() {
   const handleAddLead = async (e) => {
     e.preventDefault();
     setIsSubmittingLead(true);
-    
+
     const previousLeads = [...myLeads];
     const optimisticLead = {
       id: 'temp-' + Date.now(), company: newLeadForm.company, deal: newLeadForm.deal_name,
@@ -509,7 +519,7 @@ export default function SalesDashboard() {
       contactName: newLeadForm.contact_name, contactEmail: newLeadForm.contact_email, contactPhone: newLeadForm.contact_phone,
       assignee: isHeadView ? newLeadForm.assigned_to : execPersona
     };
-    
+
     setMyLeads(prev => [optimisticLead, ...prev]);
     setShowAddLeadModal(false);
 
@@ -570,7 +580,7 @@ export default function SalesDashboard() {
   const updateTaskStatus = async (taskId, newStatus) => {
     const previousTasks = [...ongoingTasks];
     setOngoingTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
-    
+
     try {
       const res = await fetch(`${API_BASE_URL}/api/sales/tasks/${taskId}/status`, {
         method: 'PATCH',
@@ -579,7 +589,7 @@ export default function SalesDashboard() {
       });
       if (!res.ok) throw new Error('API failed');
       toast.success('Task status updated');
-    } catch(e) {
+    } catch (e) {
       setOngoingTasks(previousTasks);
       toast.error('Failed to update task status.');
     }
@@ -600,7 +610,7 @@ export default function SalesDashboard() {
     toast.success(`Block request sent to Revenue Manager for ${blockForm.company}.`);
     setBlockForm({ company: '', roomType: 'Standard Room', roomsNeeded: '', startDate: '', endDate: '' });
   };
-  
+
   const handleGenerateProForma = (company) => {
     toast.success(`Generating Pro Forma Contract for ${company}...`);
     setTimeout(() => {
@@ -611,7 +621,7 @@ export default function SalesDashboard() {
   const handleAssignTask = async (e) => {
     e.preventDefault();
     setIsAssigningTask(true);
-    
+
     // Find the ID of the selected assignee
     const assigneeMember = teamPerformance.find(m => m.name === assignTaskForm.assignee);
     const assignedToId = assigneeMember ? assigneeMember.id : currentUser.id;
@@ -667,10 +677,10 @@ export default function SalesDashboard() {
     e.preventDefault();
     const newTarget = parseFloat(editTargetForm.target) || 0;
     const memberId = editTargetForm.id;
-    
+
     // Optimistic update
     setTeamPerformance(prev => prev.map(m => m.id === memberId ? { ...m, target: newTarget } : m).sort((a, b) => b.achieved - a.achieved));
-    
+
     try {
       const res = await fetch(`${API_BASE_URL}/api/sales/team/${memberId}/target`, {
         method: 'PATCH',
@@ -704,10 +714,14 @@ export default function SalesDashboard() {
     };
   };
 
-  // Dynamic Dervied Data based on Role
+  // Dynamic Derived Data based on Role
+  const isHeadView = accessLevel === 'SUPER_ADMIN' || accessLevel === 'ADMIN' || (sessionStorage.getItem('hms_role') || '').toUpperCase() === 'SALES_HEAD';
+  const execPersona = currentUser?.name || 'Self';
   const effectiveLeads = isHeadView ? myLeads : myLeads.filter(l => l.assignee === execPersona || l.assignee === 'Self');
   const filteredLeads = effectiveLeads.filter(l => (l.company + l.deal + l.contactName).toLowerCase().includes(leadSearch.toLowerCase()));
-  
+
+  const ACCOUNTS_PER_PAGE = 5;
+  const TASKS_PER_PAGE = 5;
   const paginatedAccounts = myAccounts.slice((accountsPage - 1) * ACCOUNTS_PER_PAGE, accountsPage * ACCOUNTS_PER_PAGE);
   const totalAccountPages = Math.max(1, Math.ceil(myAccounts.length / ACCOUNTS_PER_PAGE));
   const paginatedTasks = ongoingTasks.slice((tasksPage - 1) * TASKS_PER_PAGE, tasksPage * TASKS_PER_PAGE);
@@ -731,7 +745,7 @@ export default function SalesDashboard() {
   const displayTarget = isHeadView ? teamPerformance.reduce((s, t) => s + (t.target || 0), 0) : currentUser.target;
   const displayAchieved = isHeadView ? teamPerformance.reduce((s, t) => s + (t.achieved || 0), 0) : currentUser.achieved;
   const displayIncentiveRate = currentUser.baseIncentiveRate || 0.025;
-  const displayInitials = isHeadView ? 'SH' : (currentUser.name ? currentUser.name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase() : 'ME');
+  const displayInitials = isHeadView ? 'SH' : (currentUser.name ? currentUser.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'ME');
   const displayName = isHeadView ? 'Sales Head' : currentUser.name;
 
   // Enhanced Theme Map
@@ -745,16 +759,30 @@ export default function SalesDashboard() {
     orange: { gradient: 'from-orange-50 via-white to-white', ring: 'ring-orange-500/10', glow: 'rgba(212,163,115,0.35)', iconBg: 'bg-[#D4A373] text-white shadow-lg shadow-[#D4A373]/30' }
   };
 
-  const navGroups = isHeadView ? [
-    { heading: 'Leadership', items: [{ key: 'overview', label: 'Team Overview', icon: <TrendingUp size={15} /> }, { key: 'team', label: 'Manage Team', icon: <UserCog size={15} /> }] },
-    { heading: 'Global Pipeline', items: [{ key: 'pipeline', label: 'Master Pipeline', icon: <Target size={15} /> }, { key: 'accounts', label: 'Key Accounts', icon: <Briefcase size={15} /> }] },
-    { heading: 'Distribution', items: [{ key: 'modes', label: 'Booking Sources', icon: <Activity size={15} /> }, { key: 'ota', label: 'OTA Performance', icon: <Globe size={15} /> }] },
-    { heading: 'Property Assets', items: [{ key: 'inventory', label: 'Room & Banquet Inventory', icon: <BedDouble size={15} /> }] },
-  ] : [
-    { heading: 'My Workspace', items: [{ key: 'overview', label: 'My Performance', icon: <TrendingUp size={15} /> }, { key: 'tasks', label: 'Task Management', icon: <ListTodo size={15} /> }] },
-    { heading: 'Pipeline & Accounts', items: [{ key: 'pipeline', label: 'My Pipeline', icon: <Target size={15} /> }, { key: 'accounts', label: 'My Accounts', icon: <Briefcase size={15} /> }] },
-    { heading: 'Sources & Channels', items: [{ key: 'modes', label: 'Booking Modes', icon: <Activity size={15} /> }, { key: 'ota', label: 'OTA Performance', icon: <Globe size={15} /> }] },
-    { heading: 'Property Assets', items: [{ key: 'inventory', label: 'Room & Banquet Inventory', icon: <BedDouble size={15} /> }] },
+  const navGroups = [
+    {
+      heading: 'My Workspace',
+      items: [
+        ...(accessLevel !== 'EXECUTIVE' ? [{ key: 'overview', label: 'My Performance', icon: <TrendingUp size={15} /> }] : []),
+        { key: 'tasks', label: 'Task Management', icon: <ListTodo size={15} /> },
+      ],
+    },
+    {
+      heading: 'Pipeline & Accounts',
+      items: [
+        { key: 'pipeline', label: 'Lead Pipeline', icon: <Target size={15} /> },
+        { key: 'accounts', label: 'My Accounts', icon: <Briefcase size={15} /> },
+      ],
+    },
+    ...(accessLevel !== 'EXECUTIVE' ? [
+      {
+        heading: 'Sources & Channels',
+        items: [
+          { key: 'modes', label: 'Booking Modes', icon: <Activity size={15} /> },
+          { key: 'ota', label: 'OTA Performance', icon: <Globe size={15} /> },
+        ],
+      }
+    ] : [])
   ];
   const navItems = navGroups.flatMap(g => g.items);
 
@@ -769,10 +797,10 @@ export default function SalesDashboard() {
     return (
       <div className="flex items-center w-full max-w-[200px] mt-1.5 opacity-90">
         {steps.map((s, i) => (
-           <div key={s} className="flex-1 flex items-center">
-              <div className={`w-2 h-2 shrink-0 rounded-full ${i < currentStep ? 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]' : i === currentStep ? 'bg-amber-400 animate-pulse' : 'bg-zinc-200'}`} title={s} />
-              {i < steps.length - 1 && <div className={`flex-1 h-0.5 ${i < currentStep - 1 ? 'bg-emerald-500' : 'bg-zinc-200'}`} />}
-           </div>
+          <div key={s} className="flex-1 flex items-center">
+            <div className={`w-2 h-2 shrink-0 rounded-full ${i < currentStep ? 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]' : i === currentStep ? 'bg-amber-400 animate-pulse' : 'bg-zinc-200'}`} title={s} />
+            {i < steps.length - 1 && <div className={`flex-1 h-0.5 ${i < currentStep - 1 ? 'bg-emerald-500' : 'bg-zinc-200'}`} />}
+          </div>
         ))}
       </div>
     );
@@ -818,8 +846,8 @@ export default function SalesDashboard() {
                     key={item.key}
                     onClick={() => setActiveTab(item.key)}
                     className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === item.key
-                        ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
-                        : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
+                      ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+                      : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
                       }`}
                   >
                     {item.icon} {item.label}
@@ -839,34 +867,16 @@ export default function SalesDashboard() {
               {navItems.find(i => i.key === activeTab)?.label || 'Overview'}
             </h2>
             <p className="text-xs text-zinc-500 mt-1">
-              {activeTab === 'inventory' 
-                ? 'Monitor live room allotments, group blocks, and banquet availability.' 
-                : isHeadView 
+              {activeTab === 'inventory'
+                ? 'Monitor live room allotments, group blocks, and banquet availability.'
+                : isHeadView
                   ? 'Manage your entire sales team, analyze global pipeline, and oversee distribution.'
                   : 'Manage your active deals, daily tasks, and track your quota.'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            
-            {/* DEV TOGGLE FOR PREVIEWING ROLES */}
-            <div className="flex bg-zinc-100 p-1 rounded-xl items-center shadow-inner gap-1">
-               <button onClick={() => { setViewRole('HEAD'); setActiveTab('overview'); }} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${isHeadView ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 hover:text-zinc-700'}`}>Sales Head</button>
-               <div className="relative flex items-center">
-                 <button onClick={() => { setViewRole('EXEC'); setActiveTab('overview'); }} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${!isHeadView ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 hover:text-zinc-700'}`}>Executive</button>
-                 {!isHeadView && (
-                   <div className="ml-1 relative flex items-center bg-white border border-zinc-200 rounded-lg px-2 shadow-sm">
-                     <select 
-                       value={execPersona} 
-                       onChange={(e) => setExecPersona(e.target.value)}
-                       className="appearance-none bg-transparent text-[10px] font-bold text-[#D4A373] py-1.5 pr-4 outline-none cursor-pointer"
-                     >
-                       {TEAM_MEMBERS.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
-                     </select>
-                     <ChevronDown size={10} className="text-zinc-400 absolute right-2 pointer-events-none" />
-                   </div>
-                 )}
-               </div>
-            </div>
+
+            {/* DEV TOGGLE REMOVED TO FIX REFERENCE ERRORS */}
 
             <button onClick={() => refresh()} className={`p-2.5 rounded-xl border border-zinc-200/80 bg-white hover:bg-zinc-50 text-zinc-500 transition-all ${isLoading ? 'animate-spin' : ''}`}>
               <RefreshCw size={15} />
@@ -880,6 +890,13 @@ export default function SalesDashboard() {
               <Plus size={14} /> Add Lead
             </button>
             {(() => {
+              const staffName = sessionStorage.getItem('hms_name') || 'Staff';
+              const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
+              let designation = 'Sales admin';
+              try {
+                const user = JSON.parse(sessionStorage.getItem('hms_user'));
+                if (user && user.designation) designation = user.designation;
+              } catch (e) { console.error(e); }
               return (
                 <motion.button
                   whileHover={{ y: -2 }}
@@ -959,11 +976,11 @@ export default function SalesDashboard() {
                       { label: isHeadView ? 'Team Target' : 'My Target', value: `₹${(displayTarget / 100000).toFixed(1)}L`, sub: 'Monthly Goal', icon: <Target size={16} />, theme: 'indigo', pct: displayTarget ? Math.min(displayAchieved / displayTarget, 1) : 0 },
                       { label: isHeadView ? 'Team Revenue' : 'Revenue Generated', value: `₹${(displayAchieved / 100000).toFixed(1)}L`, sub: `${Math.round((displayAchieved / displayTarget) * 100)}% of Target`, icon: <TrendingUp size={16} />, theme: 'emerald' },
                       { label: isHeadView ? 'Global Pipeline Deals' : 'Deals In Pipeline', value: activeDealsCount, sub: `₹${(myPipelineValue / 100000).toFixed(1)}L Total Value`, icon: <Briefcase size={16} />, theme: 'amber' },
-                      { label: isHeadView ? 'Overall Conversion' : 'Pending Tasks', value: isHeadView ? '28%' : pendingTasksCount, sub: isHeadView ? '+3% from last month' : 'Ongoing & Assigned', icon: isHeadView ? <Handshake size={16}/> : <CheckSquare size={16} />, theme: 'rose' },
+                      { label: isHeadView ? 'Overall Conversion' : 'Pending Tasks', value: isHeadView ? '28%' : pendingTasksCount, sub: isHeadView ? '+3% from last month' : 'Ongoing & Assigned', icon: isHeadView ? <Handshake size={16} /> : <CheckSquare size={16} />, theme: 'rose' },
                     ].map((kpi, i) => {
                       const t = enhancedThemeMap[kpi.theme];
                       const dotColor = { indigo: '#4f46e5', emerald: '#10b981', amber: '#f59e0b', rose: '#e11d48' }[kpi.theme] || '#D4A373';
-                      
+
                       return (
                         <motion.div
                           key={i}
@@ -1042,7 +1059,7 @@ export default function SalesDashboard() {
                             const isTop = idx === 0;
                             return (
                               <div key={member.id} className={`p-3 rounded-xl border ${isTop ? 'bg-amber-50 border-amber-200 shadow-sm' : 'bg-zinc-50 border-zinc-100'} flex items-center gap-3 relative overflow-hidden`}>
-                                {isTop && <div className="absolute top-0 right-0 w-12 h-12 bg-amber-400 blur-xl opacity-20 rounded-full"/>}
+                                {isTop && <div className="absolute top-0 right-0 w-12 h-12 bg-amber-400 blur-xl opacity-20 rounded-full" />}
                                 <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm bg-${member.color}-500 shrink-0`}>{member.avatar}</div>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center justify-between mb-0.5">
@@ -1051,7 +1068,7 @@ export default function SalesDashboard() {
                                   </div>
                                   <div className="flex items-center justify-between">
                                     <p className="text-[9px] text-zinc-500 font-semibold">{member.role}</p>
-                                    <p className="text-[9px] text-zinc-400 font-bold">{Math.round((member.achieved/member.target)*100)}% of quota</p>
+                                    <p className="text-[9px] text-zinc-400 font-bold">{Math.round((member.achieved / member.target) * 100)}% of quota</p>
                                   </div>
                                 </div>
                               </div>
@@ -1213,26 +1230,26 @@ export default function SalesDashboard() {
               {/* TAB: INVENTORY */}
               {activeTab === 'inventory' && (
                 <motion.div key="inventory" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
-                  
+
                   {/* Date Forecaster Banner */}
                   <div className="flex flex-col sm:flex-row items-center justify-between bg-white p-4 rounded-[1.5rem] border border-zinc-200/60 shadow-sm">
-                     <div className="flex items-center gap-3 text-sm font-bold uppercase text-zinc-800 tracking-wider mb-4 sm:mb-0">
-                       <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center border border-indigo-100">
-                         <CalendarRange size={16} className="text-indigo-600"/> 
-                       </div>
-                       Inventory Forecast
-                     </div>
-                     <div className="flex items-center gap-3 w-full sm:w-auto">
-                       <input 
-                         type="date" 
-                         value={inventoryDate} 
-                         onChange={e => setInventoryDate(e.target.value)} 
-                         className="fd-input py-2 text-xs flex-1 sm:w-auto cursor-pointer" 
-                       />
-                       <button onClick={() => setShowBlockModal(true)} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-indigo-700 transition shadow-sm flex items-center justify-center gap-2 shrink-0">
-                         <Lock size={14}/> Request Block
-                       </button>
-                     </div>
+                    <div className="flex items-center gap-3 text-sm font-bold uppercase text-zinc-800 tracking-wider mb-4 sm:mb-0">
+                      <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center border border-indigo-100">
+                        <CalendarRange size={16} className="text-indigo-600" />
+                      </div>
+                      Inventory Forecast
+                    </div>
+                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                      <input
+                        type="date"
+                        value={inventoryDate}
+                        onChange={e => setInventoryDate(e.target.value)}
+                        className="fd-input py-2 text-xs flex-1 sm:w-auto cursor-pointer"
+                      />
+                      <button onClick={() => setShowBlockModal(true)} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-indigo-700 transition shadow-sm flex items-center justify-center gap-2 shrink-0">
+                        <Lock size={14} /> Request Block
+                      </button>
+                    </div>
                   </div>
 
                   {/* Inventory KPIs */}
@@ -1245,7 +1262,7 @@ export default function SalesDashboard() {
                     ].map((kpi, i) => {
                       const t = enhancedThemeMap[kpi.theme];
                       const dotColor = { indigo: '#4f46e5', emerald: '#10b981', amber: '#f59e0b', rose: '#e11d48' }[kpi.theme] || '#D4A373';
-                      
+
                       return (
                         <motion.div
                           key={i}
@@ -1286,21 +1303,21 @@ export default function SalesDashboard() {
                             <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Room Class Availability</h3>
                           </div>
                         </div>
-                        
+
                         <div className="space-y-4 relative z-10">
                           {inventoryData?.roomClasses?.map((rc, idx) => {
                             const availPct = Math.round((rc.available / rc.total) * 100);
                             const blockedPct = Math.round((rc.group_blocked / rc.total) * 100);
                             const oooPct = Math.round((rc.out_of_order / rc.total) * 100);
                             const isLow = availPct < 20;
-                            
+
                             return (
                               <div key={idx} className="bg-zinc-50/80 p-4 rounded-[1.25rem] border border-zinc-100/80 flex flex-col gap-3">
                                 <div className="flex items-center justify-between">
                                   <h4 className="text-sm font-bold text-zinc-800">{rc.name}</h4>
                                   <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500 bg-white border border-zinc-200 px-2 py-0.5 rounded-md shadow-sm">₹{rc.price}/Night</span>
                                 </div>
-                                
+
                                 <div className="flex items-center gap-1.5 w-full h-2 rounded-full overflow-hidden bg-zinc-200">
                                   <motion.div initial={{ width: 0 }} animate={{ width: `${availPct}%` }} transition={{ duration: 0.8 }} className="h-full bg-emerald-500" title="Available" />
                                   <motion.div initial={{ width: 0 }} animate={{ width: `${blockedPct}%` }} transition={{ duration: 0.8 }} className="h-full bg-amber-500" title="Blocked" />
@@ -1309,8 +1326,8 @@ export default function SalesDashboard() {
                                 </div>
 
                                 <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider">
-                                  <span className={`flex items-center gap-1 ${isLow ? 'text-rose-500' : 'text-emerald-600'}`}><span className={`w-2 h-2 rounded-full ${isLow ? 'bg-rose-500' : 'bg-emerald-500'}`}/> {rc.available} Available</span>
-                                  <span className="flex items-center gap-1 text-amber-600"><span className="w-2 h-2 rounded-full bg-amber-500"/> {rc.group_blocked} Blocked</span>
+                                  <span className={`flex items-center gap-1 ${isLow ? 'text-rose-500' : 'text-emerald-600'}`}><span className={`w-2 h-2 rounded-full ${isLow ? 'bg-rose-500' : 'bg-emerald-500'}`} /> {rc.available} Available</span>
+                                  <span className="flex items-center gap-1 text-amber-600"><span className="w-2 h-2 rounded-full bg-amber-500" /> {rc.group_blocked} Blocked</span>
                                   <span className="flex items-center gap-1 text-zinc-500"> Total {rc.total}</span>
                                 </div>
                               </div>
@@ -1331,17 +1348,17 @@ export default function SalesDashboard() {
                           </div>
                           <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100/50 px-2 py-0.5 rounded border border-emerald-200 uppercase tracking-wider">AI Powered</span>
                         </div>
-                        
+
                         <div className="flex items-end justify-between bg-white p-4 rounded-[1.25rem] border border-emerald-100 shadow-sm relative overflow-hidden">
-                           <div className="absolute top-0 right-0 w-1.5 h-full bg-emerald-500" />
-                           <div>
-                             <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider mb-1">Suggested Min Group Rate</p>
-                             <p className="text-2xl font-black text-emerald-600">₹{inventoryData?.yieldRecommendation?.suggestedMinRate}</p>
-                           </div>
-                           <div className="text-right">
-                             <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider mb-1">Standard Rate</p>
-                             <p className="text-lg font-bold text-zinc-500 line-through">₹{inventoryData?.yieldRecommendation?.standardRate}</p>
-                           </div>
+                          <div className="absolute top-0 right-0 w-1.5 h-full bg-emerald-500" />
+                          <div>
+                            <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider mb-1">Suggested Min Group Rate</p>
+                            <p className="text-2xl font-black text-emerald-600">₹{inventoryData?.yieldRecommendation?.suggestedMinRate}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider mb-1">Standard Rate</p>
+                            <p className="text-lg font-bold text-zinc-500 line-through">₹{inventoryData?.yieldRecommendation?.standardRate}</p>
+                          </div>
                         </div>
                         <p className="text-[10px] text-zinc-500 mt-3 font-semibold leading-relaxed">
                           Based on 30-day price elasticity and current inventory compression, the Revenue Manager is highly likely to approve group deals at or above the suggested minimum rate.
@@ -1376,60 +1393,60 @@ export default function SalesDashboard() {
 
                   {/* Interactive Banquet Gantt Calendar */}
                   <motion.div whileHover={{ y: -2 }} className="group relative overflow-hidden bg-white rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
-                     <div className="relative flex items-center justify-between mb-6">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-lg bg-rose-500 flex items-center justify-center shadow-md"><PartyPopper size={14} className="text-white" /></div>
-                          <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Event Spaces Timeline (08:00 - 22:00)</h3>
-                        </div>
+                    <div className="relative flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-rose-500 flex items-center justify-center shadow-md"><PartyPopper size={14} className="text-white" /></div>
+                        <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Event Spaces Timeline (08:00 - 22:00)</h3>
                       </div>
+                    </div>
 
-                      <div className="relative border border-zinc-100 rounded-[1.25rem] overflow-hidden bg-zinc-50/50">
-                        {/* Timeline Header */}
-                        <div className="flex items-center border-b border-zinc-200/80 bg-zinc-100/50">
-                           <div className="w-40 shrink-0 p-3 text-[10px] font-black uppercase text-zinc-400 tracking-wider border-r border-zinc-200/80">Space</div>
-                           <div className="flex-1 flex text-[9px] font-bold text-zinc-400 uppercase tracking-widest px-2">
-                             {[8, 10, 12, 14, 16, 18, 20, 22].map(h => (
-                               <div key={h} className="flex-1 text-center border-l border-zinc-200/50 py-3">{h}:00</div>
-                             ))}
-                           </div>
-                        </div>
-                        
-                        {/* Timeline Rows */}
-                        <div className="flex flex-col divide-y divide-zinc-200/60">
-                          {inventoryData?.banquets?.map((bq, idx) => (
-                            <div key={idx} className="flex items-stretch min-h-[60px] hover:bg-white transition-colors">
-                              <div className="w-40 shrink-0 p-3 border-r border-zinc-200/80 flex flex-col justify-center bg-white z-10">
-                                <span className="text-xs font-bold text-zinc-800 leading-tight">{bq.name}</span>
-                                <span className="text-[9px] text-zinc-500 font-semibold">{bq.capacity} Pax</span>
-                              </div>
-                              <div className="flex-1 relative mx-2 my-2 rounded-xl bg-zinc-100 overflow-hidden">
-                                 {/* Grid Lines Overlay */}
-                                 <div className="absolute inset-0 flex pointer-events-none">
-                                   {[...Array(8)].map((_, i) => <div key={i} className="flex-1 border-l border-zinc-200/40 h-full" />)}
-                                 </div>
-                                 {/* Event Blocks */}
-                                 {bq.events?.map((ev, eIdx) => {
-                                    // Math: Timeline is 14 hours (8 to 22). 
-                                    const totalHours = 14;
-                                    const leftPct = ((ev.start - 8) / totalHours) * 100;
-                                    const widthPct = ((ev.end - ev.start) / totalHours) * 100;
-                                    
-                                    return (
-                                      <div 
-                                        key={eIdx}
-                                        className="absolute top-1 bottom-1 rounded-lg flex items-center justify-center text-[10px] font-bold text-white shadow-sm overflow-hidden whitespace-nowrap px-2 cursor-pointer transition-transform hover:scale-[1.02]"
-                                        style={{ left: `${leftPct}%`, width: `${widthPct}%`, backgroundColor: ev.type === 'maintenance' ? '#f59e0b' : bq.color }}
-                                        title={`${ev.name} (${ev.start}:00 - ${ev.end}:00)`}
-                                      >
-                                        {ev.name}
-                                      </div>
-                                    )
-                                 })}
-                              </div>
-                            </div>
+                    <div className="relative border border-zinc-100 rounded-[1.25rem] overflow-hidden bg-zinc-50/50">
+                      {/* Timeline Header */}
+                      <div className="flex items-center border-b border-zinc-200/80 bg-zinc-100/50">
+                        <div className="w-40 shrink-0 p-3 text-[10px] font-black uppercase text-zinc-400 tracking-wider border-r border-zinc-200/80">Space</div>
+                        <div className="flex-1 flex text-[9px] font-bold text-zinc-400 uppercase tracking-widest px-2">
+                          {[8, 10, 12, 14, 16, 18, 20, 22].map(h => (
+                            <div key={h} className="flex-1 text-center border-l border-zinc-200/50 py-3">{h}:00</div>
                           ))}
                         </div>
                       </div>
+
+                      {/* Timeline Rows */}
+                      <div className="flex flex-col divide-y divide-zinc-200/60">
+                        {inventoryData?.banquets?.map((bq, idx) => (
+                          <div key={idx} className="flex items-stretch min-h-[60px] hover:bg-white transition-colors">
+                            <div className="w-40 shrink-0 p-3 border-r border-zinc-200/80 flex flex-col justify-center bg-white z-10">
+                              <span className="text-xs font-bold text-zinc-800 leading-tight">{bq.name}</span>
+                              <span className="text-[9px] text-zinc-500 font-semibold">{bq.capacity} Pax</span>
+                            </div>
+                            <div className="flex-1 relative mx-2 my-2 rounded-xl bg-zinc-100 overflow-hidden">
+                              {/* Grid Lines Overlay */}
+                              <div className="absolute inset-0 flex pointer-events-none">
+                                {[...Array(8)].map((_, i) => <div key={i} className="flex-1 border-l border-zinc-200/40 h-full" />)}
+                              </div>
+                              {/* Event Blocks */}
+                              {bq.events?.map((ev, eIdx) => {
+                                // Math: Timeline is 14 hours (8 to 22). 
+                                const totalHours = 14;
+                                const leftPct = ((ev.start - 8) / totalHours) * 100;
+                                const widthPct = ((ev.end - ev.start) / totalHours) * 100;
+
+                                return (
+                                  <div
+                                    key={eIdx}
+                                    className="absolute top-1 bottom-1 rounded-lg flex items-center justify-center text-[10px] font-bold text-white shadow-sm overflow-hidden whitespace-nowrap px-2 cursor-pointer transition-transform hover:scale-[1.02]"
+                                    style={{ left: `${leftPct}%`, width: `${widthPct}%`, backgroundColor: ev.type === 'maintenance' ? '#f59e0b' : bq.color }}
+                                    title={`${ev.name} (${ev.start}:00 - ${ev.end}:00)`}
+                                  >
+                                    {ev.name}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </motion.div>
 
                   {/* Group Blocks Ledger with RM Stepper & Pro Forma Action */}
@@ -1479,7 +1496,7 @@ export default function SalesDashboard() {
                       </table>
                     </div>
                   </div>
-                  
+
                 </motion.div>
               )}
 
@@ -1540,7 +1557,7 @@ export default function SalesDashboard() {
                             </div>
                           </div>
                         ))}
-                        
+
                         {totalTaskPages > 1 && (
                           <div className="flex items-center justify-between mt-auto pt-4 border-t border-zinc-100">
                             <button disabled={tasksPage === 1} onClick={() => setTasksPage(p => p - 1)} className="px-3 py-1 rounded-lg border border-zinc-200 text-[10px] font-bold text-zinc-600 disabled:opacity-50 hover:bg-zinc-50">Previous</button>
@@ -1716,36 +1733,36 @@ export default function SalesDashboard() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                     {[
-                      { 
-                        label: 'Total Gross Revenue', 
-                        value: `₹${(totalOtaGross / 100000).toFixed(2)}L`, 
-                        sub: 'All OTA Channels', 
-                        icon: <Globe size={16} />, 
+                      {
+                        label: 'Total Gross Revenue',
+                        value: `₹${(totalOtaGross / 100000).toFixed(2)}L`,
+                        sub: 'All OTA Channels',
+                        icon: <Globe size={16} />,
                         theme: 'sky',
                         graphicIndex: 1
                       },
-                      { 
-                        label: 'Commission Paid', 
-                        value: `₹${(totalOtaCommission / 100000).toFixed(2)}L`, 
-                        sub: `${totalOtaGross > 0 ? ((totalOtaCommission / totalOtaGross) * 100).toFixed(1) : 0}% Avg Commission`, 
-                        icon: <Percent size={16} />, 
+                      {
+                        label: 'Commission Paid',
+                        value: `₹${(totalOtaCommission / 100000).toFixed(2)}L`,
+                        sub: `${totalOtaGross > 0 ? ((totalOtaCommission / totalOtaGross) * 100).toFixed(1) : 0}% Avg Commission`,
+                        icon: <Percent size={16} />,
                         theme: 'rose',
                         graphicIndex: 2
                       },
-                      { 
-                        label: 'Net Revenue', 
-                        value: `₹${(totalOtaNet / 100000).toFixed(2)}L`, 
-                        sub: `${totalOtaGross > 0 ? ((totalOtaNet / totalOtaGross) * 100).toFixed(1) : '0.0'}% Net Margin Retained`, 
-                        icon: <DollarSign size={16} />, 
+                      {
+                        label: 'Net Revenue',
+                        value: `₹${(totalOtaNet / 100000).toFixed(2)}L`,
+                        sub: `${totalOtaGross > 0 ? ((totalOtaNet / totalOtaGross) * 100).toFixed(1) : '0.0'}% Net Margin Retained`,
+                        icon: <DollarSign size={16} />,
                         theme: 'emerald',
                         graphicIndex: 3,
                         pct: totalOtaGross > 0 ? totalOtaNet / totalOtaGross : 0
                       },
-                      { 
-                        label: 'Avg Cancel Rate', 
-                        value: `${avgCancelRate}%`, 
-                        sub: 'Across platforms', 
-                        icon: <TrendingDown size={16} />, 
+                      {
+                        label: 'Avg Cancel Rate',
+                        value: `${avgCancelRate}%`,
+                        sub: 'Across platforms',
+                        icon: <TrendingDown size={16} />,
                         theme: 'violet',
                         graphicIndex: 0,
                         pct: parseFloat(avgCancelRate) / 100
@@ -1753,7 +1770,7 @@ export default function SalesDashboard() {
                     ].map((kpi, i) => {
                       const t = enhancedThemeMap[kpi.theme];
                       const dotColor = { sky: '#0ea5e9', rose: '#e11d48', emerald: '#10b981', violet: '#8b5cf6' }[kpi.theme] || '#D4A373';
-                      
+
                       return (
                         <motion.div
                           key={i}
@@ -1889,7 +1906,7 @@ export default function SalesDashboard() {
       {/* =============================================
           MODAL SYSTEM
       ============================================= */}
-      
+
       {/* Generate Report Modal */}
       <AnimatePresence>
         {showReportModal && (
@@ -1949,7 +1966,7 @@ export default function SalesDashboard() {
                   <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Export Format</label>
                   <div className="grid grid-cols-3 gap-3">
                     {['PDF Document', 'CSV Excel', 'JSON'].map(fmt => (
-                      <div 
+                      <div
                         key={fmt}
                         onClick={() => setReportForm({ ...reportForm, format: fmt })}
                         className={`text-center py-2 rounded-xl cursor-pointer border text-xs font-bold transition-all ${reportForm.format === fmt ? 'bg-[#D4A373]/10 border-[#D4A373] text-[#D4A373]' : 'bg-white border-zinc-200 text-zinc-500 hover:border-zinc-300'}`}
@@ -2126,7 +2143,7 @@ export default function SalesDashboard() {
                     >
                       <option value="Self">Self (Unassigned)</option>
                       {teamPerformance.map(m => (
-                         <option key={m.id} value={m.name}>{m.name} ({m.role})</option>
+                        <option key={m.id} value={m.name}>{m.name} ({m.role})</option>
                       ))}
                     </select>
                   </div>

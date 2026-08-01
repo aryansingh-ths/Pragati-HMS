@@ -351,6 +351,16 @@ const backdropVariants = {
 
 export default function HousekeepingDashboard() {
   const navigate = useNavigate();
+  const getAccessLevel = () => {
+    let raw = sessionStorage.getItem('hms_access_level');
+    if (raw && raw !== 'undefined' && raw !== 'null') return raw;
+    let role = (sessionStorage.getItem('hms_role') || '').toUpperCase();
+    if (role === 'SUPER_ADMIN') return 'SUPER_ADMIN';
+    if (role === 'ADMIN') return 'ADMIN';
+    if (role === 'MANAGER') return 'MANAGER';
+    return 'EXECUTIVE';
+  };
+  const accessLevel = getAccessLevel();
 
   useEffect(() => {
     const appWrapper = document.querySelector('.min-h-screen.bg-\\[\\#FDFBF7\\]');
@@ -783,7 +793,11 @@ export default function HousekeepingDashboard() {
             {(() => {
               const staffName = sessionStorage.getItem('hms_name') || 'Staff';
               const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
-              const designation = 'Head Housekeeper';
+              let designation = 'Head Housekeeper';
+              try {
+                const user = JSON.parse(sessionStorage.getItem('hms_user'));
+                if (user && user.designation) designation = user.designation;
+              } catch(e) {}
               return (
                 <motion.button
                   whileHover={{ y: -2 }}
@@ -1126,15 +1140,17 @@ export default function HousekeepingDashboard() {
 
                                   {status === 'inspecting' && (
                                     <>
-                                      <RippleButton
-                                        onClick={() => handleApproveInspection(room.id)}
-                                        disabled={isSubmitting}
-                                        whileHover={{ scale: 1.02, y: -1 }}
-                                        whileTap={{ scale: 0.97 }}
-                                        className="flex-1 flex items-center justify-center gap-1.5 bg-gradient-to-r from-[#D4A373] to-[#B3835B] hover:from-emerald-600 hover:to-teal-600 text-white text-xs font-bold py-2.5 rounded-lg transition-all shadow-sm hover:shadow-md disabled:opacity-50"
-                                      >
-                                        <ShieldCheck size={13} /> Approve
-                                      </RippleButton>
+                                      {accessLevel !== 'EXECUTIVE' && (
+                                        <RippleButton
+                                          onClick={() => handleApproveInspection(room.id)}
+                                          disabled={isSubmitting}
+                                          whileHover={{ scale: 1.02, y: -1 }}
+                                          whileTap={{ scale: 0.97 }}
+                                          className="flex-1 flex items-center justify-center gap-1.5 bg-gradient-to-r from-[#D4A373] to-[#B3835B] hover:from-emerald-600 hover:to-teal-600 text-white text-xs font-bold py-2.5 rounded-lg transition-all shadow-sm hover:shadow-md disabled:opacity-50"
+                                        >
+                                          <ShieldCheck size={13} /> Approve
+                                        </RippleButton>
+                                      )}
                                       <motion.button
                                         whileHover={{ scale: 1.08, rotate: -6 }}
                                         whileTap={{ scale: 0.94 }}

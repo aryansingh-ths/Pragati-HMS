@@ -31,23 +31,35 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
         const { token, user } = data;
 
         sessionStorage.setItem('hms_token', token);
-        sessionStorage.setItem('hms_role', user.role);
+        sessionStorage.setItem('hms_role', user.role || 'EXECUTIVE'); // Fallback
         sessionStorage.setItem('hms_name', user.name);
+        sessionStorage.setItem('hms_access_level', user.access_level);
+        const role = user.role ? user.role.toUpperCase() : 'EXECUTIVE';
+        const accessLevel = user.access_level || role;
 
-        // Computed role tracking state and target routing maps
-        const role = user.role.toUpperCase();
+        let department = user.department;
+        if (!department) department = [role];
+        if (!Array.isArray(department)) department = [department];
+
+        sessionStorage.setItem('hms_department', JSON.stringify(department));
+        sessionStorage.setItem('hms_user', JSON.stringify(user));
+
         let redirectPath = '/';
-        
-        if (role === 'ADMIN') redirectPath = '/dashboard/Admin';
-        else if (role === 'FRONT_DESK' || role === 'RECEPTION') redirectPath = '/dashboard/front-desk';
-        else if (role === 'HOUSEKEEPING') redirectPath = '/dashboard/housekeeping';
-        else if (role === 'FINANCE') redirectPath = '/dashboard/finance';
-        else if (role === 'TRAVEL') redirectPath = '/dashboard/travel';
-        else if (role === 'RESTAURANT') redirectPath = '/dashboard/dining';
-        
-        // Treat Sales Leadership and Sales Executives as completely separate routing destinations
-        else if (role === 'SALES_HEAD') redirectPath = '/dashboard/sales';
-        else if (role === 'SALES_EXECUTIVE' || role === 'SALES') redirectPath = '/dashboard/sales-executive';
+
+        if (accessLevel === 'SUPER_ADMIN') {
+          redirectPath = '/dashboard/super-admin';
+        } else if (department.length > 1) {
+          redirectPath = '/workspace-selector';
+        } else {
+          const primaryDept = department[0];
+          if (accessLevel === 'ADMIN' && primaryDept === 'GLOBAL') redirectPath = '/dashboard/Admin';
+          else if (primaryDept === 'FRONT_DESK' || role === 'RECEPTION' || role === 'FRONT_DESK') redirectPath = '/dashboard/front-desk';
+          else if (primaryDept === 'HOUSEKEEPING' || role === 'HOUSEKEEPING') redirectPath = '/dashboard/housekeeping';
+          else if (primaryDept === 'FINANCE' || role === 'FINANCE') redirectPath = '/dashboard/finance';
+          else if (primaryDept === 'SALES' || role === 'SALES') redirectPath = '/dashboard/sales';
+          else if (primaryDept === 'TRAVEL' || role === 'TRAVEL') redirectPath = '/dashboard/travel';
+          else if (primaryDept === 'RESTAURANT' || role === 'RESTAURANT') redirectPath = '/dashboard/dining';
+        }
 
         completeLogin(role, token, redirectPath);
 
@@ -66,7 +78,9 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
     setUserRole(role);
     setAuthToken(token);
     setIsLoading(false);
-    navigate(redirectPath, { replace: true });
+    // Force a full page reload to ensure all React state is cleared between user sessions.
+    // Using navigate() keeps stale data from the previous user in memory.
+    window.location.href = redirectPath;
   };
 
   return (

@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useId, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Plane, MapPin, Users, Wallet, Clock, CheckCircle2, AlertTriangle, RefreshCw,
+import {
+  Plane, MapPin, Users, Wallet, Clock, CheckCircle2, AlertTriangle, RefreshCw,
   Download, Plus, X, Loader2, Search, Filter, TrendingUp, Building2, ArrowUpRight,
-  ShieldCheck, PieChart, Compass, CalendarClock, Phone, Mail, Star, Ban, CreditCard, LogOut, Zap, Car } from 'lucide-react';
+  ShieldCheck, PieChart, Compass, CalendarClock, Phone, Mail, Star, Ban, CreditCard, LogOut, Zap, Car
+} from 'lucide-react';
 
 const API_BASE = 'http://localhost:3000';
 const getToken = () => sessionStorage.getItem('hms_token');
@@ -31,7 +33,6 @@ function DonutChart({ data, size = 170, centerLabel = 'Booked' }) {
   const strokeWidth = 20;
   const cx = size / 2;
   const cy = size / 2;
-  let cumulativePercent = 0;
 
   const getCoord = (percent) => {
     const angle = percent * 2 * Math.PI - Math.PI / 2;
@@ -41,17 +42,17 @@ function DonutChart({ data, size = 170, centerLabel = 'Booked' }) {
   return (
     <div className="relative flex items-center justify-center">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        {data.map((segment, i) => {
+        {data.reduce((acc, segment, i) => {
           const percent = Number(segment.value) / total;
-          if (percent === 0) return null;
-          const startAngle = cumulativePercent;
-          cumulativePercent += percent;
-          const endAngle = cumulativePercent;
+          if (percent === 0) return acc;
+          const startAngle = acc.cumulativePercent;
+          acc.cumulativePercent += percent;
+          const endAngle = acc.cumulativePercent;
           const start = getCoord(startAngle);
           const end = getCoord(endAngle);
           const largeArc = percent > 0.5 ? 1 : 0;
           const d = `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 1 ${end.x} ${end.y}`;
-          return (
+          acc.elements.push(
             <motion.path
               key={i} d={d} fill="none" stroke={segment.color} strokeWidth={strokeWidth} strokeLinecap="round"
               initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: 1 }}
@@ -60,7 +61,8 @@ function DonutChart({ data, size = 170, centerLabel = 'Booked' }) {
               whileHover={{ strokeWidth: strokeWidth + 4 }}
             />
           );
-        })}
+          return acc;
+        }, { cumulativePercent: 0, elements: [] }).elements}
         <text x={cx} y={cy - 6} textAnchor="middle" className="fill-zinc-900" style={{ fontSize: '20px', fontWeight: 900 }}>{shortInr(total).replace('₹', '₹')}</text>
         <text x={cx} y={cy + 14} textAnchor="middle" className="fill-zinc-400" style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{centerLabel}</text>
       </svg>
@@ -174,7 +176,7 @@ function BarRankChart({ data = [] }) {
 // =============================================
 const kpiGraphic = (i, color, pct = null) => {
   const kind = i % 4;
-  
+
   if (kind === 0) {
     return (
       <div className="relative flex items-center justify-center shrink-0 ml-2 sm:ml-4">
@@ -217,12 +219,12 @@ const kpiGraphic = (i, color, pct = null) => {
     <div className="shrink-0 ml-2 sm:ml-4 border rounded-xl bg-white p-1.5 shadow-sm" style={{ borderColor: `${color}33` }}>
       <svg className="w-12 h-8 sm:w-16 sm:h-9 overflow-visible" viewBox="0 0 60 32">
         <defs>
-          <linearGradient id={`kpiYieldFill-${color.replace('#','')}`} x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={`kpiYieldFill-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={color} stopOpacity="0.35" />
             <stop offset="100%" stopColor={color} stopOpacity="0" />
           </linearGradient>
         </defs>
-        <motion.path d="M0 25 L12 18 L24 22 L36 10 L48 14 L60 4 V32 H0 Z" fill={`url(#kpiYieldFill-${color.replace('#','')})`}
+        <motion.path d="M0 25 L12 18 L24 22 L36 10 L48 14 L60 4 V32 H0 Z" fill={`url(#kpiYieldFill-${color.replace('#', '')})`}
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1, delay: 0.2 }} />
         <motion.path d="M0 25 L12 18 L24 22 L36 10 L48 14 L60 4" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"
           initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: 'easeOut', delay: 0.2 }} />
@@ -243,6 +245,17 @@ const modalVariants = {
 // MAIN COMPONENT
 // =============================================
 export default function TravelDashboard() {
+  const getAccessLevel = () => {
+    let raw = sessionStorage.getItem('hms_access_level');
+    if (raw && raw !== 'undefined' && raw !== 'null') return raw;
+    let role = (sessionStorage.getItem('hms_role') || '').toUpperCase();
+    if (role === 'SUPER_ADMIN') return 'SUPER_ADMIN';
+    if (role === 'ADMIN') return 'ADMIN';
+    if (role === 'MANAGER') return 'MANAGER';
+    return 'EXECUTIVE';
+  };
+  const accessLevel = getAccessLevel();
+
   // ─── Broadcast States ──────────────────────────────────────
   const [broadcasts, setBroadcasts] = React.useState([]);
   const [dismissedBroadcasts, setDismissedBroadcasts] = React.useState(() => {
@@ -272,7 +285,7 @@ export default function TravelDashboard() {
     return () => clearInterval(interval);
   }, [fetchBroadcasts]);
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(accessLevel === 'EXECUTIVE' ? 'bookings' : 'overview');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -550,10 +563,10 @@ export default function TravelDashboard() {
     {
       heading: 'Packages & Sales',
       items: [
-        { key: 'overview', label: 'Travel Overview', icon: <Compass size={15} /> },
+        ...(accessLevel !== 'EXECUTIVE' ? [{ key: 'overview', label: 'Travel Overview', icon: <Compass size={15} /> }] : []),
         { key: 'packages', label: 'Package Catalog', icon: <Plane size={15} /> },
-        { key: 'bookings', label: 'Package Bookings', icon: <CalendarClock size={15} /> },
-        { key: 'customers', label: 'Customers', icon: <Users size={15} /> },
+        { key: 'bookings', label: 'Bookings & Purchases', icon: <CalendarClock size={15} /> },
+        ...(accessLevel !== 'EXECUTIVE' ? [{ key: 'customers', label: 'Customers', icon: <Users size={15} /> }] : []),
       ],
     },
     {
@@ -637,9 +650,8 @@ export default function TravelDashboard() {
                   <button
                     key={item.key}
                     onClick={() => setActiveTab(item.key)}
-                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${
-                      activeTab === item.key ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
-                    }`}
+                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === item.key ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
+                      }`}
                   >
                     {item.icon} {item.label}
                   </button>
@@ -711,7 +723,11 @@ export default function TravelDashboard() {
             {(() => {
               const staffName = sessionStorage.getItem('hms_name') || 'Staff';
               const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
-              const designation = 'Travel Desk admin';
+              let designation = 'Travel Desk admin';
+              try {
+                const user = JSON.parse(sessionStorage.getItem('hms_user'));
+                if (user && user.designation) designation = user.designation;
+              } catch (e) { console.error(e); }
               return (
                 <motion.button
                   whileHover={{ y: -2 }}
@@ -808,7 +824,7 @@ export default function TravelDashboard() {
                         {overviewKpis.map((kpi, i) => {
                           const t = enhancedThemeMap[kpi.theme] || enhancedThemeMap['orange'];
                           const dotColor = { sky: '#0ea5e9', rose: '#e11d48', emerald: '#10b981', violet: '#8b5cf6', orange: '#D4A373' }[kpi.theme] || '#D4A373';
-                          
+
                           return (
                             <motion.div
                               key={i}
@@ -913,11 +929,10 @@ export default function TravelDashboard() {
                                   <td className="p-4 text-sm text-zinc-600">{new Date(b.travel_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
                                   <td className="p-4 text-sm font-bold text-zinc-900 text-right">{inr(b.amount)}</td>
                                   <td className="p-4 text-right">
-                                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
-                                      b.booking_status === 'Completed' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
-                                      : b.booking_status === 'Cancelled' ? 'bg-rose-50 text-rose-600 border-rose-200'
-                                      : 'bg-sky-50 text-sky-600 border-sky-200'
-                                    }`}>
+                                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${b.booking_status === 'Completed' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                        : b.booking_status === 'Cancelled' ? 'bg-rose-50 text-rose-600 border-rose-200'
+                                          : 'bg-sky-50 text-sky-600 border-sky-200'
+                                      }`}>
                                       {b.booking_status === 'Completed' ? <CheckCircle2 size={12} /> : b.booking_status === 'Cancelled' ? <Ban size={12} /> : <Clock size={12} />}
                                       {b.booking_status}
                                     </span>
@@ -1058,19 +1073,17 @@ export default function TravelDashboard() {
                                 <td className="p-4 text-sm text-zinc-600">{new Date(b.travel_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
                                 <td className="p-4 text-sm font-bold text-zinc-900 text-right">{inr(b.amount)}</td>
                                 <td className="p-4 text-right">
-                                  <span className={`px-2 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
-                                    b.payment_status === 'Paid' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
-                                    : b.payment_status === 'Partial' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
-                                    : b.payment_status === 'Refunded' ? 'bg-zinc-100 text-zinc-500 border-zinc-200'
-                                    : 'bg-rose-50 text-rose-600 border-rose-200'
-                                  }`}>{b.payment_status}</span>
+                                  <span className={`px-2 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider border ${b.payment_status === 'Paid' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                      : b.payment_status === 'Partial' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                        : b.payment_status === 'Refunded' ? 'bg-zinc-100 text-zinc-500 border-zinc-200'
+                                          : 'bg-rose-50 text-rose-600 border-rose-200'
+                                    }`}>{b.payment_status}</span>
                                 </td>
                                 <td className="p-4 text-right">
-                                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
-                                    b.booking_status === 'Completed' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
-                                    : b.booking_status === 'Cancelled' ? 'bg-rose-50 text-rose-600 border-rose-200'
-                                    : 'bg-sky-50 text-sky-600 border-sky-200'
-                                  }`}>
+                                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${b.booking_status === 'Completed' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                      : b.booking_status === 'Cancelled' ? 'bg-rose-50 text-rose-600 border-rose-200'
+                                        : 'bg-sky-50 text-sky-600 border-sky-200'
+                                    }`}>
                                     {b.booking_status === 'Completed' ? <CheckCircle2 size={12} /> : b.booking_status === 'Cancelled' ? <Ban size={12} /> : <Clock size={12} />}
                                     {b.booking_status}
                                   </span>
@@ -1181,7 +1194,7 @@ export default function TravelDashboard() {
                             </div>
                             <span className="text-[10px] font-bold text-zinc-400">Cap: {v.capacity}</span>
                           </div>
-                          
+
                           <div className="mb-4">
                             <p className="text-xs text-zinc-500 font-semibold mb-1">Reg No: {v.registration_number || 'N/A'}</p>
                             <div className="flex items-baseline gap-1 mt-3">
@@ -1191,9 +1204,8 @@ export default function TravelDashboard() {
                           </div>
 
                           <div className="mt-auto flex items-center justify-between pt-4 border-t border-zinc-100">
-                            <span className={`px-2 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
-                              v.is_active ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-zinc-100 text-zinc-500 border-zinc-200'
-                            }`}>
+                            <span className={`px-2 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider border ${v.is_active ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-zinc-100 text-zinc-500 border-zinc-200'
+                              }`}>
                               {v.is_active ? 'Active' : 'Disabled'}
                             </span>
                             <button onClick={() => handleToggleVehicle(v.id)} className="text-[10px] font-bold text-[#D4A373] hover:text-[#D4A373]">
@@ -1255,18 +1267,16 @@ export default function TravelDashboard() {
                                 <td className="p-4 text-sm text-zinc-600">{new Date(b.travel_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
                                 <td className="p-4 text-sm font-bold text-zinc-900 text-right">{inr(b.amount)}</td>
                                 <td className="p-4 text-right">
-                                  <span className={`px-2 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
-                                    b.payment_status === 'Paid' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
-                                    : b.payment_status === 'Partial' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
-                                    : 'bg-rose-50 text-rose-600 border-rose-200'
-                                  }`}>{b.payment_status}</span>
+                                  <span className={`px-2 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider border ${b.payment_status === 'Paid' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                      : b.payment_status === 'Partial' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                        : 'bg-rose-50 text-rose-600 border-rose-200'
+                                    }`}>{b.payment_status}</span>
                                 </td>
                                 <td className="p-4 text-right">
-                                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${
-                                    b.booking_status === 'Completed' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
-                                    : b.booking_status === 'Cancelled' ? 'bg-rose-50 text-rose-600 border-rose-200'
-                                    : 'bg-sky-50 text-sky-600 border-sky-200'
-                                  }`}>
+                                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${b.booking_status === 'Completed' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
+                                      : b.booking_status === 'Cancelled' ? 'bg-rose-50 text-rose-600 border-rose-200'
+                                        : 'bg-sky-50 text-sky-600 border-sky-200'
+                                    }`}>
                                     {b.booking_status === 'Completed' ? <CheckCircle2 size={12} /> : b.booking_status === 'Cancelled' ? <Ban size={12} /> : <Clock size={12} />}
                                     {b.booking_status}
                                   </span>

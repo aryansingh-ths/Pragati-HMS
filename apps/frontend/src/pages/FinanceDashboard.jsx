@@ -44,8 +44,6 @@ function DonutChart({ data, size = 170, centerLabel = 'Collected' }) {
   const strokeWidth = 20;
   const cx = size / 2;
   const cy = size / 2;
-  let cumulativePercent = 0;
-
   const getCoord = (percent) => {
     const angle = percent * 2 * Math.PI - Math.PI / 2;
     return { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) };
@@ -54,12 +52,12 @@ function DonutChart({ data, size = 170, centerLabel = 'Collected' }) {
   return (
     <div className="relative flex items-center justify-center">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        {data.map((segment, i) => {
+        {data.reduce((acc, segment, i) => {
           const percent = segment.value / total;
-          if (percent === 0) return null;
-          const startAngle = cumulativePercent;
-          cumulativePercent += percent;
-          const endAngle = cumulativePercent;
+          if (percent === 0) return acc;
+          const startAngle = acc.cumulativePercent;
+          acc.cumulativePercent += percent;
+          const endAngle = acc.cumulativePercent;
 
           const start = getCoord(startAngle);
           const end = getCoord(endAngle);
@@ -67,7 +65,7 @@ function DonutChart({ data, size = 170, centerLabel = 'Collected' }) {
 
           const d = `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 1 ${end.x} ${end.y}`;
 
-          return (
+          acc.elements.push(
             <motion.path
               key={i}
               d={d}
@@ -82,7 +80,8 @@ function DonutChart({ data, size = 170, centerLabel = 'Collected' }) {
               whileHover={{ strokeWidth: strokeWidth + 4, filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.15))' }}
             />
           );
-        })}
+          return acc;
+        }, { cumulativePercent: 0, elements: [] }).elements}
         <text x={cx} y={cy - 6} textAnchor="middle" className="fill-zinc-900" style={{ fontSize: '20px', fontWeight: 900 }}>{shortInr(total)}</text>
         <text x={cx} y={cy + 14} textAnchor="middle" className="fill-zinc-400" style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{centerLabel}</text>
       </svg>
@@ -340,7 +339,7 @@ function BarRankChart({ data = [] }) {
 // =============================================
 const kpiGraphic = (i, color, pct = null) => {
   const kind = i % 4;
-  
+
   if (kind === 0) {
     return (
       <div className="relative flex items-center justify-center shrink-0 ml-2 sm:ml-4">
@@ -383,12 +382,12 @@ const kpiGraphic = (i, color, pct = null) => {
     <div className="shrink-0 ml-2 sm:ml-4 border rounded-xl bg-white p-1.5 shadow-sm" style={{ borderColor: `${color}33` }}>
       <svg className="w-12 h-8 sm:w-16 sm:h-9 overflow-visible" viewBox="0 0 60 32">
         <defs>
-          <linearGradient id={`kpiYieldFill-${color.replace('#','')}`} x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={`kpiYieldFill-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={color} stopOpacity="0.35" />
             <stop offset="100%" stopColor={color} stopOpacity="0" />
           </linearGradient>
         </defs>
-        <motion.path d="M0 25 L12 18 L24 22 L36 10 L48 14 L60 4 V32 H0 Z" fill={`url(#kpiYieldFill-${color.replace('#','')})`}
+        <motion.path d="M0 25 L12 18 L24 22 L36 10 L48 14 L60 4 V32 H0 Z" fill={`url(#kpiYieldFill-${color.replace('#', '')})`}
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1, delay: 0.2 }} />
         <motion.path d="M0 25 L12 18 L24 22 L36 10 L48 14 L60 4" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"
           initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: 'easeOut', delay: 0.2 }} />
@@ -403,6 +402,16 @@ const kpiGraphic = (i, color, pct = null) => {
 // =============================================
 export default function FinanceDashboard() {
   const navigate = useNavigate();
+  const getAccessLevel = () => {
+    let raw = sessionStorage.getItem('hms_access_level');
+    if (raw && raw !== 'undefined' && raw !== 'null') return raw;
+    let role = (sessionStorage.getItem('hms_role') || '').toUpperCase();
+    if (role === 'SUPER_ADMIN') return 'SUPER_ADMIN';
+    if (role === 'ADMIN') return 'ADMIN';
+    if (role === 'MANAGER') return 'MANAGER';
+    return 'EXECUTIVE';
+  };
+  const accessLevel = getAccessLevel();
 
   // ─── Broadcast States (Real-Time SSE) ───────────────────────
   const [broadcasts, setBroadcasts] = React.useState([]);
@@ -431,7 +440,8 @@ export default function FinanceDashboard() {
     return () => eventSource.close();
   }, []);
 
-  const [activeTab, setActiveTab] = useState('overview');
+
+  const [activeTab, setActiveTab] = useState(accessLevel === 'EXECUTIVE' ? 'invoices' : 'overview');
   const [isLoading, setIsLoading] = useState(false);
 
   // States
@@ -480,6 +490,63 @@ export default function FinanceDashboard() {
   };
 
   React.useEffect(() => {
+    const fetchFinanceData = async () => {
+      try {
+        const token = sessionStorage.getItem('hms_token');
+        const headers = { 'Authorization': `Bearer ${token}` };
+
+        const [overviewRes, expensesRes, invoicesRes, payablesRes, reconRes, ledgerRes, stmtRes, budgetRes, cashRegisterRes] = await Promise.all([
+          fetch('http://localhost:3000/api/finance/overview', { headers }),
+          fetch('http://localhost:3000/api/finance/expenses', { headers }),
+          fetch('http://localhost:3000/api/finance/invoices', { headers }),
+          fetch('http://localhost:3000/api/finance/payables', { headers }),
+          fetch('http://localhost:3000/api/finance/reconciliations', { headers }),
+          fetch('http://localhost:3000/api/finance/ledger', { headers }),
+          fetch('http://localhost:3000/api/finance/statements', { headers }),
+          fetch('http://localhost:3000/api/finance/budgets', { headers }),
+          fetch('http://localhost:3000/api/finance/cash-register', { headers })
+        ]);
+
+        if (overviewRes.ok) {
+          const { data } = await overviewRes.json();
+          setApiOverview(data);
+        }
+        if (expensesRes.ok) {
+          const { data } = await expensesRes.json();
+          setApiExpenses(data.expenses);
+        }
+        if (invoicesRes.ok) {
+          const { data } = await invoicesRes.json();
+          setApiInvoices(data.invoices);
+        }
+        if (payablesRes.ok) {
+          const { data } = await payablesRes.json();
+          setApiPayables(data.payables);
+        }
+        if (reconRes.ok) {
+          const { data } = await reconRes.json();
+          setApiReconciliations(data.reconciliations);
+        }
+        if (ledgerRes.ok) {
+          const { data } = await ledgerRes.json();
+          setApiLedger(data.ledger);
+        }
+        if (stmtRes.ok) {
+          const { data } = await stmtRes.json();
+          setApiStatements(data);
+        }
+        if (budgetRes.ok) {
+          const { data } = await budgetRes.json();
+          setApiBudgets(data.budgets);
+        }
+        if (cashRegisterRes.ok) {
+          const { data } = await cashRegisterRes.json();
+          setApiCashRegister(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch finance data:', err);
+      }
+    };
     fetchFinanceData();
   }, []);
 
@@ -510,6 +577,16 @@ export default function FinanceDashboard() {
   const [depositSearch, setDepositSearch] = useState('');
   const [depositStatusFilter, setDepositStatusFilter] = useState('All');
 
+  // --- Audit Trail ---
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditActionFilter, setAuditActionFilter] = useState('All');
+  const allAuditLog = [];
+  const auditLog = [];
+  const pendingApprovalsCount = 0;
+  const flaggedHighValueCount = 0;
+  const auditActionTypes = ['Approve', 'Reject', 'Escalate'];
+
+  // --- Bank Accounts ---
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [transferForm, setTransferForm] = useState({ from: 'HDFC Current A/c', to: 'ICICI Savings A/c', amount: '', notes: '' });
 
@@ -571,16 +648,16 @@ export default function FinanceDashboard() {
     { label: 'Total Liability', value: `₹${totalTax.toLocaleString('en-IN')}`, sub: 'Due 20th next month' },
   ];
 
-  let cumulativeBalance = 0;
-  const ledgerEntries = (apiLedger || []).slice().reverse().map(l => {
-    cumulativeBalance += Number(l.amount);
-    return {
+  const ledgerEntries = (apiLedger || []).slice().reverse().reduce((acc, l) => {
+    acc.balance += Number(l.amount);
+    acc.entries.push({
       voucher: l.reference_number || `JV-${l.id.substring(0, 4).toUpperCase()}`, account: l.transaction_type,
       debit: Number(l.amount) > 0 ? `₹${Number(l.amount).toLocaleString('en-IN')}` : '-',
       credit: Number(l.amount) < 0 ? `₹${Math.abs(Number(l.amount)).toLocaleString('en-IN')}` : '-',
-      balance: `₹${cumulativeBalance.toLocaleString('en-IN')}`, date: new Date(l.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-    };
-  }).reverse();
+      balance: `₹${acc.balance.toLocaleString('en-IN')}`, date: new Date(l.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+    });
+    return acc;
+  }, { balance: 0, entries: [] }).entries.reverse();
 
   // --- Expense Management ---
   const expenseCatSpent = {};
@@ -769,9 +846,30 @@ export default function FinanceDashboard() {
   };
 
   const navGroups = [
-    { heading: 'Accounts & Finance', items: [{ key: 'overview', label: 'Financial Overview', icon: <Building2 size={15} /> }, { key: 'invoices', label: 'Invoices & Billing', icon: <FileText size={15} /> }, { key: 'expenses', label: 'Expenses & Payables', icon: <PieChart size={15} /> }, { key: 'reconciliation', label: 'Reconciliation', icon: <Link2 size={15} /> }] },
-    { heading: 'Planning & Reporting', items: [{ key: 'statements', label: 'Financial Statements', icon: <Scale size={15} /> }] },
-    { heading: 'Treasury & HR', items: [{ key: 'payroll', label: 'Payroll & Staff Costs', icon: <Users size={15} /> }, { key: 'bank', label: 'Bank & Deposits', icon: <Landmark size={15} /> }] },
+    {
+      heading: 'Accounts & Finance',
+      items: [
+        ...(accessLevel !== 'EXECUTIVE' ? [{ key: 'overview', label: 'Financial Overview', icon: <Building2 size={15} /> }] : []),
+        { key: 'invoices', label: 'Invoices & Billing', icon: <FileText size={15} /> },
+        { key: 'expenses', label: 'Expenses & Payables', icon: <PieChart size={15} /> },
+        ...(accessLevel !== 'EXECUTIVE' ? [{ key: 'reconciliation', label: 'Reconciliation', icon: <Link2 size={15} /> }] : []),
+      ],
+    },
+    ...(accessLevel !== 'EXECUTIVE' ? [
+      {
+        heading: 'Planning & Reporting',
+        items: [
+          { key: 'statements', label: 'Financial Statements', icon: <Scale size={15} /> },
+        ],
+      },
+      {
+        heading: 'Treasury & HR',
+        items: [
+          { key: 'payroll', label: 'Payroll & Staff Costs', icon: <Users size={15} /> },
+          { key: 'bank', label: 'Bank & Deposits', icon: <Landmark size={15} /> },
+        ],
+      }
+    ] : [])
   ];
 
   // KPI Groupings using dynamic Graphic renderer
@@ -814,7 +912,7 @@ export default function FinanceDashboard() {
       {kpiArray.map((kpi, i) => {
         const t = enhancedThemeMap[kpi.theme] || enhancedThemeMap['orange'];
         const dotColor = { sky: '#0ea5e9', rose: '#e11d48', emerald: '#10b981', violet: '#8b5cf6', orange: '#D4A373', indigo: '#4f46e5', amber: '#f59e0b' }[kpi.theme] || '#D4A373';
-        
+
         return (
           <motion.div
             key={i}
@@ -944,6 +1042,11 @@ export default function FinanceDashboard() {
             {(() => {
               const staffName = sessionStorage.getItem('hms_name') || 'Staff';
               const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
+              let designation = 'Finance Officer';
+              try {
+                const user = JSON.parse(sessionStorage.getItem('hms_user'));
+                if (user && user.designation) designation = user.designation;
+              } catch (e) { console.error(e); }
               return (
                 <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.95 }} onClick={() => { localStorage.clear(); window.location.href = '/login'; }} className="group flex items-center gap-3 bg-white pl-3 pr-4 py-1.5 rounded-2xl border border-zinc-200/60 shadow-xs hover:shadow-md hover:border-rose-200 hover:bg-rose-50 transition-all cursor-pointer" title="Sign Out">
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-600 to-teal-600 group-hover:from-rose-500 group-hover:to-rose-600 text-white font-bold text-xs flex items-center justify-center shadow-xs transition-colors">{initials}</div>
@@ -1363,13 +1466,13 @@ export default function FinanceDashboard() {
                             <tr key={idx} className="hover:bg-zinc-50/60 transition-colors">
                               <td className="py-3 px-5 text-xs font-mono text-zinc-500">{inv.id}</td><td className="py-3 px-5 text-sm font-bold text-zinc-900">{inv.billTo}</td><td className="py-3 px-5"><span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-600 border border-zinc-200">{inv.type}</span></td><td className="py-3 px-5 text-xs text-zinc-600">{inv.dueDate}</td><td className={`py-3 px-5 text-sm font-bold text-right ${inv.amount < 0 ? 'text-rose-500' : 'text-zinc-900'}`}>{inv.amount < 0 ? '-' : ''}₹{Math.abs(inv.amount).toLocaleString('en-IN')}</td>
                               <td className="py-3 px-5 text-right"><span className={`px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${inv.status === 'Paid' ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                                  : inv.status === 'Partial' ? 'bg-amber-50 text-amber-600 border-amber-200'
-                                    : inv.status === 'Overdue' ? 'bg-rose-50 text-rose-600 border-rose-200'
-                                      : inv.status === 'Issued' ? 'bg-indigo-50 text-indigo-600 border-indigo-200'
-                                        : 'bg-zinc-100 text-zinc-500 border-zinc-200'
-                                  }`}>
-                                  {inv.status === 'Paid' ? <CheckCircle2 size={10} /> : inv.status === 'Overdue' ? <AlertTriangle size={10} /> : <Clock size={10} />} {inv.status}
-                                </span></td>
+                                : inv.status === 'Partial' ? 'bg-amber-50 text-amber-600 border-amber-200'
+                                  : inv.status === 'Overdue' ? 'bg-rose-50 text-rose-600 border-rose-200'
+                                    : inv.status === 'Issued' ? 'bg-indigo-50 text-indigo-600 border-indigo-200'
+                                      : 'bg-zinc-100 text-zinc-500 border-zinc-200'
+                                }`}>
+                                {inv.status === 'Paid' ? <CheckCircle2 size={10} /> : inv.status === 'Overdue' ? <AlertTriangle size={10} /> : <Clock size={10} />} {inv.status}
+                              </span></td>
                               <td className="py-3 px-5 text-right"><button className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded-md transition-colors">Download</button></td>
                             </tr>
                           ))}
@@ -1673,7 +1776,7 @@ export default function FinanceDashboard() {
       {/* =============================================
           MODAL SYSTEM
           ============================================= */}
-      
+
       {/* New Ledger Entry Modal */}
       <AnimatePresence>
         {isEntryModalOpen && (
@@ -2128,7 +2231,7 @@ export default function FinanceDashboard() {
             </motion.div>
           </motion.div>
         )}
-        
+
         {/* Cash Count Modal */}
         {isCashModalOpen && (
           <motion.div

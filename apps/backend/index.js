@@ -1,12 +1,24 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const pool = require('./db/index');
+const { Pool } = require('pg');
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:Hms@techhansa@localhost:5432/hms_database',
+  connectionTimeoutMillis: 5000,
+});
+
+pool.on('connect', () => {
+  console.log('✅ Successfully connected to the PostgreSQL database.');
+});
+
+pool.on('error', (err) => {
+  console.error('❌ Unexpected database error:', err);
+});
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { z } = require('zod');
-const helmet = require('helmet'); 
-const rateLimit = require('express-rate-limit'); 
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -35,19 +47,19 @@ app.use(cors({
 app.use(helmet());
 
 // 4. ✨ Rate Limiting
-// Global API Limiter: Max 200 requests per 15 minutes per IP
+// Global API Limiter: Max 2000 requests per 15 minutes per IP
 const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, 
-  max: 200, 
-  standardHeaders: true, 
-  legacyHeaders: false, 
+  windowMs: 15 * 60 * 1000,
+  max: 2000,
+  standardHeaders: true,
+  legacyHeaders: false,
   message: { error: 'Too many requests from this IP, please try again after 15 minutes' }
 });
 
 // Strict Auth Limiter: Increased to 1000 requests per 15 mins for development
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 1000, 
+  max: 1000,
   message: { error: 'Too many authentication attempts, please try again later' }
 });
 
@@ -68,26 +80,6 @@ app.use((req, res, next) => {
 // ROLE SECURITY MIDDLEWARE & SSE
 // ==========================================
 
-const logAuditAction = async (userId, action, details) => {
-  try {
-    let name = 'System / Guest';
-    let role = 'System';
-    if (userId) {
-      const uRes = await pool.query('SELECT name, role FROM users WHERE id = $1', [userId]);
-      if (uRes.rows.length > 0) {
-        name = uRes.rows[0].name;
-        role = uRes.rows[0].role;
-      }
-    }
-    await pool.query(
-      'INSERT INTO system_audit_logs (user_name, user_role, action, details) VALUES ($1, $2, $3, $4)',
-      [name, role, action, details]
-    );
-  } catch (err) {
-    console.error('Audit trail logging error:', err);
-  }
-};
-
 const verifyToken = (req, res, next) => {
   // Allow token in Authorization header OR query string (for SSE)
   let token = req.headers['authorization']?.split(' ')[1];
@@ -107,17 +99,6 @@ const verifyToken = (req, res, next) => {
     res.status(401).json({ error: 'Invalid or expired authentication token.' });
   }
 };
-
-const requireRole = (allowedRoles) => {
-  return (req, res, next) => {
-    if (!allowedRoles.includes(req.user.role)) {
-      return res.status(403).json({ error: 'Permission denied. Insufficient access clearance.' });
-    }
-    next();
-  };
-};
-
-const verifyStaffToken = [verifyToken, requireRole(['ADMIN', 'RECEPTION', 'FRONT_DESK', 'HOUSEKEEPING'])];
 
 // ==========================================
 // AUTHENTICATION ROUTES
@@ -156,7 +137,7 @@ app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email.toLowerCase().trim()]);
+    const result = await pool.query('SELECT *, array_to_json(department) as department FROM users WHERE email = $1', [email.toLowerCase().trim()]);
     const user = result.rows[0];
 
     if (!user) {
@@ -168,23 +149,77 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Support new schema (access_level, department) or fallback to mapping old role
+    const userRole = user.role ? user.role.toUpperCase() : null;
+    const accessLevel = user.access_level || (userRole === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : userRole === 'ADMIN' ? 'ADMIN' : 'EXECUTIVE');
+    const isSales = userRole === 'SALES_HEAD' || userRole === 'SALES_EXECUTIVE' || userRole === 'SALES';
+    const department = user.department || (userRole === 'SUPER_ADMIN' || userRole === 'ADMIN' ? 'GLOBAL' : isSales ? 'SALES' : 'FRONT_DESK');
+
     const token = jwt.sign(
-      { userId: user.id, role: user.role.toUpperCase() },
+      { userId: user.id, accessLevel: accessLevel, department: department, hotelId: user.hotel_id, role: userRole },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
 
     await pool.query('INSERT INTO staff_shifts (user_id) VALUES ($1)', [user.id]);
-    await logAuditAction(user.id, 'Staff Login', `User logged into dashboard: ${user.email} (${user.role})`);
+    await logAuditAction(user.id, 'Staff Login', `User logged into dashboard: ${user.email} (${accessLevel})`);
 
     res.json({
       status: 'success',
       token,
-      user: { id: user.id, email: user.email, role: user.role.toUpperCase(), name: user.name }
+      user: { id: user.id, email: user.email, access_level: accessLevel, department: department, role: userRole, name: user.name, hotelId: user.hotel_id, designation: user.designation || 'Administrator' }
     });
   } catch (err) {
-    console.error('Login database connection fetch error:', err);
+    console.error('Login error:', err);
     res.status(500).json({ error: 'Internal server error during credential lookup' });
+  }
+});
+
+// ==========================================
+// ROLE SECURITY MIDDLEWARE
+// ==========================================
+
+const logAuditAction = async (userId, action, details) => {
+  try {
+    let name = 'System / Guest';
+    let role = 'System';
+    let hotelId = null;
+    if (userId) {
+      // Use COALESCE to handle pre-migration state gracefully
+      const uRes = await pool.query('SELECT name, COALESCE(access_level::text, role, \'SYSTEM\') as display_role, hotel_id FROM users WHERE id = $1', [userId]);
+      if (uRes.rows.length > 0) {
+        name = uRes.rows[0].name;
+        role = uRes.rows[0].display_role;
+        hotelId = uRes.rows[0].hotel_id;
+      }
+    }
+    await pool.query(
+      'INSERT INTO system_audit_logs (user_name, user_role, action, details, hotel_id) VALUES ($1, $2, $3, $4, $5)',
+      [name, role, action, details, hotelId]
+    );
+  } catch (err) {
+    console.error('Audit trail logging error:', err);
+  }
+};
+
+app.patch('/api/users/profile', verifyToken, async (req, res) => {
+  const { name, designation } = req.body;
+  if (!name && !designation) return res.status(400).json({ error: 'No fields provided' });
+  try {
+    const updates = [];
+    const values = [];
+    let idx = 1;
+    if (name) { updates.push(`name = $${idx++}`); values.push(name); }
+    if (designation) { updates.push(`designation = $${idx++}`); values.push(designation); }
+    values.push(req.user.userId);
+
+    const result = await pool.query(
+      `UPDATE users SET ${updates.join(', ')} WHERE id = $${idx} RETURNING id, name, email, role, hotel_id, designation`,
+      values
+    );
+    res.json({ status: 'success', data: { user: result.rows[0] } });
+  } catch (err) {
+    res.status(500).json({ error: 'Database error', details: err.message });
   }
 });
 
@@ -208,40 +243,249 @@ app.post('/api/auth/logout', verifyToken, async (req, res) => {
   }
 });
 
-// ==========================================
-// REAL-TIME BROADCASTS (SSE)
-// ==========================================
-let broadcastClients = [];
+const requireRole = (allowedRoles) => {
+  return (req, res, next) => {
+    // 1. Direct backward compatibility with old role
+    if (req.user.role && allowedRoles.includes(req.user.role)) {
+      return next();
+    }
 
-app.get('/api/broadcasts/stream', verifyToken, (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.flushHeaders();
+    // 2. Bridge logic: mapping old roles to new access_level / department
+    const hasAdminClearance = (req.user.accessLevel === 'ADMIN' || req.user.accessLevel === 'SUPER_ADMIN') &&
+      (allowedRoles.includes('ADMIN') || allowedRoles.includes('SUPER_ADMIN') || allowedRoles.includes('FRONT_DESK') || allowedRoles.includes('RECEPTION'));
 
-  const clientId = Date.now();
-  const newClient = { id: clientId, res, userRole: req.user.role };
-  broadcastClients.push(newClient);
+    const deptMap = {
+      'FRONT_DESK': 'FRONT_DESK',
+      'RECEPTION': 'FRONT_DESK',
+      'HOUSEKEEPING': 'HOUSEKEEPING',
+      'FINANCE': 'FINANCE',
+      'SALES': 'SALES',
+      'TRAVEL': 'TRAVEL',
+      'RESTAURANT': 'DINING'
+    };
 
-  req.on('close', () => {
-    broadcastClients = broadcastClients.filter(client => client.id !== clientId);
-  });
+    const hasDepartmentClearance = allowedRoles.some(role => {
+      const dept = deptMap[role] || role;
+      if (Array.isArray(req.user.department)) {
+        return req.user.department.includes(dept) || req.user.department.includes(role);
+      }
+      return req.user.department === dept || req.user.department === role;
+    });
+
+    if (hasAdminClearance || hasDepartmentClearance) {
+      return next();
+    }
+
+    return res.status(403).json({ error: 'Permission denied. Insufficient access clearance.' });
+  };
+};
+
+const requireAccess = (allowedAccessLevels) => {
+  return (req, res, next) => {
+    const level = req.user.accessLevel;
+    if (!allowedAccessLevels.includes(level)) {
+      return res.status(403).json({ error: 'Permission denied. Strict access clearance required.' });
+    }
+    next();
+  };
+};
+
+app.get('/api/hr/staff', verifyToken, requireAccess(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
+  try {
+    const currentHotel = req.user.hotelId;
+
+    // The firewall: The WHERE clause guarantees Hotel A only sees Hotel A
+    const staff = await pool.query(
+      `SELECT id, name, email, access_level, array_to_json(department) as department 
+       FROM users 
+       WHERE hotel_id = $1 AND access_level IN ('MANAGER', 'EXECUTIVE')`,
+      [currentHotel]
+    );
+
+    res.json({ data: staff.rows });
+  } catch (err) {
+    console.error('HR Staff error:', err);
+    res.status(500).json({ error: 'Failed to fetch staff data' });
+  }
 });
 
-app.get('/api/broadcasts', verifyToken, async (req, res) => {
+const verifyStaffToken = [verifyToken, requireRole(['ADMIN', 'RECEPTION', 'FRONT_DESK', 'HOUSEKEEPING'])];
+
+// Hotel filter helper: returns a SQL fragment scoped to the given table alias
+// Usage: getHotelFilter(req, 'r') => "r.hotel_id = 'uuid'" or "TRUE"
+const getHotelFilter = (req, alias) => {
+  if (req.user.role === 'SUPER_ADMIN' || req.user.accessLevel === 'SUPER_ADMIN') {
+    if (req.query.hotel_id) {
+      return alias ? `${alias}.hotel_id = '${req.query.hotel_id}'` : `hotel_id = '${req.query.hotel_id}'`;
+    }
+    return 'TRUE';
+  }
+  if (req.user.hotelId) {
+    return alias ? `${alias}.hotel_id = '${req.user.hotelId}'` : `hotel_id = '${req.user.hotelId}'`;
+  }
+  const subquery = `(SELECT hotel_id FROM users WHERE id = '${req.user.userId}')`;
+  return alias ? `${alias}.hotel_id = ${subquery}` : `hotel_id = ${subquery}`;
+};
+
+
+// ==========================================
+// SUPER ADMIN ENDPOINTS
+// ==========================================
+
+app.get('/api/super-admin/overview', verifyToken, requireRole(['SUPER_ADMIN']), async (req, res) => {
   try {
-    const userRes = await pool.query('SELECT role FROM users WHERE id = $1', [req.user.userId]);
-    const userRole = userRes.rows.length > 0 ? userRes.rows[0].role : 'NONE';
-    const result = await pool.query(`SELECT id, target_dept, message, sender_name, created_at, expires_at FROM broadcasts WHERE (target_dept = 'ALL' OR UPPER(target_dept) = UPPER($1) OR $1 = 'ADMIN') ORDER BY created_at DESC`, [userRole]);
-    res.json({ status: 'success', data: { broadcasts: result.rows } });
+    const hotels = await pool.query('SELECT COUNT(*) FROM hotels');
+    const users = await pool.query('SELECT COUNT(*) FROM users WHERE role = $1', ['ADMIN']);
+    res.json({
+      status: 'success',
+      data: {
+        total_hotels: parseInt(hotels.rows[0].count),
+        total_admins: parseInt(users.rows[0].count)
+      }
+    });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch broadcasts' });
+    res.status(500).json({ error: 'Failed to fetch overview' });
+  }
+});
+
+app.get('/api/super-admin/hotels', verifyToken, requireRole(['SUPER_ADMIN']), async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT h.*, 
+             (SELECT COUNT(*) FROM rooms r WHERE r.hotel_id = h.id) as room_count,
+             (SELECT COUNT(*) FROM users u WHERE u.hotel_id = h.id AND u.role = 'ADMIN') as admin_count
+      FROM hotels h 
+      ORDER BY h.name ASC
+    `);
+    res.json({ status: 'success', data: { hotels: result.rows } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch hotels list' });
+  }
+});
+
+app.post('/api/super-admin/hotels', verifyToken, requireRole(['SUPER_ADMIN']), async (req, res) => {
+  const { name, location } = req.body;
+  if (!name || !location) return res.status(400).json({ error: 'Name and location required' });
+  try {
+    const result = await pool.query(
+      'INSERT INTO hotels (name, location, address) VALUES ($1, $2, $3) RETURNING *',
+      [name, location, location]
+    );
+    res.status(201).json({ status: 'success', data: { hotel: result.rows[0] } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create hotel' });
+  }
+});
+
+app.delete('/api/super-admin/hotels/:id', verifyToken, requireRole(['SUPER_ADMIN']), async (req, res) => {
+  try {
+    await pool.query('DELETE FROM hotels WHERE id = $1', [req.params.id]);
+    res.json({ status: 'success', message: 'Hotel deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete hotel' });
+  }
+});
+
+app.get('/api/super-admin/users', verifyToken, requireRole(['SUPER_ADMIN']), async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT u.id, u.name, u.email, u.role, u.access_level, array_to_json(u.department) as department, h.name as hotel_name, u.hotel_id 
+      FROM users u 
+      LEFT JOIN hotels h ON u.hotel_id = h.id 
+      ORDER BY u.created_at DESC
+    `);
+    res.json({ status: 'success', data: { users: result.rows } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch staff' });
+  }
+});
+
+app.post('/api/super-admin/users', verifyToken, requireRole(['SUPER_ADMIN']), async (req, res) => {
+  const { name, email, password, role, hotel_id } = req.body;
+  if (!name || !email || !password || !role) return res.status(400).json({ error: 'Missing fields' });
+  try {
+    const hash = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      'INSERT INTO users (name, email, password_hash, role, hotel_id) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, role',
+      [name, email.toLowerCase(), hash, role, hotel_id || null]
+    );
+    res.status(201).json({ status: 'success', data: { user: result.rows[0] } });
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Email already exists' });
+    res.status(500).json({ error: 'Failed to create admin' });
+  }
+});
+
+app.patch('/api/super-admin/users/:id/access', verifyToken, requireRole(['SUPER_ADMIN']), async (req, res) => {
+  const { access_level, department, hotel_id, designation } = req.body;
+  if (!access_level || !department || !Array.isArray(department)) return res.status(400).json({ error: 'Missing access_level or invalid department array' });
+
+  try {
+    const roleMapping = {
+      GLOBAL: 'ADMIN',
+      FRONT_DESK: 'RECEPTION',
+      RESTAURANT: 'RESTAURANT',
+      HOUSEKEEPING: 'HOUSEKEEPING',
+      FINANCE: 'FINANCE',
+      SALES: 'SALES',
+      TRAVEL: 'TRAVEL'
+    };
+
+    const designationMapping = {
+      GLOBAL: 'Administrator',
+      FRONT_DESK: 'Receptionist',
+      RESTAURANT: 'Restaurant Staff',
+      HOUSEKEEPING: 'Housekeeper',
+      FINANCE: 'Accountant',
+      SALES: 'Sales Agent',
+      TRAVEL: 'Travel Desk'
+    };
+
+    // For SUPER_ADMIN, role is always SUPER_ADMIN
+    // For legacy role mapping, we just use the first department in the array
+    const primaryDept = department.length > 0 ? department[0] : 'FRONT_DESK';
+    const newRole = access_level === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : (access_level === 'ADMIN' ? 'ADMIN' : (roleMapping[primaryDept] || 'RECEPTION'));
+
+    // For MANAGER, we might want to set designation to "Manager" instead of the default department staff designation.
+    const newDesignation = designation || (access_level === 'MANAGER' ? 'Manager' : (designationMapping[primaryDept] || 'Administrator'));
+
+    const newHotelId = hotel_id || null;
+
+    await pool.query(
+      `UPDATE users 
+       SET role = $1, access_level = $2, department = $3::department_type[], hotel_id = $4, designation = $5 
+       WHERE id = $6`,
+      [newRole, access_level, department, newHotelId, newDesignation, req.params.id]
+    );
+
+    res.json({ status: 'success', message: 'User access updated successfully' });
+  } catch (err) {
+    console.error('Update access error:', err);
+    res.status(500).json({ error: 'Failed to update user access: ' + err.message });
+  }
+});
+
+app.delete('/api/super-admin/users/:id', verifyToken, requireRole(['SUPER_ADMIN']), async (req, res) => {
+  try {
+    await pool.query('DELETE FROM users WHERE id = $1', [req.params.id]);
+    res.json({ status: 'success', message: 'User deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete admin' });
   }
 });
 
 // ==========================================
 // CORE & DASHBOARD ENDPOINTS
 // ==========================================
+
+app.get('/api/hotels', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM hotels ORDER BY name ASC');
+    res.json({ status: 'success', data: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch hotels' });
+  }
+});
 
 app.get('/health', async (req, res) => {
   try {
@@ -298,10 +542,10 @@ app.get('/api/front-desk/overview', verifyToken, requireRole(['FRONT_DESK', 'ADM
   try {
     const statsQuery = `
       SELECT 
-        (SELECT COUNT(*) FROM bookings WHERE DATE(check_in_date) = CURRENT_DATE AND status = 'CONFIRMED') as arrivals,
-        (SELECT COUNT(*) FROM bookings WHERE DATE(check_out_date) = CURRENT_DATE AND status = 'CONFIRMED') as departures,
-        (SELECT ROUND((COUNT(*)::float / (SELECT COUNT(*) FROM rooms)) * 100) FROM rooms WHERE status = 'OCCUPIED') as occupancy,
-        (SELECT COUNT(*) FROM rooms WHERE status = 'AVAILABLE') as available
+        (SELECT COUNT(*) FROM bookings WHERE DATE(check_in_date) = CURRENT_DATE AND status = 'CONFIRMED' AND ${getHotelFilter(req)}) as arrivals,
+        (SELECT COUNT(*) FROM bookings WHERE DATE(check_out_date) = CURRENT_DATE AND status = 'CONFIRMED' AND ${getHotelFilter(req)}) as departures,
+        (SELECT ROUND((COUNT(*)::float / NULLIF((SELECT COUNT(*) FROM rooms WHERE ${getHotelFilter(req)}), 0)) * 100) FROM rooms WHERE status = 'OCCUPIED' AND ${getHotelFilter(req)}) as occupancy,
+        (SELECT COUNT(*) FROM rooms WHERE status = 'AVAILABLE' AND ${getHotelFilter(req)}) as available
     `;
     const statsRes = await pool.query(statsQuery);
     const liveStats = statsRes.rows[0];
@@ -311,6 +555,7 @@ app.get('/api/front-desk/overview', verifyToken, requireRole(['FRONT_DESK', 'ADM
       FROM bookings b
       JOIN guests g ON b.guest_id = g.id
       JOIN rooms r ON b.room_id = r.id
+      WHERE ${getHotelFilter(req, 'b')}
       ORDER BY b.created_at DESC LIMIT 5;
     `;
     const guestsRes = await pool.query(guestsQuery);
@@ -348,6 +593,7 @@ app.get('/api/front-desk/guests/search', verifyToken, requireRole(['FRONT_DESK',
         LEFT JOIN bookings b ON g.id = b.guest_id AND b.status NOT IN ('CHECKED_OUT', 'CANCELLED')
         LEFT JOIN rooms r ON b.room_id = r.id
         LEFT JOIN room_types rt ON r.room_type_id = rt.id
+        WHERE g.id IN (SELECT guest_id FROM bookings b_sub WHERE ${getHotelFilter(req, 'b_sub')})
         ORDER BY g.id DESC LIMIT 10;
       `;
     } else {
@@ -357,7 +603,8 @@ app.get('/api/front-desk/guests/search', verifyToken, requireRole(['FRONT_DESK',
         LEFT JOIN bookings b ON g.id = b.guest_id AND b.status NOT IN ('CHECKED_OUT', 'CANCELLED')
         LEFT JOIN rooms r ON b.room_id = r.id
         LEFT JOIN room_types rt ON r.room_type_id = rt.id
-        WHERE g.name ILIKE $1 OR g.email ILIKE $1 OR g.phone ILIKE $1
+        WHERE g.id IN (SELECT guest_id FROM bookings b_sub WHERE ${getHotelFilter(req, 'b_sub')})
+        AND (g.name ILIKE $1 OR g.email ILIKE $1 OR g.phone ILIKE $1)
         ORDER BY g.id DESC LIMIT 10;
       `;
       params = [`%${q}%`];
@@ -382,6 +629,7 @@ app.get('/api/front-desk/stays', verifyToken, requireRole(['FRONT_DESK', 'ADMIN'
       JOIN rooms r ON b.room_id = r.id
       JOIN room_types rt ON r.room_type_id = rt.id
       WHERE b.status NOT IN ('CHECKED_OUT', 'CANCELLED')
+      AND ${getHotelFilter(req, 'b')}
       ORDER BY b.check_in_date ASC;
     `;
     const result = await pool.query(query);
@@ -395,7 +643,7 @@ app.get('/api/front-desk/stays', verifyToken, requireRole(['FRONT_DESK', 'ADMIN'
 app.post('/api/front-desk/bookings/:id/checkout', verifyToken, requireRole(['FRONT_DESK', 'ADMIN', 'RECEPTION']), async (req, res) => {
   try {
     const { id } = req.params;
-    const bookingRes = await pool.query('SELECT room_id FROM bookings WHERE id = $1', [id]);
+    const bookingRes = await pool.query(`SELECT room_id FROM bookings WHERE id = $1 AND ${getHotelFilter(req)}`, [id]);
 
     if (bookingRes.rows.length === 0) {
       return res.status(404).json({ error: 'Reservation record missing' });
@@ -416,8 +664,9 @@ app.patch('/api/front-desk/bookings/:id/change-room', verifyToken, requireRole([
   const { new_room_id } = req.body;
 
   try {
-    const currentBooking = await pool.query('SELECT room_id FROM bookings WHERE id = $1', [id]);
-    const oldRoomId = currentBooking.rows[0]?.room_id;
+    const currentBooking = await pool.query(`SELECT room_id FROM bookings WHERE id = $1 AND ${getHotelFilter(req)}`, [id]);
+    if (currentBooking.rows.length === 0) return res.status(404).json({ error: 'Booking not found' });
+    const oldRoomId = currentBooking.rows[0].room_id;
 
     await pool.query('UPDATE bookings SET room_id = $1 WHERE id = $2', [new_room_id, id]);
     if (oldRoomId) await pool.query("UPDATE rooms SET status = 'AVAILABLE' WHERE id = $1", [oldRoomId]);
@@ -435,7 +684,7 @@ app.get('/api/front-desk/rooms/available', verifyToken, requireRole(['FRONT_DESK
       SELECT r.id, r.room_number, rt.name as room_type, rt.base_price 
       FROM rooms r
       JOIN room_types rt ON r.room_type_id = rt.id
-      WHERE r.status = 'AVAILABLE'
+      WHERE r.status = 'AVAILABLE' AND ${getHotelFilter(req, 'r')}
       ORDER BY r.room_number ASC;
     `;
     const result = await pool.query(query);
@@ -454,6 +703,18 @@ const pushInventoryUpdateToOTA = async (roomTypeId, dateFrom, dateTo) => {
     `, [roomTypeId]);
     const remainingInventory = countRes.rows[0].remaining;
 
+    // 2. Make an HTTP request to your Channel Admin (e.g., Channex, SiteMinder)
+    /* await fetch('https://api.yourchannelAdmin.com/v1/inventory', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer \${process.env.CHANNEL_Admin_API_KEY}` },
+      body: JSON.stringify({
+        room_type_id: roomTypeId,
+        start_date: dateFrom,
+        end_date: dateTo,
+        available_count: remainingInventory
+      })
+    });
+    */
     console.log(`📡 [OTA SYNC] Pushed new inventory count (${remainingInventory}) to Channel Admin for RoomType ${roomTypeId}`);
   } catch (err) {
     console.error('Failed to sync inventory to OTA:', err);
@@ -481,9 +742,9 @@ app.post('/api/front-desk/bookings/manual', verifyToken, requireRole(['FRONT_DES
     }
 
     await pool.query(
-      `INSERT INTO bookings (guest_id, room_id, check_in_date, check_out_date, total_price, status) 
-       VALUES ($1, $2, $3, $4, $5, 'CHECKED_IN')`,
-      [guestId, room_id, check_in_date, check_out_date, total_price]
+      `INSERT INTO bookings (guest_id, room_id, check_in_date, check_out_date, total_price, status, hotel_id) 
+       VALUES ($1, $2, $3, $4, $5, 'CHECKED_IN', $6)`,
+      [guestId, room_id, check_in_date, check_out_date, total_price, req.user.hotelId]
     );
 
     await pool.query("UPDATE rooms SET status = 'OCCUPIED' WHERE id = $1", [room_id]);
@@ -503,7 +764,7 @@ app.patch('/api/front-desk/bookings/:id/extend', verifyToken, requireRole(['FRON
   const { new_check_out_date } = req.body;
 
   try {
-    const bookingRes = await pool.query('SELECT check_in_date, room_id FROM bookings WHERE id = $1', [id]);
+    const bookingRes = await pool.query(`SELECT check_in_date, room_id FROM bookings WHERE id = $1 AND ${getHotelFilter(req)}`, [id]);
     if (bookingRes.rows.length === 0) return res.status(404).json({ error: 'Booking not found' });
     const { check_in_date, room_id } = bookingRes.rows[0];
 
@@ -533,7 +794,7 @@ app.post('/api/front-desk/bookings/:id/checkin', verifyToken, requireRole(['FRON
   const { id } = req.params;
 
   try {
-    const bookingRes = await pool.query('SELECT status, room_id FROM bookings WHERE id = $1', [id]);
+    const bookingRes = await pool.query(`SELECT status, room_id FROM bookings WHERE id = $1 AND ${getHotelFilter(req)}`, [id]);
     if (bookingRes.rows.length === 0) {
       return res.status(404).json({ error: 'Booking not found' });
     }
@@ -571,8 +832,10 @@ app.get('/api/front-desk/bookings/all', verifyToken, requireRole(['FRONT_DESK', 
     `;
     const params = [];
 
+    query += ` WHERE ${getHotelFilter(req, 'b')}`;
+
     if (statusFilter) {
-      query += ` WHERE b.status = $1`;
+      query += ` AND b.status = $1`;
       params.push(statusFilter.toUpperCase());
     }
 
@@ -597,6 +860,7 @@ app.get('/api/housekeeping/board', verifyToken, requireRole(['HOUSEKEEPING', 'AD
       FROM rooms r
       JOIN room_types rt ON r.room_type_id = rt.id
       WHERE r.status IN ('DIRTY', 'CLEANING', 'INSPECTING')
+      AND ${getHotelFilter(req, 'r')}
       ORDER BY 
         CASE r.status WHEN 'DIRTY' THEN 1 WHEN 'CLEANING' THEN 2 WHEN 'INSPECTING' THEN 3 END,
         r.room_number ASC
@@ -609,7 +873,7 @@ app.get('/api/housekeeping/board', verifyToken, requireRole(['HOUSEKEEPING', 'AD
       inspecting: result.rows.filter(r => r.status === 'INSPECTING')
     };
 
-    const completedTodayRes = await pool.query("SELECT COUNT(*)::int as count FROM rooms WHERE status = 'AVAILABLE'");
+    const completedTodayRes = await pool.query(`SELECT COUNT(*)::int as count FROM rooms WHERE status = 'AVAILABLE' AND ${getHotelFilter(req)}`);
 
     res.json({
       status: 'success',
@@ -632,7 +896,7 @@ app.get('/api/housekeeping/board', verifyToken, requireRole(['HOUSEKEEPING', 'AD
 app.patch('/api/housekeeping/rooms/:id/start-cleaning', verifyToken, requireRole(['HOUSEKEEPING', 'ADMIN']), async (req, res) => {
   const { id } = req.params;
   try {
-    const check = await pool.query('SELECT status FROM rooms WHERE id = $1', [id]);
+    const check = await pool.query(`SELECT status FROM rooms WHERE id = $1 AND ${getHotelFilter(req)}`, [id]);
     if (check.rows.length === 0) return res.status(404).json({ error: 'Room not found' });
     if (check.rows[0].status !== 'DIRTY') {
       return res.status(400).json({ error: `Room is ${check.rows[0].status}, not DIRTY. Cannot start cleaning.` });
@@ -648,7 +912,7 @@ app.patch('/api/housekeeping/rooms/:id/start-cleaning', verifyToken, requireRole
 app.patch('/api/housekeeping/rooms/:id/request-inspection', verifyToken, requireRole(['HOUSEKEEPING', 'ADMIN']), async (req, res) => {
   const { id } = req.params;
   try {
-    const check = await pool.query('SELECT status FROM rooms WHERE id = $1', [id]);
+    const check = await pool.query(`SELECT status FROM rooms WHERE id = $1 AND ${getHotelFilter(req)}`, [id]);
     if (check.rows.length === 0) return res.status(404).json({ error: 'Room not found' });
     if (check.rows[0].status !== 'CLEANING') {
       return res.status(400).json({ error: `Room is ${check.rows[0].status}, not CLEANING. Cannot request inspection.` });
@@ -664,7 +928,7 @@ app.patch('/api/housekeeping/rooms/:id/request-inspection', verifyToken, require
 app.patch('/api/housekeeping/rooms/:id/approve-inspection', verifyToken, requireRole(['HOUSEKEEPING', 'ADMIN']), async (req, res) => {
   const { id } = req.params;
   try {
-    const check = await pool.query('SELECT status FROM rooms WHERE id = $1', [id]);
+    const check = await pool.query(`SELECT status FROM rooms WHERE id = $1 AND ${getHotelFilter(req)}`, [id]);
     if (check.rows.length === 0) return res.status(404).json({ error: 'Room not found' });
     if (check.rows[0].status !== 'INSPECTING') {
       return res.status(400).json({ error: `Room is ${check.rows[0].status}, not INSPECTING. Cannot approve.` });
@@ -737,7 +1001,7 @@ const requireFinance = requireRole(['FINANCE', 'ADMIN']);
 
 app.get('/api/finance/overview', verifyToken, requireFinance, async (req, res) => {
   try {
-    const revenueRes = await pool.query("SELECT COALESCE(SUM(total_price), 0) as total FROM bookings WHERE created_at >= CURRENT_DATE");
+    const revenueRes = await pool.query(`SELECT COALESCE(SUM(total_price), 0) as total FROM bookings WHERE created_at >= CURRENT_DATE AND ${getHotelFilter(req)}`);
 
     res.json({
       status: 'success',
@@ -766,10 +1030,14 @@ app.get('/api/finance/overview', verifyToken, requireFinance, async (req, res) =
 });
 
 app.get('/api/finance/expenses', verifyToken, requireFinance, async (req, res) => {
-  res.json({ status: 'success', data: { expenses: [
-    { id: '101', category: 'Kitchen Items', vendor: 'Metro Cash & Carry', payment_method: 'Bank Transfer', amount: 12500, status: 'Paid', created_at: new Date() },
-    { id: '102', category: 'Utilities', vendor: 'State Electricity Board', payment_method: 'UPI', amount: 45000, status: 'Paid', created_at: new Date() }
-  ] } });
+  res.json({
+    status: 'success', data: {
+      expenses: [
+        { id: '101', category: 'Kitchen Items', vendor: 'Metro Cash & Carry', payment_method: 'Bank Transfer', amount: 12500, status: 'Paid', created_at: new Date() },
+        { id: '102', category: 'Utilities', vendor: 'State Electricity Board', payment_method: 'UPI', amount: 45000, status: 'Paid', created_at: new Date() }
+      ]
+    }
+  });
 });
 
 app.post('/api/finance/expenses', verifyToken, requireFinance, async (req, res) => {
@@ -777,10 +1045,14 @@ app.post('/api/finance/expenses', verifyToken, requireFinance, async (req, res) 
 });
 
 app.get('/api/finance/invoices', verifyToken, requireFinance, async (req, res) => {
-  res.json({ status: 'success', data: { invoices: [
-    { id: '1', invoice_number: 'INV-1001', bill_to: 'Acme Corp', invoice_type: 'Corporate Account', total_amount: 45000, paid_amount: 45000, tax_amount: 8100, status: 'Paid', due_date: new Date() },
-    { id: '2', invoice_number: 'INV-1002', bill_to: 'John Doe', invoice_type: 'Guest Folio', total_amount: 15000, paid_amount: 5000, tax_amount: 2700, status: 'Partial', due_date: new Date(Date.now() + 86400000) }
-  ] } });
+  res.json({
+    status: 'success', data: {
+      invoices: [
+        { id: '1', invoice_number: 'INV-1001', bill_to: 'Acme Corp', invoice_type: 'Corporate Account', total_amount: 45000, paid_amount: 45000, tax_amount: 8100, status: 'Paid', due_date: new Date() },
+        { id: '2', invoice_number: 'INV-1002', bill_to: 'John Doe', invoice_type: 'Guest Folio', total_amount: 15000, paid_amount: 5000, tax_amount: 2700, status: 'Partial', due_date: new Date(Date.now() + 86400000) }
+      ]
+    }
+  });
 });
 
 app.post('/api/finance/invoices', verifyToken, requireFinance, async (req, res) => {
@@ -788,10 +1060,14 @@ app.post('/api/finance/invoices', verifyToken, requireFinance, async (req, res) 
 });
 
 app.get('/api/finance/payables', verifyToken, requireFinance, async (req, res) => {
-  res.json({ status: 'success', data: { payables: [
-    { id: '1', bill_number: 'BILL-001', vendor: 'Fresh Foods Ltd', category: 'Kitchen & F&B Supplies', amount: 25000, status: 'Scheduled', due_date: new Date(Date.now() + 86400000 * 3) },
-    { id: '2', bill_number: 'BILL-002', vendor: 'Clean Co', category: 'Housekeeping & Amenities', amount: 15000, status: 'Overdue', due_date: new Date(Date.now() - 86400000 * 5) }
-  ] } });
+  res.json({
+    status: 'success', data: {
+      payables: [
+        { id: '1', bill_number: 'BILL-001', vendor: 'Fresh Foods Ltd', category: 'Kitchen & F&B Supplies', amount: 25000, status: 'Scheduled', due_date: new Date(Date.now() + 86400000 * 3) },
+        { id: '2', bill_number: 'BILL-002', vendor: 'Clean Co', category: 'Housekeeping & Amenities', amount: 15000, status: 'Overdue', due_date: new Date(Date.now() - 86400000 * 5) }
+      ]
+    }
+  });
 });
 
 app.post('/api/finance/payables', verifyToken, requireFinance, async (req, res) => {
@@ -803,10 +1079,14 @@ app.get('/api/finance/reconciliations', verifyToken, requireFinance, async (req,
 });
 
 app.get('/api/finance/ledger', verifyToken, requireFinance, async (req, res) => {
-  res.json({ status: 'success', data: { ledger: [
-    { id: '1', reference_number: 'JV-001', transaction_type: 'Room Revenue', amount: 15000, created_at: new Date() },
-    { id: '2', reference_number: 'JV-002', transaction_type: 'Bank Transfer', amount: -5000, created_at: new Date() }
-  ] } });
+  res.json({
+    status: 'success', data: {
+      ledger: [
+        { id: '1', reference_number: 'JV-001', transaction_type: 'Room Revenue', amount: 15000, created_at: new Date() },
+        { id: '2', reference_number: 'JV-002', transaction_type: 'Bank Transfer', amount: -5000, created_at: new Date() }
+      ]
+    }
+  });
 });
 
 app.get('/api/finance/statements', verifyToken, requireFinance, async (req, res) => {
@@ -832,10 +1112,14 @@ app.get('/api/finance/statements', verifyToken, requireFinance, async (req, res)
 });
 
 app.get('/api/finance/budgets', verifyToken, requireFinance, async (req, res) => {
-  res.json({ status: 'success', data: { budgets: [
-    { department_name: 'Kitchen Items', type: 'Expense', budget_amount: 120000 },
-    { department_name: 'Rooms', type: 'Revenue', budget_amount: 1000000 }
-  ] } });
+  res.json({
+    status: 'success', data: {
+      budgets: [
+        { department_name: 'Kitchen Items', type: 'Expense', budget_amount: 120000 },
+        { department_name: 'Rooms', type: 'Revenue', budget_amount: 1000000 }
+      ]
+    }
+  });
 });
 
 app.get('/api/finance/cash-register', verifyToken, requireFinance, async (req, res) => {
@@ -866,12 +1150,12 @@ app.get('/api/travel/overview', verifyToken, requireTravel, async (req, res) => 
         COUNT(*) FILTER (WHERE travel_date >= CURRENT_DATE AND booking_status = 'Confirmed') AS upcoming_departures,
         COALESCE(SUM(amount) FILTER (WHERE payment_status IN ('Pending', 'Partial')), 0) AS pending_payments_value,
         COUNT(*) FILTER (WHERE payment_status IN ('Pending', 'Partial')) AS pending_payments_count
-      FROM all_bookings;
+      FROM travel_bookings WHERE ${getHotelFilter(req)};
     `);
 
     const trendRes = await pool.query(`
       WITH all_bookings AS (
-        SELECT id, amount, created_at, booking_status FROM travel_bookings
+        SELECT id, amount, created_at, booking_status FROM travel_bookings WHERE ${getHotelFilter(req)}
         UNION ALL
         SELECT id, amount, created_at, booking_status FROM vehicle_bookings
       )
@@ -887,23 +1171,18 @@ app.get('/api/travel/overview', verifyToken, requireTravel, async (req, res) => 
       SELECT tp.name AS label, COUNT(tb.id) AS bookings, COALESCE(SUM(tb.amount), 0) AS value
       FROM travel_packages tp
       LEFT JOIN travel_bookings tb ON tb.package_id = tp.id AND tb.booking_status != 'Cancelled'
+      WHERE ${getHotelFilter(req, 'tp')}
       GROUP BY tp.name
       ORDER BY value DESC
       LIMIT 6;
     `);
 
     const recentRes = await pool.query(`
-      WITH recent_all AS (
-        SELECT tb.id, tb.guest_name, tp.name AS package_name, tb.travel_date, tb.amount, tb.payment_status, tb.booking_status, tb.created_at
-        FROM travel_bookings tb
-        LEFT JOIN travel_packages tp ON tp.id = tb.package_id
-        UNION ALL
-        SELECT vb.id, vb.guest_name, tv.model || ' (' || tv.type || ')' AS package_name, vb.travel_date, vb.amount, vb.payment_status, vb.booking_status, vb.created_at
-        FROM vehicle_bookings vb
-        LEFT JOIN travel_vehicles tv ON tv.id = vb.vehicle_id
-      )
-      SELECT * FROM recent_all
-      ORDER BY created_at DESC
+      SELECT tb.id, tb.guest_name, tp.name AS package_name, tb.travel_date, tb.amount, tb.payment_status, tb.booking_status, tb.created_at
+      FROM travel_bookings tb
+      LEFT JOIN travel_packages tp ON tp.id = tb.package_id
+      WHERE ${getHotelFilter(req, 'tb')}
+      ORDER BY tb.created_at DESC
       LIMIT 6;
     `);
 
@@ -929,6 +1208,7 @@ app.get('/api/travel/packages', verifyToken, requireTravel, async (req, res) => 
         COALESCE(SUM(tb.amount) FILTER (WHERE tb.booking_status != 'Cancelled'), 0) AS revenue
       FROM travel_packages tp
       LEFT JOIN travel_bookings tb ON tb.package_id = tp.id
+      WHERE ${getHotelFilter(req, 'tp')}
       GROUP BY tp.id
       ORDER BY tp.created_at DESC;
     `);
@@ -946,9 +1226,9 @@ app.post('/api/travel/packages', verifyToken, requireTravel, async (req, res) =>
   }
   try {
     const result = await pool.query(
-      `INSERT INTO travel_packages (name, destination, description, category, price, duration_days, max_travelers)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [name, destination, description || '', category || 'Leisure', price, duration_days || 3, max_travelers || 4]
+      `INSERT INTO travel_packages (name, destination, description, category, price, duration_days, max_travelers, hotel_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [name, destination, description || '', category || 'Leisure', price, duration_days || 3, max_travelers || 4, req.user.hotelId]
     );
     await logAuditAction(req.user.userId, 'Create Travel Package', `Added new package: ${name} (${destination})`);
     res.status(201).json({ status: 'success', data: { package: result.rows[0] } });
@@ -961,7 +1241,7 @@ app.post('/api/travel/packages', verifyToken, requireTravel, async (req, res) =>
 app.patch('/api/travel/packages/:id/toggle-active', verifyToken, requireTravel, async (req, res) => {
   try {
     const result = await pool.query(
-      'UPDATE travel_packages SET is_active = NOT is_active WHERE id = $1 RETURNING *',
+      `UPDATE travel_packages SET is_active = NOT is_active WHERE id = $1 AND ${getHotelFilter(req)} RETURNING *`,
       [req.params.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Package not found' });
@@ -985,7 +1265,8 @@ app.get('/api/travel/bookings', verifyToken, requireTravel, async (req, res) => 
       params.push(`%${search.toLowerCase()}%`);
       conditions.push(`(LOWER(tb.guest_name) LIKE $${params.length} OR LOWER(tp.name) LIKE $${params.length} OR LOWER(tb.guest_email) LIKE $${params.length})`);
     }
-    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    conditions.push(getHotelFilter(req, 'tb'));
+    const whereClause = `WHERE ${conditions.join(' AND ')}`;
     const result = await pool.query(`
       SELECT tb.*, tp.name AS package_name, tp.destination
       FROM travel_bookings tb
@@ -1011,9 +1292,9 @@ app.post('/api/travel/bookings', verifyToken, requireTravel, async (req, res) =>
 
     const amount = Number(pkgRes.rows[0].price) * Number(travelers_count || 1);
     const result = await pool.query(
-      `INSERT INTO travel_bookings (package_id, guest_name, guest_email, guest_phone, travelers_count, travel_date, amount, payment_status, booked_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [package_id, guest_name, guest_email || null, guest_phone || null, travelers_count || 1, travel_date, amount, payment_status || 'Pending', req.user.userId]
+      `INSERT INTO travel_bookings (package_id, guest_name, guest_email, guest_phone, travelers_count, travel_date, amount, payment_status, booked_by, hotel_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [package_id, guest_name, guest_email || null, guest_phone || null, travelers_count || 1, travel_date, amount, payment_status || 'Pending', req.user.userId, req.user.hotelId]
     );
     await logAuditAction(req.user.userId, 'New Travel Booking', `Booked for ${guest_name}: ₹${amount}`);
     res.status(201).json({ status: 'success', data: { booking: result.rows[0] } });
@@ -1030,7 +1311,7 @@ app.patch('/api/travel/bookings/:id/status', verifyToken, requireTravel, async (
       `UPDATE travel_bookings SET
          payment_status = COALESCE($1, payment_status),
          booking_status = COALESCE($2, booking_status)
-       WHERE id = $3 RETURNING *`,
+       WHERE id = $3 AND ${getHotelFilter(req)} RETURNING *`,
       [payment_status || null, booking_status || null, req.params.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Booking not found' });
@@ -1048,7 +1329,8 @@ app.get('/api/travel/customers', verifyToken, requireTravel, async (req, res) =>
         COUNT(*) AS total_bookings,
         COALESCE(SUM(amount), 0) AS total_spent,
         MAX(travel_date) AS last_travel_date
-      FROM travel_bookings
+      FROM travel_bookings tb
+      WHERE ${getHotelFilter(req, 'tb')}
       GROUP BY guest_name, guest_email, guest_phone
       ORDER BY total_spent DESC;
     `);
@@ -1154,13 +1436,16 @@ app.patch('/api/travel/vehicle-bookings/:id/status', verifyToken, requireTravel,
 // Admin (ADMIN) ADMINISTRATIVE ENDPOINTS
 // ==========================================
 
-app.get('/api/Admin/live-operations', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+// 1. COMPREHENSIVE LIVE OPERATIONS DASHBOARD ENDPOINT
+app.get('/api/Admin/live-operations', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   try {
-    const totalRoomsRes = await pool.query("SELECT COUNT(*) FROM rooms;");
-    const occupiedRoomsRes = await pool.query("SELECT COUNT(*) FROM rooms WHERE status = 'OCCUPIED';");
-    const maintenanceRoomsRes = await pool.query("SELECT COUNT(*) FROM rooms WHERE status = 'MAINTENANCE';");
+
+
+    const totalRoomsRes = await pool.query(`SELECT COUNT(*) FROM rooms WHERE ${getHotelFilter(req)};`);
+    const occupiedRoomsRes = await pool.query(`SELECT COUNT(*) FROM rooms WHERE status = 'OCCUPIED' AND ${getHotelFilter(req)};`);
+    const maintenanceRoomsRes = await pool.query(`SELECT COUNT(*) FROM rooms WHERE status = 'MAINTENANCE' AND ${getHotelFilter(req)};`);
     const todaysRevenueRes = await pool.query(
-      "SELECT COALESCE(SUM(CAST(total_price AS NUMERIC)), 0) as total FROM bookings WHERE DATE(created_at) = CURRENT_DATE AND status NOT IN ('CANCELLED')"
+      `SELECT COALESCE(SUM(CAST(total_price AS NUMERIC)), 0) as total FROM bookings WHERE DATE(created_at) = CURRENT_DATE AND status NOT IN ('CANCELLED') AND ${getHotelFilter(req)}`
     );
 
     const totalRooms = parseInt(totalRoomsRes.rows[0].count) || 0;
@@ -1170,59 +1455,65 @@ app.get('/api/Admin/live-operations', verifyToken, requireRole(['ADMIN']), async
     const occupancyRate = salableRooms > 0 ? Math.round((occupiedRooms / salableRooms) * 100) : 0;
     const todaysRevenue = parseFloat(todaysRevenueRes.rows[0].total) || 0;
 
-    const statusDistRes = await pool.query("SELECT status, COUNT(*)::int as count FROM rooms GROUP BY status ORDER BY status");
+    const statusDistRes = await pool.query(`SELECT status, COUNT(*)::int as count FROM rooms WHERE ${getHotelFilter(req)} GROUP BY status ORDER BY status`);
     const roomStatusDistribution = {};
     statusDistRes.rows.forEach(r => { roomStatusDistribution[r.status] = r.count; });
 
     const occupancyTrendRes = await pool.query(`
       SELECT d::date as date, COUNT(b.id)::int as occupied_count
       FROM generate_series(CURRENT_DATE - INTERVAL '3 days', CURRENT_DATE + INTERVAL '3 days', '1 day') d
-      LEFT JOIN bookings b ON b.check_in_date <= d::date AND b.check_out_date > d::date AND b.status IN ('CONFIRMED', 'CHECKED_IN')
+      LEFT JOIN bookings b ON b.check_in_date <= d::date AND b.check_out_date > d::date AND b.status IN ('CONFIRMED', 'CHECKED_IN') AND ${getHotelFilter(req, 'b')}
       GROUP BY d::date ORDER BY d::date ASC
     `);
     const occupancyTrend = occupancyTrendRes.rows.map(r => ({ date: r.date, occupied: r.occupied_count, total: totalRooms }));
 
-    const arrivalsRes = await pool.query("SELECT COUNT(*)::int as count FROM bookings WHERE check_in_date = CURRENT_DATE AND status IN ('CONFIRMED', 'CHECKED_IN')");
-    const departuresRes = await pool.query("SELECT COUNT(*)::int as count FROM bookings WHERE check_out_date = CURRENT_DATE AND status IN ('CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT')");
+    const arrivalsRes = await pool.query(`SELECT COUNT(*)::int as count FROM bookings WHERE check_in_date = CURRENT_DATE AND status IN ('CONFIRMED', 'CHECKED_IN') AND ${getHotelFilter(req)}`);
+    const departuresRes = await pool.query(`SELECT COUNT(*)::int as count FROM bookings WHERE check_out_date = CURRENT_DATE AND status IN ('CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT') AND ${getHotelFilter(req)}`);
 
     const pendingCheckinsRes = await pool.query(`
-      SELECT b.id, g.name as guest_name, r.room_number, rt.name as room_type, b.check_in_date
+      SELECT b.id, g.name as guest_name, r.room_number, rt.name as room_type, b.check_in_date, h.name as hotel_name
       FROM bookings b JOIN guests g ON b.guest_id = g.id JOIN rooms r ON b.room_id = r.id JOIN room_types rt ON r.room_type_id = rt.id
-      WHERE b.status = 'CONFIRMED' AND b.check_in_date <= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+      LEFT JOIN hotels h ON r.hotel_id = h.id
+      WHERE b.status = 'CONFIRMED' AND b.check_in_date <= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date AND ${getHotelFilter(req, 'r')}
       ORDER BY b.check_in_date ASC LIMIT 8
     `);
 
     const overstaysRes = await pool.query(`
-      SELECT b.id, g.name as guest_name, r.room_number, b.check_out_date
+      SELECT b.id, g.name as guest_name, r.room_number, b.check_out_date, h.name as hotel_name
       FROM bookings b JOIN guests g ON b.guest_id = g.id JOIN rooms r ON b.room_id = r.id
-      WHERE b.status = 'CHECKED_IN' AND (
+      LEFT JOIN hotels h ON r.hotel_id = h.id
+      WHERE b.status = 'CHECKED_IN' AND ${getHotelFilter(req, 'r')} AND (
         b.check_out_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date 
         OR (b.check_out_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date AND EXTRACT(HOUR FROM CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata') >= 11)
       ) ORDER BY b.check_out_date ASC LIMIT 5
     `);
 
     const dirtyRoomsRes = await pool.query(`
-      SELECT r.room_number, rt.name as room_type, rt.base_price
+      SELECT r.room_number, rt.name as room_type, rt.base_price, h.name as hotel_name
       FROM rooms r JOIN room_types rt ON r.room_type_id = rt.id
-      WHERE r.status IN ('DIRTY', 'CLEANING') ORDER BY rt.base_price DESC LIMIT 6
+      LEFT JOIN hotels h ON r.hotel_id = h.id
+      WHERE r.status IN ('DIRTY', 'CLEANING') AND ${getHotelFilter(req, 'r')} ORDER BY rt.base_price DESC LIMIT 6
     `);
 
     let highPriorityTickets = [];
     try {
       const ticketsRes = await pool.query(`
-        SELECT m.id, m.issue, m.priority, m.status, m.assigned_to, r.room_number
+        SELECT m.id, m.issue, m.priority, m.status, m.assigned_to, r.room_number, h.name as hotel_name
         FROM maintenance_tickets m JOIN rooms r ON m.room_id = r.id
-        WHERE m.status != 'Resolved' ORDER BY CASE m.priority WHEN 'High' THEN 1 WHEN 'Medium' THEN 2 ELSE 3 END ASC LIMIT 5
+        LEFT JOIN hotels h ON r.hotel_id = h.id
+        WHERE m.status != 'Resolved' AND ${getHotelFilter(req, 'r')} ORDER BY CASE m.priority WHEN 'High' THEN 1 WHEN 'Medium' THEN 2 ELSE 3 END ASC LIMIT 5
       `);
       highPriorityTickets = ticketsRes.rows;
     } catch (e) {
-      const mRooms = await pool.query("SELECT id, room_number, 'System Maintenance' as issue, 'Medium' as priority, 'Pending' as status, 'Unassigned' as assigned_to FROM rooms WHERE status = 'MAINTENANCE' LIMIT 5");
+      const mRooms = await pool.query(`SELECT r.id, r.room_number, 'System Maintenance' as issue, 'Medium' as priority, 'Pending' as status, 'Unassigned' as assigned_to, h.name as hotel_name FROM rooms r LEFT JOIN hotels h ON r.hotel_id = h.id WHERE r.status = 'MAINTENANCE' AND ${getHotelFilter(req, 'r')} LIMIT 5`);
       highPriorityTickets = mRooms.rows;
     }
 
     const activityRes = await pool.query(`
-      SELECT b.id, b.status as action, b.created_at, b.check_in_date, b.check_out_date, g.name as guest_name, r.room_number, rt.name as room_type
+      SELECT b.id, b.status as action, b.created_at, b.check_in_date, b.check_out_date, g.name as guest_name, r.room_number, rt.name as room_type, h.name as hotel_name
       FROM bookings b JOIN guests g ON b.guest_id = g.id JOIN rooms r ON b.room_id = r.id JOIN room_types rt ON r.room_type_id = rt.id
+      LEFT JOIN hotels h ON r.hotel_id = h.id
+      WHERE ${getHotelFilter(req, 'r')}
       ORDER BY b.created_at DESC LIMIT 15
     `);
 
@@ -1241,11 +1532,18 @@ app.get('/api/Admin/live-operations', verifyToken, requireRole(['ADMIN']), async
   }
 });
 
-app.get('/api/Admin/rooms', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+// 2. GET ALL ROOMS CONFIGURATION LIST FOR ADMIN MANAGEMENT
+// FETCH ALL ROOMS FOR INVENTORY GRID (Updated for Hierarchical Grouping)
+app.get('/api/Admin/rooms', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   try {
+
+
     const query = `
-      SELECT r.id, r.room_number, r.status, r.room_blocked, r.room_type_id, rt.name as room_type, rt.base_price
-      FROM rooms r JOIN room_types rt ON r.room_type_id = rt.id ORDER BY r.room_number ASC;
+      SELECT r.id, r.room_number, r.status, r.room_blocked, r.room_type_id, rt.name as room_type, rt.base_price, h.name as hotel_name
+      FROM rooms r JOIN room_types rt ON r.room_type_id = rt.id 
+      LEFT JOIN hotels h ON r.hotel_id = h.id
+      WHERE ${getHotelFilter(req, 'r')}
+      ORDER BY r.room_number ASC;
     `;
     const result = await pool.query(query);
     res.json({ status: 'success', data: { rooms: result.rows } });
@@ -1254,7 +1552,8 @@ app.get('/api/Admin/rooms', verifyToken, requireRole(['ADMIN']), async (req, res
   }
 });
 
-app.post('/api/Admin/rooms/:id/toggle-block', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+// 3. ACTION TRIGGER: TOGGLE ADMINISTRATIVE ROOM BLOCK (Out of Order)
+app.post('/api/Admin/rooms/:id/toggle-block', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   const { id } = req.params;
   try {
     const roomCheck = await pool.query('SELECT room_blocked, status FROM rooms WHERE id = $1', [id]);
@@ -1269,7 +1568,8 @@ app.post('/api/Admin/rooms/:id/toggle-block', verifyToken, requireRole(['ADMIN']
   }
 });
 
-app.get('/api/Admin/room-types', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+// 4. GET ROOM TYPES (For the Add Room Dropdown)
+app.get('/api/Admin/room-types', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   try {
     const result = await pool.query('SELECT id, name, base_price FROM room_types ORDER BY base_price ASC');
     res.json({ status: 'success', data: { roomTypes: result.rows } });
@@ -1278,19 +1578,32 @@ app.get('/api/Admin/room-types', verifyToken, requireRole(['ADMIN']), async (req
   }
 });
 
-app.post('/api/Admin/rooms', verifyToken, requireRole(['ADMIN']), async (req, res) => {
-  const { room_number, room_type_id } = req.body;
+// 5. ADD NEW ROOM TO INVENTORY
+app.post('/api/Admin/rooms', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
+  const { room_number, room_type_id, hotel_id } = req.body;
+  const targetHotelId = req.user.hotelId || hotel_id;
   try {
-    const check = await pool.query('SELECT id FROM rooms WHERE room_number = $1', [room_number]);
+    // Room number must be unique per hotel
+    const check = await pool.query(
+      targetHotelId
+        ? 'SELECT id FROM rooms WHERE room_number = $1 AND hotel_id = $2'
+        : 'SELECT id FROM rooms WHERE room_number = $1 AND hotel_id IS NULL',
+      targetHotelId ? [room_number, targetHotelId] : [room_number]
+    );
     if (check.rows.length > 0) return res.status(400).json({ error: 'Room number already exists in inventory.' });
-    await pool.query("INSERT INTO rooms (room_number, room_type_id, status, room_blocked) VALUES ($1, $2, 'AVAILABLE', false)", [room_number, room_type_id]);
+
+    await pool.query(
+      "INSERT INTO rooms (room_number, room_type_id, status, room_blocked, hotel_id) VALUES ($1, $2, 'AVAILABLE', false, $3)",
+      [room_number, room_type_id, targetHotelId || null]
+    );
     res.json({ status: 'success', message: 'Room added to inventory.' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to add room to database.' });
   }
 });
 
-app.delete('/api/Admin/rooms/:id', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+// 6. REMOVE ROOM FROM INVENTORY (Force Delete connected records)
+app.delete('/api/Admin/rooms/:id', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   const { id } = req.params;
   try {
     await pool.query('DELETE FROM bookings WHERE room_id = $1', [id]);
@@ -1301,11 +1614,16 @@ app.delete('/api/Admin/rooms/:id', verifyToken, requireRole(['ADMIN']), async (r
   }
 });
 
-app.get('/api/Admin/maintenance', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+// 7. GET MAINTENANCE TICKETS
+app.get('/api/Admin/maintenance', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   try {
+
+
     const query = `
       SELECT m.id, m.issue, m.assigned_to, m.priority, m.status, m.created_at, m.room_id, r.room_number, r.room_blocked 
-      FROM maintenance_tickets m JOIN rooms r ON m.room_id = r.id ORDER BY m.created_at DESC;
+      FROM maintenance_tickets m JOIN rooms r ON m.room_id = r.id
+      WHERE ${getHotelFilter(req, 'r')}
+      ORDER BY m.created_at DESC;
     `;
     const result = await pool.query(query);
     res.json({ status: 'success', data: { tickets: result.rows } });
@@ -1314,7 +1632,8 @@ app.get('/api/Admin/maintenance', verifyToken, requireRole(['ADMIN']), async (re
   }
 });
 
-app.post('/api/Admin/maintenance', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+// 8. CREATE MAINTENANCE TICKET
+app.post('/api/Admin/maintenance', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   const { room_id, issue, priority, assigned_to } = req.body;
   try {
     await pool.query('BEGIN');
@@ -1328,7 +1647,8 @@ app.post('/api/Admin/maintenance', verifyToken, requireRole(['ADMIN']), async (r
   }
 });
 
-app.patch('/api/Admin/maintenance/:id/status', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+// 9. UPDATE TICKET STATUS
+app.patch('/api/Admin/maintenance/:id/status', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
   try {
@@ -1346,7 +1666,8 @@ app.patch('/api/Admin/maintenance/:id/status', verifyToken, requireRole(['ADMIN'
   }
 });
 
-app.patch('/api/Admin/maintenance/:id/assign', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+// 10. DYNAMIC STAFF ASSIGNMENT
+app.patch('/api/Admin/maintenance/:id/assign', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   const { id } = req.params;
   const { assigned_to } = req.body;
   try {
@@ -1360,7 +1681,7 @@ app.patch('/api/Admin/maintenance/:id/assign', verifyToken, requireRole(['ADMIN'
   }
 });
 
-app.patch('/api/Admin/rooms/:id/status', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.patch('/api/Admin/rooms/:id/status', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
   const validStatuses = ['AVAILABLE', 'OCCUPIED', 'DIRTY', 'CLEANING', 'INSPECTING', 'MAINTENANCE'];
@@ -1479,9 +1800,12 @@ app.post('/api/channel-Admin/webhook', async (req, res) => {
       if (availableRoom.rows.length === 0) throw new Error('No available rooms of this type for the selected dates');
       const assignedRoomId = availableRoom.rows[0].id;
 
+      const roomRes = await pool.query('SELECT hotel_id FROM rooms WHERE id = $1', [assignedRoomId]);
+      const hotelId = roomRes.rows.length > 0 ? roomRes.rows[0].hotel_id : null;
+
       const bRes = await pool.query(
-        `INSERT INTO bookings (guest_id, room_id, check_in_date, check_out_date, total_price, status, source, ota_reference) VALUES ($1, $2, $3, $4, $5, 'CONFIRMED', 'OTA', $6) RETURNING id;`,
-        [guestId, assignedRoomId, check_in_date, check_out_date, total_price, ota_reference]
+        `INSERT INTO bookings (guest_id, room_id, check_in_date, check_out_date, total_price, status, source, ota_reference, hotel_id) VALUES ($1, $2, $3, $4, $5, 'CONFIRMED', 'OTA', $6, $7) RETURNING id;`,
+        [guestId, assignedRoomId, check_in_date, check_out_date, total_price, ota_reference, hotelId]
       );
       if (commission_amount) {
         await pool.query(`INSERT INTO ledger_transactions (booking_id, amount, transaction_type, status) VALUES ($1, $2, 'OTA_COMMISSION', 'PENDING_PAYMENT')`, [bRes.rows[0].id, commission_amount]);
@@ -1522,9 +1846,10 @@ app.patch('/api/rooms/:id/status', verifyStaffToken, async (req, res) => {
 // Admin / ADMIN COMMAND CENTER EXTENDED ENDPOINTS
 // =========================================================================
 
-app.get('/api/Admin/yield-rules', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+// 1. DYNAMIC PRICING & YIELD MANAGEMENT: Fetch All Rules
+app.get('/api/Admin/yield-rules', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   try {
-    const rules = await pool.query('SELECT * FROM yield_rules;');
+    const rules = await pool.query(`SELECT * FROM yield_rules WHERE ${getHotelFilter(req)};`);
     const rulesObj = {
       pricing_surges: { enabled: false, surge_percentage: 20, occupancy_threshold: 80 },
       los_discount: { enabled: false, min_nights: 5, discount_percentage: 10 },
@@ -1540,25 +1865,37 @@ app.get('/api/Admin/yield-rules', verifyToken, requireRole(['ADMIN']), async (re
   }
 });
 
-app.post('/api/Admin/yield-rules', verifyToken, requireRole(['ADMIN']), async (req, res) => {
-  const { key, value } = req.body;
+// 2. DYNAMIC PRICING & YIELD MANAGEMENT: Update Yield Rule
+app.post('/api/Admin/yield-rules', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
+  const { key, value, apply_to_all } = req.body;
   if (!key || value === undefined) return res.status(400).json({ error: 'Key and value are required' });
   try {
-    await pool.query('INSERT INTO yield_rules (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;', [key, value]);
-    await logAuditAction(req.user.userId, 'Update Yield Rule', `Updated configuration for rule: ${key}`);
+    if (apply_to_all && req.user.role === 'SUPER_ADMIN') {
+      const hotelsRes = await pool.query('SELECT id FROM hotels');
+      for (const h of hotelsRes.rows) {
+        await pool.query('INSERT INTO yield_rules (key, value, hotel_id) VALUES ($1, $2, $3) ON CONFLICT (hotel_id, key) DO UPDATE SET value = EXCLUDED.value;', [key, value, h.id]);
+      }
+      await logAuditAction(req.user.userId, 'Global Yield Override', `Forced configuration for rule: ${key} to all properties`);
+    } else {
+      await pool.query('INSERT INTO yield_rules (key, value, hotel_id) VALUES ($1, $2, $3) ON CONFLICT (hotel_id, key) DO UPDATE SET value = EXCLUDED.value;', [key, value, req.user.hotelId]);
+      await logAuditAction(req.user.userId, 'Update Yield Rule', `Updated configuration for rule: ${key}`);
+    }
     res.json({ status: 'success', message: `Rule ${key} updated successfully` });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update yield rule configuration' });
   }
 });
 
-app.get('/api/Admin/audit-logs', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+// 3. SYSTEM WATCHDOG: Fetch Immutable Audit Trail
+app.get('/api/Admin/audit-logs', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   const { q } = req.query;
   try {
-    let query = 'SELECT * FROM system_audit_logs ORDER BY created_at DESC LIMIT 100;';
+
+
+    let query = `SELECT s.*, h.name as hotel_name FROM system_audit_logs s LEFT JOIN hotels h ON s.hotel_id = h.id WHERE ${getHotelFilter(req, 's')} ORDER BY s.created_at DESC LIMIT 100;`;
     let params = [];
     if (q && q.trim() !== '') {
-      query = `SELECT * FROM system_audit_logs WHERE user_name ILIKE $1 OR user_role ILIKE $1 OR action ILIKE $1 OR details ILIKE $1 ORDER BY created_at DESC LIMIT 100;`;
+      query = `SELECT s.*, h.name as hotel_name FROM system_audit_logs s LEFT JOIN hotels h ON s.hotel_id = h.id WHERE (s.user_name ILIKE $1 OR s.user_role ILIKE $1 OR s.action ILIKE $1 OR s.details ILIKE $1 OR h.name ILIKE $1) AND ${getHotelFilter(req, 's')} ORDER BY s.created_at DESC LIMIT 100;`;
       params = [`%${q}%`];
     }
     const logs = await pool.query(query, params);
@@ -1568,11 +1905,16 @@ app.get('/api/Admin/audit-logs', verifyToken, requireRole(['ADMIN']), async (req
   }
 });
 
-app.get('/api/Admin/permissions', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+// 4. ACCESS CONTROL: Fetch All User Roles & Custom Permissions
+app.get('/api/Admin/permissions', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   try {
+
+
     const permQuery = `
       SELECT u.id, u.name, u.email, u.role, COALESCE(p.can_process_refunds, false) as can_process_refunds, COALESCE(p.can_apply_discounts, false) as can_apply_discounts, COALESCE(p.can_overbook, false) as can_overbook
-      FROM users u LEFT JOIN user_permissions p ON u.id = p.user_id ORDER BY u.role, u.name;
+      FROM users u LEFT JOIN user_permissions p ON u.id = p.user_id
+      WHERE ${getHotelFilter(req, 'u')}
+      ORDER BY u.role, u.name;
     `;
     const usersPerm = await pool.query(permQuery);
     res.json({ status: 'success', data: { permissions: usersPerm.rows } });
@@ -1581,7 +1923,8 @@ app.get('/api/Admin/permissions', verifyToken, requireRole(['ADMIN']), async (re
   }
 });
 
-app.post('/api/Admin/permissions/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+// 5. ACCESS CONTROL: Save Specific User Permissions
+app.post('/api/Admin/permissions/:userId', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   const { userId } = req.params;
   const { role, can_process_refunds, can_apply_discounts, can_overbook } = req.body;
   try {
@@ -1600,11 +1943,16 @@ app.post('/api/Admin/permissions/:userId', verifyToken, requireRole(['ADMIN']), 
   }
 });
 
-app.get('/api/Admin/shifts', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+// 6. SHIFT & ACTIVE STAFF SESSION MONITORING
+app.get('/api/Admin/shifts', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   try {
+
+
     const shiftQuery = `
       SELECT s.id, u.id as user_id, u.name, u.email, u.role, s.login_time, s.logout_time, (CASE WHEN s.logout_time IS NULL THEN true ELSE false END) as is_active, ROUND(EXTRACT(EPOCH FROM (COALESCE(s.logout_time, NOW()) - s.login_time)) / 60)::int AS duration_minutes
-      FROM staff_shifts s JOIN users u ON s.user_id = u.id ORDER BY s.login_time DESC LIMIT 60;
+      FROM staff_shifts s JOIN users u ON s.user_id = u.id
+      WHERE ${getHotelFilter(req, 'u')}
+      ORDER BY s.login_time DESC LIMIT 60;
     `;
     const shifts = await pool.query(shiftQuery);
     res.json({ status: 'success', data: { shifts: shifts.rows } });
@@ -1613,16 +1961,19 @@ app.get('/api/Admin/shifts', verifyToken, requireRole(['ADMIN']), async (req, re
   }
 });
 
-app.get('/api/Admin/salaries', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+// 6b. STAFF SALARY CONFIGURATION
+app.get('/api/Admin/salaries', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM staff_salaries');
+
+
+    const result = await pool.query(`SELECT s.* FROM staff_salaries s JOIN users u ON s.user_id = u.id WHERE ${getHotelFilter(req, 'u')}`);
     res.json({ status: 'success', data: { salaries: result.rows } });
   } catch (err) {
     res.status(500).json({ error: 'Failed to access salary configurations' });
   }
 });
 
-app.get('/api/Admin/salary/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/Admin/salary/:userId', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   try {
     const { userId } = req.params;
     const result = await pool.query('SELECT * FROM staff_salaries WHERE user_id = $1', [userId]);
@@ -1633,7 +1984,7 @@ app.get('/api/Admin/salary/:userId', verifyToken, requireRole(['ADMIN']), async 
   }
 });
 
-app.post('/api/Admin/salary/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/Admin/salary/:userId', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   try {
     const { userId } = req.params;
     const { base_salary_monthly, daily_deduction } = req.body;
@@ -1650,16 +2001,25 @@ app.post('/api/Admin/salary/:userId', verifyToken, requireRole(['ADMIN']), async
   }
 });
 
-app.get('/api/Admin/crm/guests', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+// 7. CRM / GUEST REGISTRY: VIP & Blacklist Controls
+app.get('/api/Admin/crm/guests', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   try {
-    const guests = await pool.query('SELECT * FROM guests ORDER BY is_vip DESC, is_blacklisted DESC, name ASC;');
+
+
+    const guests = await pool.query(`
+      SELECT DISTINCT g.* FROM guests g
+      JOIN bookings b ON b.guest_id = g.id
+      JOIN rooms r ON b.room_id = r.id
+      WHERE ${getHotelFilter(req, 'r')}
+      ORDER BY g.is_vip DESC, g.is_blacklisted DESC, g.name ASC;
+    `);
     res.json({ status: 'success', data: { guests: guests.rows } });
   } catch (err) {
     res.status(500).json({ error: 'Database error while fetching CRM guest registry' });
   }
 });
 
-app.post('/api/Admin/crm/guests/:id', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.post('/api/Admin/crm/guests/:id', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   const { id } = req.params;
   const { is_vip, is_blacklisted } = req.body;
   try {
@@ -1671,7 +2031,8 @@ app.post('/api/Admin/crm/guests/:id', verifyToken, requireRole(['ADMIN']), async
   }
 });
 
-app.post('/api/Admin/broadcast', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+// 8. DEPARTMENTAL BROADCASTING
+app.post('/api/Admin/broadcast', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   const { targetDept, message } = req.body;
   if (!message) return res.status(400).json({ error: 'Message content is required' });
   try {
@@ -1703,7 +2064,19 @@ app.post('/api/Admin/broadcast', verifyToken, requireRole(['ADMIN']), async (req
   }
 });
 
-app.post('/api/Admin/staff/onboard', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+app.get('/api/broadcasts', verifyToken, async (req, res) => {
+  try {
+    const userRes = await pool.query('SELECT role FROM users WHERE id = $1', [req.user.userId]);
+    const userRole = userRes.rows.length > 0 ? userRes.rows[0].role : 'NONE';
+    const result = await pool.query(`SELECT b.id, b.target_dept, b.message, b.sender_name, b.created_at, b.expires_at, h.name as hotel_name FROM broadcasts b LEFT JOIN hotels h ON b.hotel_id = h.id WHERE (b.target_dept = 'ALL' OR UPPER(b.target_dept) = UPPER($1) OR $1 = 'ADMIN' OR $1 = 'SUPER_ADMIN') ORDER BY b.created_at DESC`, [userRole]);
+    res.json({ status: 'success', data: { broadcasts: result.rows } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch broadcasts' });
+  }
+});
+
+// 9. HR lifecycle: Onboard Employee
+app.post('/api/Admin/staff/onboard', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   const { email, password, name, role } = req.body;
   if (!email || !password || !name) return res.status(400).json({ error: 'All fields are required' });
   try {
@@ -1721,7 +2094,8 @@ app.post('/api/Admin/staff/onboard', verifyToken, requireRole(['ADMIN']), async 
   }
 });
 
-app.patch('/api/Admin/staff/:id', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+// 10. HR lifecycle: Update Employee Details
+app.patch('/api/Admin/staff/:id', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   const { id } = req.params;
   const { name, email } = req.body;
   if (!name || !email) return res.status(400).json({ error: 'Name and email are required' });
@@ -1735,7 +2109,8 @@ app.patch('/api/Admin/staff/:id', verifyToken, requireRole(['ADMIN']), async (re
   }
 });
 
-app.post('/api/Admin/staff/offboard/:userId', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+// 11. HR lifecycle: Offboard Employee
+app.post('/api/Admin/staff/offboard/:userId', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   const { userId } = req.params;
   if (userId === req.user.userId) return res.status(400).json({ error: 'You cannot offboard your own administrator account' });
 
@@ -1750,8 +2125,11 @@ app.post('/api/Admin/staff/offboard/:userId', verifyToken, requireRole(['ADMIN']
   }
 });
 
-app.get('/api/Admin/analytics', verifyToken, requireRole(['ADMIN']), async (req, res) => {
+// 11. PREDICTIVE ANALYTICS & STATS PACE ENGINE
+app.get('/api/Admin/analytics', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   try {
+
+
     const currentMonthPace = [{ day: 1, velocity: 12 }, { day: 5, velocity: 18 }, { day: 10, velocity: 26 }, { day: 15, velocity: 38 }, { day: 20, velocity: 49 }, { day: 25, velocity: 63 }, { day: 30, velocity: 74 }];
     const lastYearMonthPace = [{ day: 1, velocity: 8 }, { day: 5, velocity: 14 }, { day: 10, velocity: 22 }, { day: 15, velocity: 30 }, { day: 20, velocity: 41 }, { day: 25, velocity: 52 }, { day: 30, velocity: 61 }];
     const cancellationRates = [{ category: 'Suite (Expedia)', rate: 28 }, { category: 'Deluxe (Expedia)', rate: 19 }, { category: 'Standard (Booking.com)', rate: 24 }, { category: 'Suite (Booking.com)', rate: 15 }, { category: 'Deluxe (Agoda)', rate: 22 }, { category: 'Standard (Direct Booking)', rate: 4 }];
@@ -1769,7 +2147,7 @@ const requireDining = requireRole(['RESTAURANT', 'ADMIN']);
 
 app.get('/api/dining/kots', verifyToken, requireDining, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM dining_kots ORDER BY created_at DESC');
+    const result = await pool.query(`SELECT * FROM dining_kots WHERE ${getHotelFilter(req)} ORDER BY created_at DESC`);
     res.json({ status: 'success', data: result.rows });
   } catch (err) { res.status(500).json({ error: 'Failed to fetch KOTs' }); }
 });
@@ -1777,30 +2155,30 @@ app.get('/api/dining/kots', verifyToken, requireDining, async (req, res) => {
 app.post('/api/dining/kots', verifyToken, requireDining, async (req, res) => {
   const { table, items, type } = req.body;
   try {
-    const result = await pool.query('INSERT INTO dining_kots (table_number, items, type) VALUES ($1, $2, $3) RETURNING *', [table, items, type || 'Dine-in']);
+    const result = await pool.query('INSERT INTO dining_kots (table_number, items, type, hotel_id) VALUES ($1, $2, $3, $4) RETURNING *', [table, items, type || 'Dine-in', req.user.hotelId]);
     res.status(201).json({ status: 'success', data: result.rows[0] });
   } catch (err) { res.status(500).json({ error: 'Failed to create KOT' }); }
 });
 
 app.get('/api/dining/tables', verifyToken, requireDining, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM dining_tables ORDER BY id ASC');
+    const result = await pool.query(`SELECT * FROM dining_tables WHERE ${getHotelFilter(req)} ORDER BY id ASC`);
     res.json({ status: 'success', data: result.rows });
   } catch (err) { res.status(500).json({ error: 'Failed to fetch tables' }); }
 });
 
 app.get('/api/dining/menu', verifyToken, requireDining, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM dining_menu ORDER BY orders DESC');
+    const result = await pool.query(`SELECT * FROM dining_menu WHERE ${getHotelFilter(req)} ORDER BY orders DESC`);
     res.json({ status: 'success', data: result.rows });
   } catch (err) { res.status(500).json({ error: 'Failed to fetch menu' }); }
 });
 
 app.get('/api/dining/overview', verifyToken, requireDining, async (req, res) => {
   try {
-    const activeKotsRes = await pool.query("SELECT COUNT(*) FROM dining_kots WHERE status != 'Served'");
-    const occupiedTablesRes = await pool.query("SELECT COUNT(*) FROM dining_tables WHERE status = 'Occupied'");
-    const totalTablesRes = await pool.query("SELECT COUNT(*) FROM dining_tables");
+    const activeKotsRes = await pool.query(`SELECT COUNT(*) FROM dining_kots WHERE status != 'Served' AND ${getHotelFilter(req)}`);
+    const occupiedTablesRes = await pool.query(`SELECT COUNT(*) FROM dining_tables WHERE status = 'Occupied' AND ${getHotelFilter(req)}`);
+    const totalTablesRes = await pool.query(`SELECT COUNT(*) FROM dining_tables WHERE ${getHotelFilter(req)}`);
 
     const activeKots = parseInt(activeKotsRes.rows[0].count);
     const occupiedTables = parseInt(occupiedTablesRes.rows[0].count);
@@ -1838,7 +2216,7 @@ const requireSales = requireRole(['SALES_HEAD', 'SALES_EXECUTIVE', 'ADMIN', 'SAL
 app.get('/api/sales/me', verifyToken, requireSales, async (req, res) => {
   try {
     const { userId, role } = req.user;
-    
+
     // Admins and Sales Heads see total company achieved, Sales Reps see their own closed-won deals
     let query = `SELECT COALESCE(SUM(value), 0) as total_achieved FROM sales_leads WHERE stage = 'Won' AND deleted_at IS NULL`;
     let params = [];
@@ -1849,7 +2227,7 @@ app.get('/api/sales/me', verifyToken, requireSales, async (req, res) => {
     }
 
     const achievedRes = await pool.query(query, params);
-    
+
     const userRes = await pool.query('SELECT name FROM users WHERE id = $1', [userId]);
     const name = userRes.rows[0]?.name || 'Sales Staff';
     const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
@@ -1860,9 +2238,9 @@ app.get('/api/sales/me', verifyToken, requireSales, async (req, res) => {
         id: userId,
         name: name,
         initials: initials,
-        target: 1200000, 
+        target: 1200000,
         achieved: parseFloat(achievedRes.rows[0].total_achieved),
-        baseIncentiveRate: 0.025 
+        baseIncentiveRate: 0.025
       }
     });
   } catch (err) {
@@ -1872,18 +2250,7 @@ app.get('/api/sales/me', verifyToken, requireSales, async (req, res) => {
 
 app.get('/api/sales/leads', verifyToken, requireSales, async (req, res) => {
   try {
-    const { userId, role } = req.user;
-    let query = 'SELECT * FROM sales_leads WHERE deleted_at IS NULL';
-    let params = [];
-
-    // Filter by assigned user unless they are an Admin or Sales Head
-    if (role !== 'ADMIN' && role !== 'SALES_HEAD') {
-      query += ' AND assigned_to = $1';
-      params.push(userId);
-    }
-    query += ' ORDER BY created_at DESC';
-
-    const result = await pool.query(query, params);
+    const result = await pool.query(`SELECT * FROM sales_leads WHERE ${getHotelFilter(req)} ORDER BY created_at DESC`);
     res.json({ status: 'success', data: result.rows });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch leads' });
@@ -1904,24 +2271,13 @@ const leadSchema = z.object({
 
 app.post('/api/sales/leads', verifyToken, requireSales, async (req, res) => {
   try {
-    const validatedData = leadSchema.parse(req.body); 
+    const validatedData = leadSchema.parse(req.body);
     const { userId } = req.user;
 
     const result = await pool.query(
-      `INSERT INTO sales_leads (company, deal_name, value, stage, source, product_type, contact_name, contact_email, contact_phone, assigned_to) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-      [
-        validatedData.company, 
-        validatedData.deal_name, 
-        validatedData.value, 
-        validatedData.stage, 
-        validatedData.source, 
-        validatedData.product_type || 'Rooms',
-        validatedData.contact_name, 
-        validatedData.contact_email, 
-        validatedData.contact_phone,
-        userId // Automatically assign the lead to the user making the request
-      ]
+      `INSERT INTO sales_leads (company, deal_name, value, stage, source, contact_name, contact_email, contact_phone, hotel_id) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [company, deal_name, value || 0, stage || 'New', source, contact_name, contact_email, contact_phone, req.user.hotelId]
     );
     res.status(201).json({ status: 'success', data: result.rows[0] });
   } catch (err) {
@@ -1937,55 +2293,7 @@ app.post('/api/sales/leads', verifyToken, requireSales, async (req, res) => {
 app.post('/api/sales/leads/:id/convert', verifyToken, requireSales, async (req, res) => {
   const client = await pool.connect();
   try {
-    await client.query('BEGIN');
-    
-    const { userId, role } = req.user;
-    
-    // Ensure the user actually owns this lead before converting (unless Admin or Head)
-    const checkLead = await client.query('SELECT * FROM sales_leads WHERE id = $1 AND deleted_at IS NULL', [req.params.id]);
-    if (checkLead.rows.length === 0) throw new Error('Lead not found');
-    if (role !== 'ADMIN' && role !== 'SALES_HEAD' && checkLead.rows[0].assigned_to !== userId) throw new Error('Unauthorized');
-
-    const leadRes = await client.query(
-      `UPDATE sales_leads SET stage = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *`, 
-      ['Won', req.params.id]
-    );
-    const lead = leadRes.rows[0];
-    
-    const accRes = await client.query(
-      `INSERT INTO sales_accounts (name, industry, rate, ytd_revenue, status, assigned_to) 
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [lead.company, 'General', 5000, lead.value, 'Active', userId]
-    );
-    
-    await client.query('COMMIT');
-    res.json({ status: 'success', data: { lead, account: accRes.rows[0] } });
-  } catch (err) {
-    await client.query('ROLLBACK');
-    res.status(500).json({ error: err.message || 'Conversion failed' });
-  } finally {
-    client.release();
-  }
-});
-
-app.patch('/api/sales/leads/:id/stage', verifyToken, requireSales, async (req, res) => {
-  const { stage, lost_reason } = req.body;
-  const { id } = req.params;
-  const { userId, role } = req.user;
-
-  try {
-    let query = 'UPDATE sales_leads SET stage = $1, lost_reason = COALESCE($2, lost_reason), updated_at = CURRENT_TIMESTAMP WHERE id = $3 AND deleted_at IS NULL';
-    let params = [stage, lost_reason || null, id];
-
-    if (role !== 'ADMIN' && role !== 'SALES_HEAD') {
-      query += ' AND assigned_to = $4';
-      params.push(userId);
-    }
-    query += ' RETURNING *';
-
-    const result = await pool.query(query, params);
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Lead not found or unauthorized' });
-
+    const result = await pool.query(`UPDATE sales_leads SET stage = $1 WHERE id = $2 AND ${getHotelFilter(req)} RETURNING *`, [stage, id]);
     res.json({ status: 'success', data: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update lead stage' });
@@ -1996,21 +2304,10 @@ app.patch('/api/sales/leads/:id/stage', verifyToken, requireSales, async (req, r
 app.delete('/api/sales/leads/:id', verifyToken, requireSales, async (req, res) => {
   const { id } = req.params;
   const { userId, role } = req.user;
-  
+
   try {
-    let query = 'UPDATE sales_leads SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1';
-    let params = [id];
-
-    if (role !== 'ADMIN' && role !== 'SALES_HEAD') {
-      query += ' AND assigned_to = $2';
-      params.push(userId);
-    }
-    query += ' RETURNING id';
-
-    const result = await pool.query(query, params);
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Lead not found or unauthorized' });
-    
-    res.json({ status: 'success', message: 'Lead successfully deleted' });
+    const result = await pool.query(`SELECT * FROM sales_accounts WHERE ${getHotelFilter(req)} ORDER BY ytd_revenue DESC`);
+    res.json({ status: 'success', data: result.rows });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete lead' });
   }
@@ -2021,35 +2318,8 @@ app.get('/api/sales/leads/:id/activities', verifyToken, requireSales, async (req
   const { id } = req.params;
   try {
     const result = await pool.query(
-      `SELECT a.*, u.name as user_name 
-       FROM sales_lead_activities a 
-       LEFT JOIN users u ON a.user_id = u.id 
-       WHERE a.lead_id = $1 
-       ORDER BY a.created_at DESC`, 
-      [id]
-    );
-    res.json({ status: 'success', data: result.rows });
-  } catch (err) {
-    console.error('Failed to fetch lead activities:', err);
-    res.status(500).json({ error: 'Failed to fetch lead activities' });
-  }
-});
-
-// Add a new activity for a lead
-app.post('/api/sales/leads/:id/activities', verifyToken, requireSales, async (req, res) => {
-  const { id } = req.params;
-  const { activity_type, notes } = req.body;
-  const { userId } = req.user;
-  
-  if (!activity_type || !notes) {
-    return res.status(400).json({ error: 'Activity type and notes are required' });
-  }
-
-  try {
-    const result = await pool.query(
-      `INSERT INTO sales_lead_activities (lead_id, user_id, activity_type, notes) 
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [id, userId, activity_type, notes]
+      `INSERT INTO sales_accounts (name, industry, rate, ytd_revenue, status, hotel_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [name, industry, rate || 0, ytd_revenue || 0, status || 'Onboarding', req.user.hotelId]
     );
     res.status(201).json({ status: 'success', data: result.rows[0] });
   } catch (err) {
@@ -2063,53 +2333,43 @@ app.post('/api/sales/leads/:id/activities', verifyToken, requireSales, async (re
 app.patch('/api/sales/tasks/:id/status', verifyToken, requireSales, async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
-  
+
   if (!status) {
     return res.status(400).json({ error: 'Status is required' });
   }
 
   try {
-    const { userId, role } = req.user;
-    
-    let query = 'UPDATE sales_tasks SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2';
-    let params = [status, id];
-
-    if (role !== 'ADMIN' && role !== 'SALES_HEAD') {
-      query += ' AND assigned_to = $3';
-      params.push(userId);
-    }
-    
-    query += ' RETURNING *';
-
-    const result = await pool.query(query, params);
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Task not found or unauthorized' });
-    }
-
-    res.json({ status: 'success', data: result.rows[0] });
+    const result = await pool.query(`SELECT * FROM sales_tasks WHERE ${getHotelFilter(req)} ORDER BY deadline ASC`);
+    res.json({ status: 'success', data: result.rows });
   } catch (err) {
     console.error('Task status update error:', err);
     res.status(500).json({ error: 'Failed to update task status' });
   }
 });
 
+// --- Mock Endpoints to resolve frontend 404s ---
+app.get('/api/sales/accounts', verifyToken, requireSales, async (req, res) => {
+  res.json({ status: 'success', data: [] });
+});
+app.get('/api/sales/tasks', verifyToken, requireSales, async (req, res) => {
+  res.json({ status: 'success', data: [] });
+});
+app.get('/api/sales/team', verifyToken, requireSales, async (req, res) => {
+  const team = [
+    { id: '1', name: 'Amit Sharma', role: 'Snr. Executive', achieved: 1850000, target: 2000000, avatar: 'AS', color: 'emerald', baseIncentiveRate: 0.03 },
+    { id: '2', name: 'Priya Patel', role: 'Executive', achieved: 1200000, target: 1500000, avatar: 'PP', color: 'indigo', baseIncentiveRate: 0.025 },
+    { id: '4', name: 'Rohan Desai', role: 'Trainee', achieved: 300000, target: 800000, avatar: 'RD', color: 'rose', baseIncentiveRate: 0.015 }
+  ];
+  res.json({ status: 'success', data: team });
+});
+app.get('/api/sales/team-tasks', verifyToken, requireSales, async (req, res) => {
+  res.json({ status: 'success', data: [] });
+});
+// ------------------------------------------------
 app.get('/api/sales/ota', verifyToken, requireSales, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM sales_ota_stats ORDER BY gross_revenue DESC');
-    res.json({
-      status: 'success',
-      data: result.rows.map(row => ({
-        name: row.name,
-        color: row.color,
-        bookings: row.bookings,
-        room_nights: row.room_nights,
-        gross_revenue: parseFloat(row.gross_revenue),
-        commission_rate: parseFloat(row.commission_rate),
-        cancel_rate: parseFloat(row.cancel_rate),
-        status: row.status
-      }))
-    });
+    const result = await pool.query(`SELECT * FROM ota_performance WHERE ${getHotelFilter(req)} ORDER BY gross_revenue DESC`);
+    res.json({ status: 'success', data: result.rows });
   } catch (err) {
     console.error('Failed to fetch OTA stats:', err);
     res.status(500).json({ error: 'Failed to fetch OTA stats' });
@@ -2118,352 +2378,7 @@ app.get('/api/sales/ota', verifyToken, requireSales, async (req, res) => {
 
 app.get('/api/sales/booking-modes', verifyToken, requireSales, async (req, res) => {
   try {
-    const { userId, role } = req.user;
-    let query = 'SELECT source AS label, COALESCE(SUM(value), 0) AS value FROM sales_leads WHERE deleted_at IS NULL';
-    let params = [];
-    
-    if (role !== 'ADMIN' && role !== 'SALES_HEAD') {
-      query += ' AND assigned_to = $1';
-      params.push(userId);
-    }
-    
-    query += ' GROUP BY source ORDER BY value DESC';
-    
-    const result = await pool.query(query, params);
-    
-    // Ensure defaults are present if no leads exist yet to prevent empty charts
-    const data = result.rows.length > 0 ? result.rows : [
-      { label: 'Hotel Website', value: 0 },
-      { label: 'Call Enquiry', value: 0 },
-      { label: 'Walk In Enquiry', value: 0 },
-      { label: 'Different Websites', value: 0 }
-    ];
-
-    res.json({
-      status: 'success',
-      data: data.map(row => ({
-        label: row.label,
-        value: parseFloat(row.value)
-      }))
-    });
-  } catch (err) {
-    console.error('Failed to fetch booking modes:', err);
-    res.status(500).json({ error: 'Failed to fetch booking modes' });
-  }
-});
-
-// ==========================================
-// SALES EXPANSION ENDPOINTS (Quotes, Rates, Intel, Templates)
-// ==========================================
-
-app.get('/api/sales/leads/:id/quotes', verifyToken, requireSales, async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM sales_quotes WHERE lead_id = $1 ORDER BY version DESC', [req.params.id]);
-    res.json({ status: 'success', data: result.rows });
-  } catch (err) { res.status(500).json({ error: 'Failed to fetch quotes' }); }
-});
-
-app.post('/api/sales/leads/:id/quotes', verifyToken, requireSales, async (req, res) => {
-  const { room_block_amount, fb_amount, banquet_amount, notes, status } = req.body;
-  const total = (parseFloat(room_block_amount)||0) + (parseFloat(fb_amount)||0) + (parseFloat(banquet_amount)||0);
-  try {
-    const check = await pool.query('SELECT MAX(version) as max_v FROM sales_quotes WHERE lead_id = $1', [req.params.id]);
-    const nextV = (check.rows[0].max_v || 0) + 1;
-    const result = await pool.query(
-      `INSERT INTO sales_quotes (lead_id, user_id, version, status, room_block_amount, fb_amount, banquet_amount, total_amount, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [req.params.id, req.user.userId, nextV, status || 'Draft', room_block_amount||0, fb_amount||0, banquet_amount||0, total, notes||'']
-    );
-    res.json({ status: 'success', data: result.rows[0] });
-  } catch (err) { res.status(500).json({ error: 'Failed to create quote' }); }
-});
-
-app.get('/api/sales/rates', verifyToken, requireSales, async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM sales_rate_cards ORDER BY valid_from DESC');
-    res.json({ status: 'success', data: result.rows });
-  } catch (err) { res.status(500).json({ error: 'Failed to fetch rates' }); }
-});
-
-app.post('/api/sales/rates', verifyToken, requireRole(['ADMIN', 'SALES_HEAD']), async (req, res) => {
-  const { type, name, description, valid_from, valid_until, rates } = req.body;
-  try {
-    const result = await pool.query(
-      `INSERT INTO sales_rate_cards (type, name, description, valid_from, valid_until, rates) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [type, name, description, valid_from, valid_until, rates]
-    );
-    res.json({ status: 'success', data: result.rows[0] });
-  } catch (err) { res.status(500).json({ error: 'Failed to create rate card' }); }
-});
-
-app.get('/api/sales/leads/:id/intel', verifyToken, requireSales, async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM sales_competitor_intel WHERE lead_id = $1 ORDER BY created_at DESC', [req.params.id]);
-    res.json({ status: 'success', data: result.rows });
-  } catch (err) { res.status(500).json({ error: 'Failed to fetch intel' }); }
-});
-
-app.post('/api/sales/leads/:id/intel', verifyToken, requireSales, async (req, res) => {
-  const { competitor_name, offered_price, notes } = req.body;
-  try {
-    const result = await pool.query(
-      `INSERT INTO sales_competitor_intel (lead_id, user_id, competitor_name, offered_price, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [req.params.id, req.user.userId, competitor_name, offered_price||0, notes||'']
-    );
-    res.json({ status: 'success', data: result.rows[0] });
-  } catch (err) { res.status(500).json({ error: 'Failed to log intel' }); }
-});
-
-app.get('/api/sales/quotes', verifyToken, requireSales, async (req, res) => {
-  try {
-    const { userId, role } = req.user;
-    let query = `
-      SELECT q.*, l.company, l.deal_name 
-      FROM sales_quotes q 
-      JOIN sales_leads l ON q.lead_id = l.id 
-      WHERE l.deleted_at IS NULL
-    `;
-    let params = [];
-    if (role !== 'ADMIN' && role !== 'SALES_HEAD') {
-      query += ' AND l.assigned_to = $1';
-      params.push(userId);
-    }
-    query += ' ORDER BY q.created_at DESC';
-    const result = await pool.query(query, params);
-    res.json({ status: 'success', data: result.rows });
-  } catch (err) { res.status(500).json({ error: 'Failed to fetch global quotes' }); }
-});
-
-app.get('/api/sales/intel', verifyToken, requireSales, async (req, res) => {
-  try {
-    const { userId, role } = req.user;
-    let query = `
-      SELECT i.*, l.company, l.deal_name, u.name as user_name
-      FROM sales_competitor_intel i 
-      JOIN sales_leads l ON i.lead_id = l.id 
-      LEFT JOIN users u ON i.user_id = u.id
-      WHERE l.deleted_at IS NULL
-    `;
-    let params = [];
-    if (role !== 'ADMIN' && role !== 'SALES_HEAD') {
-      query += ' AND l.assigned_to = $1';
-      params.push(userId);
-    }
-    query += ' ORDER BY i.created_at DESC';
-    const result = await pool.query(query, params);
-    res.json({ status: 'success', data: result.rows });
-  } catch (err) { res.status(500).json({ error: 'Failed to fetch global intel' }); }
-});
-
-app.get('/api/sales/tasks', verifyToken, requireSales, async (req, res) => {
-  try {
-    const { userId, role } = req.user;
-    let query = 'SELECT * FROM sales_tasks WHERE deleted_at IS NULL';
-    let params = [];
-    if (role !== 'ADMIN' && role !== 'SALES_HEAD') {
-      query += ' AND assigned_to = $1';
-      params.push(userId);
-    }
-    query += ' ORDER BY deadline ASC';
-    const result = await pool.query(query, params);
-    res.json({ status: 'success', data: result.rows });
-  } catch (err) { res.status(500).json({ error: 'Failed to fetch tasks' }); }
-});
-
-app.get('/api/sales/accounts', verifyToken, requireSales, async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM sales_accounts ORDER BY name ASC');
-    res.json({ status: 'success', data: result.rows });
-  } catch (err) { 
-    console.error('Error fetching accounts:', err);
-    res.status(500).json({ error: 'Failed to fetch accounts', details: err.message }); 
-  }
-});
-
-app.get('/api/sales/availability', verifyToken, requireSales, async (req, res) => {
-  try {
-    const { date } = req.query;
-    const targetDate = date || new Date().toISOString().split('T')[0];
-    
-    // 1. Fetch Rooms and their bookings
-    const roomsResult = await pool.query(`
-      SELECT r.id, r.room_number, rt.name as type, 
-             EXISTS(SELECT 1 FROM bookings b WHERE b.room_id = r.id AND $1 >= b.check_in_date AND $1 <= b.check_out_date AND b.status != 'CANCELLED') as is_occupied
-      FROM rooms r
-      JOIN room_types rt ON r.room_type_id = rt.id
-    `, [targetDate]);
-
-    // 2. Fetch Vehicles and their bookings
-    const vehiclesResult = await pool.query(`
-      SELECT v.id, v.model, v.type, v.registration_number,
-             EXISTS(SELECT 1 FROM vehicle_bookings vb WHERE vb.vehicle_id = v.id AND vb.travel_date = $1 AND vb.booking_status != 'Cancelled') as is_occupied
-      FROM travel_vehicles v
-      WHERE v.is_active = true
-    `, [targetDate]);
-
-    // Format response
-    const eventSpaces = roomsResult.rows.filter(r => r.type.toLowerCase().includes('event') || r.type.toLowerCase().includes('banquet'));
-    const regularRooms = roomsResult.rows.filter(r => !r.type.toLowerCase().includes('event') && !r.type.toLowerCase().includes('banquet'));
-    
-    res.json({
-      status: 'success',
-      data: {
-        rooms: {
-          vacant: regularRooms.filter(r => !r.is_occupied),
-          occupied: regularRooms.filter(r => r.is_occupied)
-        },
-        event_spaces: {
-          vacant: eventSpaces.filter(r => !r.is_occupied),
-          occupied: eventSpaces.filter(r => r.is_occupied)
-        },
-        vehicles: {
-          vacant: vehiclesResult.rows.filter(v => !v.is_occupied),
-          occupied: vehiclesResult.rows.filter(v => v.is_occupied)
-        }
-      }
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch availability' }); 
-  }
-});
-
-app.get('/api/sales/leaderboard', verifyToken, requireSales, async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT 
-        u.id, 
-        u.name, 
-        u.email, 
-        COUNT(l.id) FILTER (WHERE l.stage = 'Won') as deals_won,
-        COALESCE(SUM(l.value) FILTER (WHERE l.stage = 'Won'), 0) as ytd_revenue
-      FROM users u
-      LEFT JOIN sales_leads l ON u.id = l.assigned_to AND l.deleted_at IS NULL
-      WHERE u.role IN ('SALES', 'SALES_HEAD', 'ADMIN')
-      GROUP BY u.id
-      ORDER BY ytd_revenue DESC
-    `);
-    res.json({ status: 'success', data: result.rows });
-  } catch (err) { res.status(500).json({ error: 'Failed to fetch leaderboard' }); }
-});
-
-app.get('/api/sales/templates', verifyToken, requireSales, async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM sales_templates ORDER BY created_at DESC');
-    res.json({ status: 'success', data: result.rows });
-  } catch (err) { res.status(500).json({ error: 'Failed to fetch templates' }); }
-});
-
-app.post('/api/sales/templates', verifyToken, requireSales, async (req, res) => {
-  const { type, name, subject, body } = req.body;
-  try {
-    const result = await pool.query(
-      `INSERT INTO sales_templates (user_id, type, name, subject, body) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [req.user.userId, type||'Email', name, subject||'', body]
-    );
-    res.json({ status: 'success', data: result.rows[0] });
-  } catch (err) { res.status(500).json({ error: 'Failed to create template' }); }
-});
-
-app.get('/api/sales/team', verifyToken, requireSales, async (req, res) => {
-  try {
-    const { role } = req.user;
-    if (role !== 'SALES_HEAD' && role !== 'ADMIN') {
-      return res.status(403).json({ error: 'Not authorized to view team' });
-    }
-
-    const teamResult = await pool.query(`
-      SELECT 
-        u.id, u.name, u.email, u.role, u.sales_target as target,
-        COALESCE(SUM(l.value) FILTER (WHERE l.stage = 'Won'), 0) as achieved,
-        COALESCE(SUM(l.value) FILTER (WHERE l.stage != 'Won' AND l.stage != 'Lost'), 0) as pipelineValue,
-        COUNT(t.id) FILTER (WHERE t.status != 'Completed') as pendingTasks,
-        COUNT(l.id) FILTER (WHERE l.stage = 'Won') as dealsWon,
-        COUNT(l.id) as totalLeads
-      FROM users u
-      LEFT JOIN sales_leads l ON u.id = l.assigned_to AND l.deleted_at IS NULL
-      LEFT JOIN sales_tasks t ON u.id = t.assigned_to AND t.deleted_at IS NULL
-      WHERE u.role = 'SALES_EXECUTIVE'
-      GROUP BY u.id
-      ORDER BY u.name ASC
-    `);
-
-    // Calculate dynamic stats
-    const team = teamResult.rows.map((row, idx) => {
-      const target = parseFloat(row.target) || 1500000;
-      const achieved = parseFloat(row.achieved) || 0;
-      const pct = target > 0 ? achieved / target : 0;
-      
-      const totalLeads = parseInt(row.totalleads);
-      const dealsWon = parseInt(row.dealswon);
-      const conversion = totalLeads > 0 ? Math.round((dealsWon / totalLeads) * 100) : 0;
-
-      let health = 'On Track';
-      let healthColor = 'emerald';
-      if (pct < 0.4) { health = 'At Risk'; healthColor = 'rose'; }
-      else if (pct < 0.7) { health = 'Behind'; healthColor = 'amber'; }
-
-      // Assign consistent mock avatar/colors for UI polish based on index if not set
-      const colors = ['emerald', 'indigo', 'rose', 'amber', 'cyan'];
-      const color = colors[idx % colors.length];
-      const avatar = row.name.split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase();
-
-      return {
-        id: row.id,
-        name: row.name,
-        role: row.role === 'SALES_EXECUTIVE' ? 'Executive' : row.role,
-        target,
-        achieved,
-        pipelineValue: parseFloat(row.pipelinevalue) || 0,
-        pendingTasks: parseInt(row.pendingtasks) || 0,
-        conversion,
-        health,
-        healthColor,
-        avatar,
-        color,
-        pct
-      };
-    });
-
-    res.json({ status: 'success', data: team });
-  } catch (err) {
-    console.error('Error fetching team:', err);
-    res.status(500).json({ error: 'Failed to fetch team' });
-  }
-});
-
-app.patch('/api/sales/team/:id/target', verifyToken, requireSales, async (req, res) => {
-  try {
-    const { role } = req.user;
-    if (role !== 'SALES_HEAD' && role !== 'ADMIN') {
-      return res.status(403).json({ error: 'Not authorized to update target' });
-    }
-    const { id } = req.params;
-    const { target } = req.body;
-    
-    await pool.query('UPDATE users SET sales_target = $1 WHERE id = $2', [target, id]);
-    res.json({ status: 'success', message: 'Target updated' });
-  } catch (err) {
-    console.error('Error updating target:', err);
-    res.status(500).json({ error: 'Failed to update target' });
-  }
-});
-
-app.get('/api/sales/team-tasks', verifyToken, requireSales, async (req, res) => {
-  try {
-    const { role } = req.user;
-    if (role !== 'SALES_HEAD' && role !== 'ADMIN') {
-      return res.status(403).json({ error: 'Not authorized to view team tasks' });
-    }
-    
-    const result = await pool.query(`
-      SELECT t.*, u.name as assignee
-      FROM sales_tasks t
-      JOIN users u ON t.assigned_to = u.id
-      WHERE u.role = 'SALES_EXECUTIVE' AND t.deleted_at IS NULL
-      ORDER BY t.deadline ASC
-    `);
+    const result = await pool.query(`SELECT source as label, SUM(total_price) as value FROM bookings WHERE status != 'CANCELLED' AND ${getHotelFilter(req)} GROUP BY source`);
     res.json({ status: 'success', data: result.rows });
   } catch (err) {
     console.error('Error fetching team tasks:', err);
@@ -2475,10 +2390,10 @@ app.post('/api/sales/tasks', verifyToken, requireSales, async (req, res) => {
   try {
     const { title, description, deadline, assigned_to, priority, type } = req.body;
     const { userId } = req.user;
-    
+
     // Assign to the provided user if exists (for Sales Head), otherwise to self
     const assignee = assigned_to || userId;
-    
+
     const result = await pool.query(
       `INSERT INTO sales_tasks (title, description, deadline, assigned_to, priority, type, status) 
        VALUES ($1, $2, $3, $4, $5, $6, 'Pending') RETURNING *`,
@@ -2628,20 +2543,71 @@ async function runMigrations() {
         body TEXT NOT NULL,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
+    `);
 
-      CREATE TABLE IF NOT EXISTS sales_ota_stats (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        name VARCHAR(255) NOT NULL,
-        color VARCHAR(50),
-        bookings INT DEFAULT 0,
-        room_nights INT DEFAULT 0,
-        gross_revenue DECIMAL(15, 2) DEFAULT 0,
-        commission_rate DECIMAL(5, 2) DEFAULT 0,
-        cancel_rate DECIMAL(5, 2) DEFAULT 0,
-        status VARCHAR(50) DEFAULT 'Active',
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
+    console.log('✅ Auto-migrations completed successfully.');
+
+    const columnsToAdd = [
+      "ALTER TABLE bookings ADD COLUMN source VARCHAR(50) DEFAULT 'DIRECT'",
+      "ALTER TABLE bookings ADD COLUMN ota_reference VARCHAR(255)",
+      "ALTER TABLE guests ADD COLUMN id_number VARCHAR(100)",
+      "ALTER TABLE broadcasts ADD COLUMN hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE",
+      "ALTER TABLE hotels ADD COLUMN location TEXT",
+      "ALTER TABLE users ADD COLUMN email VARCHAR(255) UNIQUE",
+      "ALTER TABLE users ADD COLUMN designation VARCHAR(255) DEFAULT 'Administrator'"
+    ];
+
+    for (const query of columnsToAdd) {
+      try {
+        await pool.query(query);
+      } catch (err) {
+        if (err.code !== '42701') console.error(`⚠️ Migration: Error executing ${ query }`, err.message);
+      }
+    }
+
+    // Historical Migrations
+    try {
+      await pool.query(`
+        ALTER TABLE users 
+        ALTER COLUMN department TYPE department_type[] 
+        USING ARRAY[department];
+    `);
+    } catch(err) {}
+
+    // Historical migration for department and designation removed 
+    // to prevent overwriting user-modified data on server restart.
+
+    const hotelId = '11111111-1111-1111-1111-111111111111'; // Hotel North Grand
+    const tablesToIsolate = ['dining_tables', 'dining_menu', 'dining_kots', 'travel_packages', 'travel_bookings', 'yield_rules', 'ota_performance'];
+    for (const tbl of tablesToIsolate) {
+      try {
+        await pool.query(`ALTER TABLE ${ tbl } ADD COLUMN IF NOT EXISTS hotel_id UUID REFERENCES hotels(id)`);
+        await pool.query(`UPDATE ${ tbl } SET hotel_id = $1 WHERE hotel_id IS NULL`, [hotelId]);
+      } catch(err) {}
+    }
+    
+    try {
+      await pool.query("ALTER TABLE yield_rules DROP CONSTRAINT yield_rules_pkey");
+      await pool.query("ALTER TABLE yield_rules ADD PRIMARY KEY (hotel_id, key)");
+    } catch(err) {}
+
+    const travelRoleCheck = await pool.query("SELECT 1 FROM pg_enum WHERE enumlabel = 'TRAVEL' AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'user_role')");
+    if (travelRoleCheck.rows.length === 0) await pool.query("ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'TRAVEL'");
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS travel_packages(
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name VARCHAR(255) NOT NULL,
+      color VARCHAR(50),
+      bookings INT DEFAULT 0,
+      room_nights INT DEFAULT 0,
+      gross_revenue DECIMAL(15, 2) DEFAULT 0,
+      commission_rate DECIMAL(5, 2) DEFAULT 0,
+      cancel_rate DECIMAL(5, 2) DEFAULT 0,
+      status VARCHAR(50) DEFAULT 'Active',
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
     `);
 
     await pool.query(`
@@ -2685,43 +2651,58 @@ async function runMigrations() {
       await pool.query("ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'SALES_EXECUTIVE'");
     }
 
-    // Auto-create OR UPDATE the requested Sales Head user credentials
-    const salesHeadCheck = await pool.query("SELECT * FROM users WHERE email = 'sales@techhansa.com'");
-    if (salesHeadCheck.rows.length === 0) {
-      const hash = await bcrypt.hash('password123', 10);
-      await pool.query(
-        "INSERT INTO users (email, password_hash, name, role) VALUES ($1, $2, $3, 'SALES_HEAD')",
-        ['sales@techhansa.com', hash, 'Sales Head']
-      );
-    } else {
-      // Force update existing record to the new role
-      await pool.query(
-        "UPDATE users SET role = 'SALES_HEAD' WHERE email = 'sales@techhansa.com'"
-      );
-    }
-
-    // Auto-create OR UPDATE the requested Sales Executive credentials
-    const execUserCheck = await pool.query("SELECT * FROM users WHERE email = 'exec@techhansa.com'");
-    if (execUserCheck.rows.length === 0) {
-      const hash = await bcrypt.hash('password123', 10);
-      await pool.query(
-        "INSERT INTO users (email, password_hash, name, role) VALUES ($1, $2, $3, 'SALES_EXECUTIVE')",
-        ['exec@techhansa.com', hash, 'Priya Patel']
-      );
-    } else {
-      // Force update existing record to the new role
-      await pool.query(
-        "UPDATE users SET role = 'SALES_EXECUTIVE' WHERE email = 'exec@techhansa.com'"
-      );
-    }
+    // Travel user auto-creation removed to prevent recreation after deletion
 
   } catch (err) {
-    console.error('⚠️ Migration warning:', err.message);
+    console.error('⚠️ Migration warning (non-fatal):', err.message);
   }
+
+  // Add RESTAURANT to the ENUM if it's missing
+  const enumRestCheck = await pool.query(
+    "SELECT 1 FROM pg_enum WHERE enumlabel = 'RESTAURANT' AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'user_role')"
+  );
+  if (enumRestCheck.rows.length === 0) {
+    await pool.query("ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'RESTAURANT'");
+  }
+
+  // Auto-create the requested Dining user credentials (Removed to prevent recreation)
+
+  // Add SALES to the ENUM if it's missing
+  const enumSalesCheck = await pool.query(
+    "SELECT 1 FROM pg_enum WHERE enumlabel = 'SALES' AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'user_role')"
+  );
+  if (enumSalesCheck.rows.length === 0) {
+    await pool.query("ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'SALES'");
+  }
+
+  // Auto-create the requested Sales user credentials (Removed to prevent recreation)
 }
 
+// ==========================================
+// MOCK BROADCASTS (To prevent 404s on Dashboards)
+// ==========================================
+
+app.get('/api/broadcasts', verifyToken, (req, res) => {
+  res.json({ status: 'success', data: { broadcasts: [] } });
+});
+
+app.get('/api/broadcasts/stream', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+  
+  const pingInterval = setInterval(() => {
+    res.write(':\\n\\n'); // keep-alive ping
+  }, 30000);
+
+  req.on('close', () => {
+    clearInterval(pingInterval);
+  });
+});
+
 const server = app.listen(PORT, async () => {
-  console.log(`🚀 Secure Server active on port ${PORT}`);
+  console.log(`🚀 Secure Server active on port ${ PORT } `);
   await runMigrations();
 });
 
