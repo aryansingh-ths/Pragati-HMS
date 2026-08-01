@@ -326,32 +326,35 @@ function RippleButton({ onClick, className, children, disabled, type = 'button',
   );
 }
 
-function RoomStatsRings({ deluxeOcc, suiteOcc, standardOcc }) {
-  const tracks = [
-    { label: 'Deluxe', value: deluxeOcc, color: '#0ea5e9', radius: 60, strokeWidth: 8 },
-    { label: 'Suite', value: suiteOcc, color: '#fb923c', radius: 46, strokeWidth: 8 },
-    { label: 'Standard', value: standardOcc, color: '#14b8a6', radius: 32, strokeWidth: 8 }
-  ];
+function RoomStatsRings({ roomTypeStats = [] }) {
+  const maxRings = 5;
+  const tracks = roomTypeStats.slice(0, maxRings).map((stat, i) => ({
+    label: stat.name,
+    value: stat.occRate,
+    color: stat.color,
+    radius: 95 - (i * 14),
+    strokeWidth: 8
+  }));
 
   return (
-    <div className="relative w-44 h-44 flex items-center justify-center">
-      <svg width={170} height={170} className="transform -rotate-90">
+    <div className="relative w-56 h-56 flex items-center justify-center mx-auto">
+      <svg width={220} height={220} className="transform -rotate-90">
         {tracks.map((track, i) => {
           const circ = 2 * Math.PI * track.radius;
           const offset = circ * (1 - Math.min(Math.max(track.value, 0), 1));
           return (
             <g key={i}>
               <circle
-                cx={85}
-                cy={85}
+                cx={110}
+                cy={110}
                 r={track.radius}
                 fill="none"
                 stroke="#EFF6FF"
                 strokeWidth={track.strokeWidth}
               />
               <motion.circle
-                cx={85}
-                cy={85}
+                cx={110}
+                cy={110}
                 r={track.radius}
                 fill="none"
                 stroke={track.color}
@@ -467,7 +470,7 @@ export default function FrontDeskDashboard() {
 
   const loadAllHotelRooms = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/rooms`);
+      const res = await fetchWithAuth(`${API_BASE}/api/front-desk/rooms/all`);
       if (res?.ok) {
         const data = await res.json();
         setAllHotelRooms(data.data.rooms);
@@ -475,7 +478,7 @@ export default function FrontDeskDashboard() {
     } catch (err) {
       console.error('Failed to load all hotel rooms:', err);
     }
-  }, []);
+  }, [fetchWithAuth]);
 
   const loadDashboard = useCallback(async (showLoader = true) => {
     if (showLoader) setIsLoading(true);
@@ -808,21 +811,24 @@ export default function FrontDeskDashboard() {
   }
 
   // Dynamic occupancy calculations
-  const totalStandard = allHotelRooms.filter(r => r.room_type?.toLowerCase().includes('standard')).length || 6;
-  const totalDeluxe = allHotelRooms.filter(r => r.room_type?.toLowerCase().includes('deluxe')).length || 3;
-  const totalSuites = allHotelRooms.filter(r => r.room_type?.toLowerCase().includes('suite') || r.room_type?.toLowerCase().includes('villa')).length || 12;
-
-  const occupiedStandard = allHotelRooms.filter(r => r.room_type?.toLowerCase().includes('standard') && r.status === 'OCCUPIED').length;
-  const occupiedDeluxe = allHotelRooms.filter(r => r.room_type?.toLowerCase().includes('deluxe') && r.status === 'OCCUPIED').length;
-  const occupiedSuites = allHotelRooms.filter(r => (r.room_type?.toLowerCase().includes('suite') || r.room_type?.toLowerCase().includes('villa')) && r.status === 'OCCUPIED').length;
-
-  const vacantStandard = allHotelRooms.filter(r => r.room_type?.toLowerCase().includes('standard') && r.status === 'AVAILABLE').length;
-  const vacantDeluxe = allHotelRooms.filter(r => r.room_type?.toLowerCase().includes('deluxe') && r.status === 'AVAILABLE').length;
-  const vacantSuites = allHotelRooms.filter(r => (r.room_type?.toLowerCase().includes('suite') || r.room_type?.toLowerCase().includes('villa')) && r.status === 'AVAILABLE').length;
-
-  const deluxeOccRate = occupiedDeluxe / totalDeluxe;
-  const suiteOccRate = occupiedSuites / totalSuites;
-  const standardOccRate = occupiedStandard / totalStandard;
+  const roomTypeStats = (() => {
+    const stats = {};
+    allHotelRooms.forEach(room => {
+      const typeName = room.room_type || 'Unknown';
+      if (!stats[typeName]) {
+        stats[typeName] = { name: typeName, total: 0, occupied: 0, vacant: 0 };
+      }
+      stats[typeName].total++;
+      if (room.status === 'OCCUPIED') stats[typeName].occupied++;
+      if (room.status === 'AVAILABLE') stats[typeName].vacant++;
+    });
+    const colors = ['#0ea5e9', '#fb923c', '#14b8a6', '#8b5cf6', '#f43f5e', '#eab308'];
+    return Object.values(stats).map((stat, idx) => ({
+      ...stat,
+      occRate: (stat.occupied / stat.total) || 0,
+      color: colors[idx % colors.length]
+    }));
+  })();
 
   return (
     <div className="h-[calc(100vh-6rem)] relative bg-[#F8F1E3] font-sans text-zinc-800 p-6 flex flex-col lg:flex-row gap-6 overflow-hidden">
@@ -1581,34 +1587,20 @@ export default function FrontDeskDashboard() {
 
               {/* Chart */}
               <RoomStatsRings
-                deluxeOcc={deluxeOccRate}
-                suiteOcc={suiteOccRate}
-                standardOcc={standardOccRate}
+                roomTypeStats={roomTypeStats}
               />
 
               {/* Legend with matching colors */}
               <div className="w-full mt-4 flex flex-col gap-2 border-t border-zinc-100 pt-4">
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#0ea5e9]" />
-                    <span className="font-medium text-zinc-600">Deluxe Rooms</span>
+                {roomTypeStats.map((stat, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: stat.color }} />
+                      <span className="font-medium text-zinc-600">{stat.name}</span>
+                    </div>
+                    <span className="font-bold text-zinc-900">{stat.occupied} / {stat.total}</span>
                   </div>
-                  <span className="font-bold text-zinc-900">{occupiedDeluxe} / {totalDeluxe}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#fb923c]" />
-                    <span className="font-medium text-zinc-600">Suites</span>
-                  </div>
-                  <span className="font-bold text-zinc-900">{occupiedSuites} / {totalSuites}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#14b8a6]" />
-                    <span className="font-medium text-zinc-600">Standard Rooms</span>
-                  </div>
-                  <span className="font-bold text-zinc-900">{occupiedStandard} / {totalStandard}</span>
-                </div>
+                ))}
               </div>
             </motion.div>
 
@@ -1636,18 +1628,16 @@ export default function FrontDeskDashboard() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <div className="flex justify-between items-center py-2 px-3 bg-sky-50/60 rounded-xl border border-sky-100">
-                  <span className="text-xs font-bold text-zinc-800">Deluxe (Vacant)</span>
-                  <span className="text-xs font-bold text-zinc-500">{vacantDeluxe} Available</span>
-                </div>
-                <div className="flex justify-between items-center py-2 px-3 bg-amber-50/60 rounded-xl border border-amber-100">
-                  <span className="text-xs font-bold text-zinc-800">Standard (Vacant)</span>
-                  <span className="text-xs font-bold text-zinc-500">{vacantStandard} Available</span>
-                </div>
-                <div className="flex justify-between items-center py-2 px-3 bg-amber-50/60 rounded-xl border border-zinc-200">
-                  <span className="text-xs font-bold text-zinc-800">Suites (Vacant)</span>
-                  <span className="text-xs font-bold text-zinc-500">{vacantSuites} Available</span>
-                </div>
+                {roomTypeStats.length === 0 ? (
+                  <span className="text-xs text-zinc-400 italic">No rooms available</span>
+                ) : (
+                  roomTypeStats.map((stat, idx) => (
+                    <div key={idx} className={`flex justify-between items-center py-2 px-3 rounded-xl border`} style={{ backgroundColor: `${stat.color}15`, borderColor: `${stat.color}30` }}>
+                      <span className="text-xs font-bold text-zinc-800">{stat.name} (Vacant)</span>
+                      <span className="text-xs font-bold text-zinc-500">{stat.vacant} Available</span>
+                    </div>
+                  ))
+                )}
               </div>
             </motion.div>
 
