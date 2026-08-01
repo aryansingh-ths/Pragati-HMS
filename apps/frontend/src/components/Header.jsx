@@ -89,14 +89,15 @@ export default function Header({
     if (r === 'admin') return '/dashboard/Admin';
     if (r === 'housekeeping') return '/dashboard/housekeeping';
     if (r === 'finance') return '/dashboard/finance';
-    if (r === 'sales') return '/dashboard/sales';
+    if (r === 'sales' || r === 'sales_head') return '/dashboard/sales';
+    if (r === 'sales_executive') return '/dashboard/sales-executive';
     if (r === 'travel') return '/dashboard/travel';
     if (r === 'restaurant') return '/dashboard/dining';
     return '/dashboard/front-desk';
   };
 
   const isStaffRole = (role) =>
-    ['super_admin', 'admin', 'staff', 'reception', 'front_desk', 'housekeeping', 'finance', 'sales', 'travel', 'restaurant'].includes(
+    ['super_admin', 'admin', 'staff', 'reception', 'front_desk', 'housekeeping', 'finance', 'sales', 'sales_head', 'sales_executive', 'travel', 'restaurant'].includes(
       role?.toLowerCase()
     );
 

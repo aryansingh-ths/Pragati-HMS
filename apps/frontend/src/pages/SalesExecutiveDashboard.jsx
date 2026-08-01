@@ -518,10 +518,14 @@ export default function SalesExecutiveDashboard() {
                             <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><Ghost size={16} className="text-zinc-400" /> Leads Going Cold</h3>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {myLeads.filter(l => l.stage !== 'Won' && l.stage !== 'Lost' && new Date(l.updated_at) < new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length === 0 ? (
-                            <p className="text-xs text-zinc-400 italic col-span-full">No cold leads! Great follow-up.</p>
-                          ) : (
-                            myLeads.filter(l => l.stage !== 'Won' && l.stage !== 'Lost' && new Date(l.updated_at) < new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).slice(0, 3).map(lead => (
+                          {(() => {
+                            // eslint-disable-next-line react-hooks/purity
+                            const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+                            const coldLeads = myLeads.filter(l => l.stage !== 'Won' && l.stage !== 'Lost' && new Date(l.updated_at) < cutoff);
+                            return coldLeads.length === 0 ? (
+                              <p className="text-xs text-zinc-400 italic col-span-full">No cold leads! Great follow-up.</p>
+                            ) : (
+                              coldLeads.slice(0, 3).map(lead => (
                               <div key={lead.id} className="p-4 bg-zinc-50 border border-zinc-100 rounded-xl flex flex-col justify-between hover:border-[#D4A373] transition-colors cursor-pointer" onClick={() => setSelectedLead(lead)}>
                                 <div>
                                   <p className="font-bold text-zinc-900 text-sm">{lead.company}</p>
@@ -531,8 +535,9 @@ export default function SalesExecutiveDashboard() {
                                   <p className="text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded">Inactive 7+ days</p>
                                 </div>
                               </div>
-                            ))
-                          )}
+                              ))
+                            );
+                          })()}
                         </div>
                     </div>
                   </div>

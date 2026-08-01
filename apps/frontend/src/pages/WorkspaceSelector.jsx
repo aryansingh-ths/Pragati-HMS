@@ -17,7 +17,8 @@ export default function WorkspaceSelector() {
   const navigate = useNavigate();
   const rawDept = sessionStorage.getItem('hms_department');
   
-  let departments = [];
+  // departments parsed from rawDept was unused and removed
+  let departments;
   try {
     departments = JSON.parse(rawDept);
     if (!Array.isArray(departments)) departments = [rawDept];

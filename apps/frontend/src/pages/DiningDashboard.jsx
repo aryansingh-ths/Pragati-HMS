@@ -15,24 +15,25 @@ import {
 function DonutChart({ data, size = 170, centerLabel = 'Orders' }) {
   const total = data.reduce((sum, d) => sum + d.value, 0);
   if (total === 0) return <div className="flex items-center justify-center text-zinc-400 text-sm" style={{ width: size, height: size }}>No Data</div>;
-  const radius = 62; const strokeWidth = 20; const cx = size / 2; const cy = size / 2; let cumulativePercent = 0;
+  const radius = 62; const strokeWidth = 20; const cx = size / 2; const cy = size / 2;
   const getCoord = (percent) => { const angle = percent * 2 * Math.PI - Math.PI / 2; return { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) }; };
 
   return (
     <div className="relative flex items-center justify-center">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        {data.map((segment, i) => {
+        {data.reduce((acc, segment, i) => {
           const percent = segment.value / total;
-          if (percent === 0) return null;
-          const startAngle = cumulativePercent; cumulativePercent += percent; const endAngle = cumulativePercent;
+          if (percent === 0) return acc;
+          const startAngle = acc.cumulativePercent; acc.cumulativePercent += percent; const endAngle = acc.cumulativePercent;
           const start = getCoord(startAngle); const end = getCoord(endAngle); const largeArc = percent > 0.5 ? 1 : 0;
           const d = `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 1 ${end.x} ${end.y}`;
-          return (
+          acc.elements.push(
             <motion.path key={i} d={d} fill="none" stroke={segment.color} strokeWidth={strokeWidth} strokeLinecap="round"
               initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: 1 }} transition={{ duration: 1.2, ease: "easeOut", delay: i * 0.1 }}
               style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))' }} whileHover={{ strokeWidth: strokeWidth + 4 }} />
           );
-        })}
+          return acc;
+        }, { cumulativePercent: 0, elements: [] }).elements}
         <text x={cx} y={cy - 6} textAnchor="middle" className="fill-zinc-900" style={{ fontSize: '24px', fontWeight: 900 }}>{total}</text>
         <text x={cx} y={cy + 14} textAnchor="middle" className="fill-zinc-400" style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{centerLabel}</text>
       </svg>
@@ -394,7 +395,7 @@ export default function DiningDashboard() {
               try {
                 const user = JSON.parse(sessionStorage.getItem('hms_user'));
                 if (user && user.designation) designation = user.designation;
-              } catch(e) {}
+              } catch(e) { console.error(e); }
               return (
                 <motion.button
                   whileHover={{ y: -2 }}

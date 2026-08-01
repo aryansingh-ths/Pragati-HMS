@@ -2908,10 +2908,9 @@ export default function AdminDashboard() {
                                       const isCritical = ['OVERRIDE_BILL', 'FAILED_LOGIN_3X', 'OFFBOARD_STAFF', 'DELETE_ROOM', 'FORCE_CHECKOUT'].includes(actionCode);
                                       const isWarning = ['CANCEL_BOOKING', 'BLOCK_ROOM', 'UPDATE_ROLE'].includes(actionCode);
 
-                                      let actionBadge = "bg-zinc-100 text-zinc-600 border-zinc-200";
+                                      let actionBadge = "bg-emerald-50 text-emerald-700 border-emerald-200";
                                       if (isCritical) actionBadge = "bg-rose-50 text-rose-700 border-rose-200 shadow-sm animate-pulse";
                                       else if (isWarning) actionBadge = "bg-amber-50 text-amber-700 border-amber-200";
-                                      else actionBadge = "bg-emerald-50 text-emerald-700 border-emerald-200";
 
                                       const rowAccent = isCritical ? 'sa-row-critical' : isWarning ? 'sa-row-warning' : 'sa-row-normal';
 

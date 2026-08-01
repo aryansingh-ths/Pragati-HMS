@@ -797,7 +797,7 @@ export default function HousekeepingDashboard() {
               try {
                 const user = JSON.parse(sessionStorage.getItem('hms_user'));
                 if (user && user.designation) designation = user.designation;
-              } catch(e) {}
+              } catch(e) { console.error(e); }
               return (
                 <motion.button
                   whileHover={{ y: -2 }}

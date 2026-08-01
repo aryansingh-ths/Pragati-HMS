@@ -185,7 +185,7 @@ export default function PortfolioOverview() {
   const handleManageProperty = (hotelId) => {
     if (!hotelId) return;
     sessionStorage.setItem('hms_selected_hotel_id', hotelId);
-    window.location.href = '/dashboard/Admin'; // Jump into the specific admin dashboard context
+    window.location.assign('/dashboard/Admin'); // Jump into the specific admin dashboard context
   };
 
   if (loading) {
