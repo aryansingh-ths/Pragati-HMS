@@ -441,9 +441,11 @@ app.patch('/api/super-admin/users/:id/access', verifyToken, requireRole(['SUPER_
       TRAVEL: 'Travel Desk'
     };
 
+    const flatDepartment = department.flat(Infinity);
+
     // For SUPER_ADMIN, role is always SUPER_ADMIN
     // For legacy role mapping, we just use the first department in the array
-    const primaryDept = department.length > 0 ? department[0] : 'FRONT_DESK';
+    const primaryDept = flatDepartment.length > 0 ? flatDepartment[0] : 'FRONT_DESK';
     const newRole = access_level === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : (access_level === 'ADMIN' ? 'ADMIN' : (roleMapping[primaryDept] || 'RECEPTION'));
 
     // For MANAGER, we might want to set designation to "Manager" instead of the default department staff designation.
@@ -455,7 +457,7 @@ app.patch('/api/super-admin/users/:id/access', verifyToken, requireRole(['SUPER_
       `UPDATE users 
        SET role = $1, access_level = $2, department = $3::department_type[], hotel_id = $4, designation = $5 
        WHERE id = $6`,
-      [newRole, access_level, department, newHotelId, newDesignation, req.params.id]
+      [newRole, access_level, flatDepartment, newHotelId, newDesignation, req.params.id]
     );
 
     res.json({ status: 'success', message: 'User access updated successfully' });
@@ -678,7 +680,22 @@ app.patch('/api/front-desk/bookings/:id/change-room', verifyToken, requireRole([
   }
 });
 
-app.get('/api/front-desk/rooms/available', verifyToken, requireRole(['FRONT_DESK', 'ADMIN']), async (req, res) => {
+app.get('/api/front-desk/rooms/all', verifyToken, requireRole(['FRONT_DESK', 'ADMIN', 'RECEPTION']), async (req, res) => {
+  try {
+    const query = `
+      SELECT r.id, r.room_number, r.status, rt.name as room_type, rt.base_price 
+      FROM rooms r
+      JOIN room_types rt ON r.room_type_id = rt.id
+      WHERE ${getHotelFilter(req, 'r')}
+      ORDER BY r.room_number ASC;
+    `;
+    const result = await pool.query(query);
+    res.json({ status: 'success', data: { rooms: result.rows } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch all rooms' });
+  }
+});
+app.get('/api/front-desk/rooms/available', verifyToken, requireRole(['FRONT_DESK', 'ADMIN', 'RECEPTION']), async (req, res) => {
   try {
     const query = `
       SELECT r.id, r.room_number, rt.name as room_type, rt.base_price 
@@ -721,7 +738,7 @@ const pushInventoryUpdateToOTA = async (roomTypeId, dateFrom, dateTo) => {
   }
 };
 
-app.post('/api/front-desk/bookings/manual', verifyToken, requireRole(['FRONT_DESK', 'ADMIN']), async (req, res) => {
+app.post('/api/front-desk/bookings/manual', verifyToken, requireRole(['FRONT_DESK', 'ADMIN', 'RECEPTION']), async (req, res) => {
   const { guest_name, guest_email, guest_phone, guest_id_number, room_id, check_in_date, check_out_date, total_price } = req.body;
 
   try {
