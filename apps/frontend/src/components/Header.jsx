@@ -229,7 +229,27 @@ export default function Header({
                 className="flex items-center rounded-full border border-zinc-200 bg-zinc-50/80 divide-x divide-zinc-200 overflow-hidden shadow-sm"
               >
                 <span className="hidden sm:flex items-center px-4 h-9 text-[11px] font-semibold uppercase tracking-wider text-zinc-500 whitespace-nowrap">
-                  <span style={{ color: GOLD }}>{userRole.replace('_', ' ')}</span>
+                  <span style={{ color: GOLD }}>
+                    {(() => {
+                      if (isDashboard) {
+                        if (location.pathname.includes('/front-desk')) return 'FRONT DESK';
+                        if (location.pathname.includes('/housekeeping')) return 'HOUSEKEEPING';
+                        if (location.pathname.includes('/finance')) return 'FINANCE';
+                        if (location.pathname.includes('/sales')) return 'SALES';
+                        if (location.pathname.includes('/travel')) return 'TRAVEL';
+                        if (location.pathname.includes('/dining')) return 'DINING';
+                        if (location.pathname.includes('/super-admin')) return 'SUPER ADMIN';
+                        if (location.pathname.includes('/Admin')) return 'ADMIN';
+                      }
+                      try {
+                        const depts = JSON.parse(sessionStorage.getItem('hms_department')) || [];
+                        if (depts.length > 1 && userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN') {
+                          return 'MULTI-ACCESS';
+                        }
+                      } catch(e) {}
+                      return userRole.replace('_', ' ');
+                    })()}
+                  </span>
                 </span>
 
                 {!isDashboard && isStaffRole(userRole) && (

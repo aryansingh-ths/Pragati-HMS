@@ -24,7 +24,9 @@ import FinanceDashboard from './pages/FinanceDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import SalesDashboard from './pages/SalesDashboard';
 import TravelDashboard from './pages/TravelDashboard';
-import DiningDashboard from './pages/DiningDashboard'; // Ensure this matches your file name (e.g., DinningDashboard if you kept the double 'n')
+import DiningDashboard from './pages/DiningDashboard';
+import WorkspaceSelector from './pages/WorkspaceSelector';
+
 
 export default function App() {
   const [viewMode, setViewMode] = useState('guest');
@@ -36,15 +38,35 @@ export default function App() {
   // Sync state with sessionStorage
   const [userRole, setUserRole] = useState(() => sessionStorage.getItem('hms_role') || null);
   const [authToken, setAuthToken] = useState(() => sessionStorage.getItem('hms_token') || null);
+  const [userDepartments, setUserDepartments] = useState(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem('hms_department')) || [];
+    } catch {
+      return [];
+    }
+  });
 
   // Listen for storage changes to keep state in sync across components
   useEffect(() => {
     const handleStorageChange = () => {
       setUserRole(sessionStorage.getItem('hms_role'));
+      try {
+        setUserDepartments(JSON.parse(sessionStorage.getItem('hms_department')) || []);
+      } catch {
+        setUserDepartments([]);
+      }
     };
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
+
+  const hasAccess = (dept) => {
+    const role = userRole?.toUpperCase();
+    if (role === 'SUPER_ADMIN' || role === 'ADMIN') return true;
+    if (role === dept) return true;
+    if (Array.isArray(userDepartments) && userDepartments.includes(dept)) return true;
+    return false;
+  };
 
   const fetchRoomClasses = async () => {
     setLoading(true);
@@ -129,19 +151,22 @@ export default function App() {
             <Route path="/login" element={
               <LoginPage setUserRole={setUserRole} setAuthToken={setAuthToken} />
             } />
+            <Route path="/workspace-selector" element={
+              authToken && userRole !== 'GUEST' ? <WorkspaceSelector /> : <Navigate to="/login" replace />
+            } />
 
             {/* ROUTE 3: PROTECTED FRONT DESK OPERATIONS WORKSPACE */}
-            <Route element={<ProtectedRoute isAllowed={userRole === 'FRONT_DESK' || userRole === 'RECEPTION' || userRole === 'ADMIN'} />}>
+            <Route element={<ProtectedRoute isAllowed={hasAccess('FRONT_DESK') || hasAccess('RECEPTION')} />}>
               <Route path="/dashboard/front-desk" element={<FrontDeskDashboard />} />
             </Route>
 
             {/* ROUTE 4: PROTECTED HOUSEKEEPING OPERATIONS WORKSPACE */}
-            <Route element={<ProtectedRoute isAllowed={userRole === 'HOUSEKEEPING' || userRole === 'ADMIN'} />}>
+            <Route element={<ProtectedRoute isAllowed={hasAccess('HOUSEKEEPING')} />}>
               <Route path="/dashboard/housekeeping" element={<HousekeepingDashboard />} />
             </Route>
 
             {/* ROUTE 5: PROTECTED FINANCE WORKSPACE */}
-            <Route element={<ProtectedRoute isAllowed={userRole === 'FINANCE' || userRole === 'ADMIN'} />}>
+            <Route element={<ProtectedRoute isAllowed={hasAccess('FINANCE')} />}>
               <Route path="/dashboard/finance" element={<FinanceDashboard />} />
             </Route>
 
@@ -151,22 +176,22 @@ export default function App() {
             </Route>
 
             {/* ROUTE 6: PROTECTED ADMIN DASHBOARD */}
-            <Route element={<ProtectedRoute isAllowed={userRole?.toUpperCase() === 'ADMIN'} />}>
+            <Route element={<ProtectedRoute isAllowed={userRole?.toUpperCase() === 'ADMIN' || userRole?.toUpperCase() === 'SUPER_ADMIN'} />}>
               <Route path="/dashboard/Admin" element={<AdminDashboard />} />
             </Route>
 
             {/* ROUTE 7: PROTECTED SALES DASHBOARD */}
-            <Route element={<ProtectedRoute isAllowed={userRole?.toUpperCase() === 'SALES' || userRole?.toUpperCase() === 'ADMIN'} />}>
+            <Route element={<ProtectedRoute isAllowed={hasAccess('SALES')} />}>
               <Route path="/dashboard/sales" element={<SalesDashboard />} />
             </Route>
 
             {/* ROUTE 8: PROTECTED TRAVEL DESK ROUTE */}
-            <Route element={<ProtectedRoute isAllowed={userRole?.toUpperCase() === 'TRAVEL' || userRole?.toUpperCase() === 'ADMIN'} />}>
+            <Route element={<ProtectedRoute isAllowed={hasAccess('TRAVEL')} />}>
               <Route path="/dashboard/travel" element={<TravelDashboard />} />
             </Route>
 
             {/* ROUTE 9: CORRECTED SINGLE PROTECTED DINING ROUTE */}
-            <Route element={<ProtectedRoute isAllowed={userRole?.toUpperCase() === 'RESTAURANT' || userRole?.toUpperCase() === 'ADMIN'} />}>
+            <Route element={<ProtectedRoute isAllowed={hasAccess('RESTAURANT')} />}>
               <Route path="/dashboard/dining" element={<DiningDashboard />} />
             </Route>
 

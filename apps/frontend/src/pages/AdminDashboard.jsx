@@ -430,8 +430,18 @@ function SlaCountdownTimer({ createdAt, priority, status }) {
 
 // MAIN Admin DASHBOARD
 export default function AdminDashboard() {
-  const isSuperAdmin = sessionStorage.getItem('hms_role') === 'SUPER_ADMIN';
-  const [activeTab, setActiveTab] = useState('overview');
+  const isSuperAdmin = sessionStorage.getItem('hms_access_level') === 'SUPER_ADMIN' || (sessionStorage.getItem('hms_role') || '').toUpperCase() === 'SUPER_ADMIN';
+  const getAccessLevel = () => {
+    let raw = sessionStorage.getItem('hms_access_level');
+    if (raw && raw !== 'undefined' && raw !== 'null') return raw;
+    let role = (sessionStorage.getItem('hms_role') || '').toUpperCase();
+    if (role === 'SUPER_ADMIN') return 'SUPER_ADMIN';
+    if (role === 'ADMIN') return 'ADMIN';
+    if (role === 'MANAGER') return 'MANAGER';
+    return 'EXECUTIVE';
+  };
+  const accessLevel = getAccessLevel();
+  const [activeTab, setActiveTab] = useState(accessLevel === 'EXECUTIVE' ? 'activity_monitor' : 'overview');
   const navigate = useNavigate();
   const [expandedQueueCol, setExpandedQueueCol] = useState(null);  // Live Operations state
   const [expandedCard, setExpandedCard] = useState(null); // 'frontdesk' | 'housekeeping' | 'engineering' | null
@@ -501,6 +511,8 @@ export default function AdminDashboard() {
   const [showAddAdminModal, setShowAddAdminModal] = useState(false);
   const [addPropertyForm, setAddPropertyForm] = useState({ name: '', location: '' });
   const [addAdminForm, setAddAdminForm] = useState({ name: '', email: '', password: '', role: 'ADMIN', hotel_id: '' });
+  const [editingUser, setEditingUser] = useState(null);
+  const [editAccessForm, setEditAccessForm] = useState({ access_level: 'EXECUTIVE', department: ['FRONT_DESK'], hotel_id: '', designation: '' });
   const [managementSubTab, setManagementSubTab] = useState('properties');
 
   // Salary Drawer state
@@ -781,15 +793,28 @@ export default function AdminDashboard() {
 
   // --- ADVANCED CONTROLS ACTIONS ---
 
-  const handleSaveYieldRule = async (key, value) => {
+  const handleSaveYieldRule = async (key, value, applyToAll = false, showNotification = true) => {
     const res = await fetchWithAuth('http://localhost:3000/api/Admin/yield-rules', {
-      method: 'POST', body: JSON.stringify({ key, value })
+      method: 'POST', body: JSON.stringify({ key, value, apply_to_all: applyToAll })
     });
     if (res?.ok) {
+      if (applyToAll && showNotification) alert(`✅ Successfully pushed rule ${key} to all properties!`);
       const yieldRes = await fetchWithAuth('http://localhost:3000/api/Admin/yield-rules');
       if (yieldRes?.ok) setYieldRules((await yieldRes.json()).data.rules || null);
     } else {
-      alert("❌ Failed to update yield engine rule configuration.");
+      if (showNotification) alert("❌ Failed to update yield engine rule configuration.");
+    }
+  };
+
+  const handlePushAllToAll = async () => {
+    if(!window.confirm("CAUTION: This will overwrite ALL yield rules for ALL properties. Continue?")) return;
+    try {
+      for (const key of Object.keys(yieldRules)) {
+        await handleSaveYieldRule(key, yieldRules[key], true, false);
+      }
+      alert("✅ Successfully pushed all yield rules to all properties!");
+    } catch (err) {
+      alert("❌ Error pushing rules to all properties.");
     }
   };
 
@@ -980,18 +1005,25 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleChangeRole = async (userId, newRole) => {
+  const handleUpdateStaffAccess = async (e) => {
+    if (e) e.preventDefault();
+    if (!editingUser) return;
     try {
-      const res = await fetch(`http://localhost:3000/api/super-admin/users/${userId}/role`, {
+      const res = await fetch(`http://localhost:3000/api/super-admin/users/${editingUser.id}/access`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
-        body: JSON.stringify({ role: newRole }),
+        body: JSON.stringify(editAccessForm),
       });
       if (res.ok) {
-        setSystemAdmins(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+        setEditingUser(null);
+        await refreshManagementData();
+      } else {
+        const json = await res.json();
+        alert(json.error || 'Failed to update access');
       }
     } catch (err) {
       console.error(err);
+      alert('Network error updating user access.');
     }
   };
 
@@ -1173,24 +1205,28 @@ export default function AdminDashboard() {
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Control Room</p>
             <div className="flex flex-col gap-1">
-              <button
-                onClick={() => setActiveTab('overview')}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === 'overview'
-                  ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
-                  : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
-                  }`}
-              >
-                <Activity size={15} /> Live Operations
-              </button>
-              <button
-                onClick={() => setActiveTab(activeTab === 'properties' || activeTab === 'properties_yield' ? 'overview' : 'properties')}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === 'properties' || activeTab === 'properties_yield'
-                  ? 'bg-[#D4A373]/40 text-zinc-900 border border-[#D4A373] shadow-xs'
-                  : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
-                  }`}
-              >
-                <Sliders size={15} /> Property Controls
-              </button>
+              {accessLevel !== 'EXECUTIVE' && (
+                <button
+                  onClick={() => setActiveTab('overview')}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === 'overview'
+                    ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+                    : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
+                    }`}
+                >
+                  <Activity size={15} /> Live Operations
+                </button>
+              )}
+              {accessLevel !== 'EXECUTIVE' && (
+                <button
+                  onClick={() => setActiveTab(activeTab === 'properties' || activeTab === 'properties_yield' ? 'overview' : 'properties')}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === 'properties' || activeTab === 'properties_yield'
+                    ? 'bg-[#D4A373]/40 text-zinc-900 border border-[#D4A373] shadow-xs'
+                    : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
+                    }`}
+                >
+                  <Sliders size={15} /> Property Controls
+                </button>
+              )}
 
               {/* Sub-tabs under Property Controls */}
               {(activeTab === 'properties' || activeTab === 'properties_yield') && (
@@ -1224,7 +1260,7 @@ export default function AdminDashboard() {
               >
                 <CircleDot size={15} /> Activity Monitor
               </button>
-              {!isSuperAdmin && (
+              {!isSuperAdmin && accessLevel !== 'EXECUTIVE' && (
                 <>
                   <button
                     onClick={() => setActiveTab('maintenance')}
@@ -3269,15 +3305,26 @@ export default function AdminDashboard() {
                         <div className="yld-orb -top-14 -right-14 w-48 h-48 bg-[#D4A373]/10" />
                         <div className="yld-orb -bottom-14 -left-14 w-40 h-40 bg-[#D4A373]/5" />
 
-                        <div className="relative flex items-center gap-3 border-b border-zinc-100/80 pb-4">
-                          <motion.div
-                            whileHover={{ rotate: -10, scale: 1.1 }}
-                            transition={{ type: 'spring', stiffness: 400, damping: 14 }}
-                            className="bg-[#D4A373] p-2.5 rounded-xl shadow-sm"
-                          >
-                            <TrendingUp size={20} className="text-white" />
-                          </motion.div>
-                          <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Dynamic Pricing &amp; Yield Engine</h3>
+                        <div className="relative flex items-center justify-between border-b border-zinc-100/80 pb-4">
+                          <div className="flex items-center gap-3">
+                            <motion.div
+                              whileHover={{ rotate: -10, scale: 1.1 }}
+                              transition={{ type: 'spring', stiffness: 400, damping: 14 }}
+                              className="bg-[#D4A373] p-2.5 rounded-xl shadow-sm"
+                            >
+                              <TrendingUp size={20} className="text-white" />
+                            </motion.div>
+                            <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Dynamic Pricing &amp; Yield Engine</h3>
+                          </div>
+                          
+                          {isSuperAdmin && (
+                            <button
+                              onClick={handlePushAllToAll}
+                              className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 text-xs font-bold uppercase tracking-wider rounded-lg border border-red-200 hover:bg-red-100 hover:text-red-700 transition-colors shadow-sm"
+                            >
+                              Push Config To All Properties
+                            </button>
+                          )}
                         </div>
 
                         <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -5080,22 +5127,33 @@ export default function AdminDashboard() {
                                             </div>
                                             <div className="min-w-0">
                                               <h4 className="font-bold text-zinc-900 text-sm truncate">{user.name}</h4>
-                                              <p className="text-[10px] font-mono text-zinc-400 truncate">{user.email}</p>
+                                              <p className="text-[10px] font-mono text-zinc-400 truncate">{user.designation || user.email}</p>
+                                              <div className="flex flex-wrap gap-1 mt-1">
+                                                {(Array.isArray(user.department) ? user.department : (user.department ? [user.department] : [])).map(d => (
+                                                  <span key={d} className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-500">
+                                                    {String(d).replace(/_/g, ' ')}
+                                                  </span>
+                                                ))}
+                                              </div>
                                             </div>
                                           </div>
 
                                           <div className="flex items-center justify-between gap-2">
-                                            <select
-                                              value={user.role}
-                                              onChange={e => handleChangeRole(user.id, e.target.value)}
+                                            <button
+                                              onClick={() => {
+                                                setEditingUser(user);
+                                                setEditAccessForm({
+                                                  access_level: user.access_level || 'EXECUTIVE',
+                                                  department: Array.isArray(user.department) ? user.department : (user.department ? [user.department] : ['FRONT_DESK']),
+                                                  hotel_id: user.hotel_id || '',
+                                                  designation: user.designation || ''
+                                                });
+                                              }}
                                               disabled={user.role === 'SUPER_ADMIN'}
-                                              className="text-[10px] font-bold uppercase tracking-wider bg-white border border-zinc-200 rounded-lg px-2 py-1.5 outline-none focus:ring-2 focus:ring-[#D4A373]/30 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed appearance-none"
+                                              className="text-[10px] font-bold uppercase tracking-wider bg-indigo-50 border border-indigo-200 text-indigo-600 hover:bg-indigo-100 rounded-lg px-3 py-1.5 outline-none transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                                             >
-                                              {['ADMIN', 'RECEPTION', 'FRONT_DESK', 'HOUSEKEEPING', 'FINANCE', 'RESTAURANT', 'SALES', 'TRAVEL'].map(r => (
-                                                <option key={r} value={r}>{r.replace('_', ' ')}</option>
-                                              ))}
-                                              {user.role === 'SUPER_ADMIN' && <option value="SUPER_ADMIN">SUPER ADMIN</option>}
-                                            </select>
+                                              Edit Access
+                                            </button>
 
                                             {user.role !== 'SUPER_ADMIN' && (
                                               <button
@@ -5346,6 +5404,120 @@ export default function AdminDashboard() {
                             <div className="flex gap-3 pt-2">
                               <button type="button" onClick={() => setShowAddAdminModal(false)} className="flex-1 py-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-500 hover:bg-zinc-50 transition-colors">Cancel</button>
                               <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-500 text-white text-xs font-bold shadow-md hover:shadow-lg transition-shadow">Create User</motion.button>
+                            </div>
+                          </form>
+                        </motion.div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* ═══ EDIT STAFF ACCESS MODAL ═══ */}
+                  <AnimatePresence>
+                    {editingUser && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+                        onClick={() => setEditingUser(null)}
+                      >
+                        <motion.div
+                          initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                          animate={{ scale: 1, opacity: 1, y: 0 }}
+                          exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                          onClick={e => e.stopPropagation()}
+                          className="bg-white rounded-3xl border border-zinc-200 shadow-2xl w-full max-w-md p-8"
+                        >
+                          <div className="flex items-center gap-3 mb-6">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white flex items-center justify-center shadow-md">
+                              <ShieldAlert size={18} />
+                            </div>
+                            <div>
+                              <h3 className="text-lg font-black text-zinc-900">Edit Staff Access</h3>
+                              <p className="text-xs text-zinc-500">Modify permissions and property for {editingUser.name}</p>
+                            </div>
+                          </div>
+
+                          <form onSubmit={handleUpdateStaffAccess} className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Clearance Level</label>
+                                <select
+                                  value={editAccessForm.access_level}
+                                  onChange={e => setEditAccessForm({ ...editAccessForm, access_level: e.target.value })}
+                                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl py-2.5 px-3 text-xs font-bold text-zinc-700 outline-none focus:ring-2 focus:ring-indigo-400/30 cursor-pointer appearance-none"
+                                >
+                                  <option value="EXECUTIVE">Executive</option>
+                                  <option value="MANAGER">Manager</option>
+                                  <option value="ADMIN">Admin</option>
+                                </select>
+                              </div>
+                              <div className="col-span-2">
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Departments</label>
+                                  <div className="grid grid-cols-2 gap-2 bg-zinc-50 border border-zinc-200 rounded-xl p-3">
+                                    {[
+                                      { value: 'GLOBAL', label: 'Global / All' },
+                                      { value: 'FRONT_DESK', label: 'Front Desk' },
+                                      { value: 'HOUSEKEEPING', label: 'Housekeeping' },
+                                      { value: 'FINANCE', label: 'Finance' },
+                                      { value: 'RESTAURANT', label: 'Dining' },
+                                      { value: 'SALES', label: 'Sales' },
+                                      { value: 'TRAVEL', label: 'Travel' }
+                                    ].map(dept => (
+                                      <label key={dept.value} className="flex items-center gap-2 cursor-pointer group">
+                                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${editAccessForm.department?.includes(dept.value) ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300 bg-white group-hover:border-indigo-400'}`}>
+                                          {editAccessForm.department?.includes(dept.value) && (
+                                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                          )}
+                                        </div>
+                                        <input
+                                          type="checkbox"
+                                          className="hidden"
+                                          checked={editAccessForm.department?.includes(dept.value) || false}
+                                          onChange={(e) => {
+                                            const currentDepts = editAccessForm.department || [];
+                                            if (e.target.checked) {
+                                              setEditAccessForm({ ...editAccessForm, department: [...currentDepts, dept.value] });
+                                            } else {
+                                              setEditAccessForm({ ...editAccessForm, department: currentDepts.filter(d => d !== dept.value) });
+                                            }
+                                          }}
+                                        />
+                                        <span className="text-xs font-medium text-zinc-700">{dept.label}</span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Designation (Title)</label>
+                              <input
+                                type="text"
+                                value={editAccessForm.designation}
+                                onChange={e => setEditAccessForm({ ...editAccessForm, designation: e.target.value })}
+                                placeholder="e.g. Senior Housekeeper"
+                                className="w-full bg-zinc-50 border border-zinc-200 rounded-xl py-2.5 px-3 text-xs font-bold text-zinc-700 outline-none focus:ring-2 focus:ring-indigo-400/30"
+                              />
+                            </div>
+                            
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Property Assignment</label>
+                              <select
+                                value={editAccessForm.hotel_id || ''}
+                                onChange={e => setEditAccessForm({ ...editAccessForm, hotel_id: e.target.value })}
+                                className="w-full bg-zinc-50 border border-zinc-200 rounded-xl py-2.5 px-3 text-xs font-bold text-zinc-700 outline-none focus:ring-2 focus:ring-indigo-400/30 cursor-pointer appearance-none"
+                              >
+                                <option value="">None (Global)</option>
+                                {hotels.map(h => (
+                                  <option key={h.id} value={h.id}>{h.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                            
+                            <div className="flex gap-3 pt-2">
+                              <button type="button" onClick={() => setEditingUser(null)} className="flex-1 py-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-500 hover:bg-zinc-50 transition-colors">Cancel</button>
+                              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-500 text-white text-xs font-bold shadow-md hover:shadow-lg transition-shadow">Save Changes</motion.button>
                             </div>
                           </form>
                         </motion.div>

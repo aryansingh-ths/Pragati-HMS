@@ -383,6 +383,17 @@ function RoomStatsRings({ deluxeOcc, suiteOcc, standardOcc }) {
 export default function FrontDeskDashboard() {
   const navigate = useNavigate();
   const searchRef = useRef(null);
+  
+  const getAccessLevel = () => {
+    let raw = sessionStorage.getItem('hms_access_level');
+    if (raw && raw !== 'undefined' && raw !== 'null') return raw;
+    let role = (sessionStorage.getItem('hms_role') || '').toUpperCase();
+    if (role === 'SUPER_ADMIN') return 'SUPER_ADMIN';
+    if (role === 'ADMIN') return 'ADMIN';
+    if (role === 'MANAGER') return 'MANAGER';
+    return 'EXECUTIVE';
+  };
+  const accessLevel = getAccessLevel();
 
   // ─── Data States ───────────────────────────────────────────
   const [overviewData, setOverviewData] = useState({ stats: [], recentGuests: [] });
@@ -932,18 +943,20 @@ export default function FrontDeskDashboard() {
         </div>
 
         {/* Section: History — pinned footer action, matches admin & Housekeeping convention */}
-        <div className="pt-4 border-t border-zinc-100 shrink-0">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">History &amp; Ledger</p>
-          <button
-            onClick={() => { setViewMode('history'); loadAllBookings(); }}
-            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'history'
-              ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
-              : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
-              }`}
-          >
-            <History size={16} /> Booking History Log
-          </button>
-        </div>
+        {accessLevel !== 'EXECUTIVE' && (
+          <div className="pt-4 border-t border-zinc-100 shrink-0">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">History &amp; Ledger</p>
+            <button
+              onClick={() => { setViewMode('history'); loadAllBookings(); }}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'history'
+                ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+                : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
+                }`}
+            >
+              <History size={16} /> Booking History Log
+            </button>
+          </div>
+        )}
 
       </motion.div>
 
@@ -1027,7 +1040,11 @@ export default function FrontDeskDashboard() {
             {(() => {
               const staffName = sessionStorage.getItem('hms_name') || 'Staff';
               const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
-              const designation = 'Front Desk Agent';
+              let designation = 'Front Desk Agent';
+              try {
+                const user = JSON.parse(sessionStorage.getItem('hms_user'));
+                if (user && user.designation) designation = user.designation;
+              } catch(e) {}
               return (
                 <motion.button
                   whileHover={{ y: -2 }}
