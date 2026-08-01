@@ -2,6 +2,8 @@
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
 -- 2. Define our ENUMs (Fixed sets of statuses)
+CREATE TYPE access_level AS ENUM ('SUPER_ADMIN', 'ADMIN', 'MANAGER', 'EXECUTIVE');
+CREATE TYPE department_type AS ENUM ('GLOBAL', 'FRONT_DESK', 'DINING', 'HOUSEKEEPING', 'FINANCE', 'SALES', 'TRAVEL');
 CREATE TYPE user_role AS ENUM ('SUPER_ADMIN', 'ADMIN', 'RECEPTION', 'HOUSEKEEPING', 'FINANCE', 'RESTAURANT');
 CREATE TYPE room_status AS ENUM ('AVAILABLE', 'OCCUPIED', 'CLEANING', 'DIRTY', 'INSPECTING', 'MAINTENANCE');
 CREATE TYPE booking_status AS ENUM ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT', 'CANCELLED');
@@ -16,9 +18,13 @@ CREATE TABLE hotels (
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
+    email VARCHAR(255) UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     name VARCHAR(255) NOT NULL,
     role user_role DEFAULT 'RECEPTION',
+    access_level access_level NOT NULL DEFAULT 'EXECUTIVE',
+    department department_type[] NOT NULL DEFAULT ARRAY['FRONT_DESK'::department_type],
+    designation VARCHAR(255) DEFAULT 'Administrator',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
