@@ -857,8 +857,8 @@ export default function TravelDashboard() {
                                 >
                                   {kpi.value}
                                 </motion.p>
-                                <p className="text-[11px] lg:text-[9px] xl:text-[10px] font-bold uppercase tracking-wider text-zinc-500 leading-tight mb-1 break-words">{kpi.label}</p>
-                                <p className="text-[9px] text-zinc-400 leading-tight break-words">{kpi.sub}</p>
+                                <p className="text-[11px] lg:text-[9.5px] xl:text-[10px] font-bold uppercase tracking-wide text-zinc-500 leading-tight mb-1">{kpi.label}</p>
+                                <p className="text-[9px] text-zinc-400 leading-tight truncate">{kpi.sub}</p>
                               </div>
                               <div className="relative shrink-0">{kpiGraphic(kpi.graphicIndex ?? i, dotColor, kpi.pct ?? null)}</div>
                             </motion.div>

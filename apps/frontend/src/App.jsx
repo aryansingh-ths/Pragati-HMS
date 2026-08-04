@@ -96,7 +96,7 @@ export default function App() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-[#FDFBF7] text-slate-800 flex flex-col justify-between pt-24">
+      <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#FDFBF7] text-slate-800 flex flex-col justify-between pt-24">
 
         <Header
           userRole={userRole}
@@ -108,7 +108,7 @@ export default function App() {
           scrollToSection={scrollToSection}
         />
 
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <Routes>
 
             {/* ROUTE 1: Landing Page Container */}

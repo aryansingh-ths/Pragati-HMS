@@ -38,10 +38,19 @@ const STATUS_ICONS = {
 // ─── Custom CSS ─────────────────────────────────────────────
 // Light, airy, no-black / no-purple palette. Teal/sky/emerald/amber only.
 const FD_STYLES = `
-  .fd-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
-  .fd-scrollbar::-webkit-scrollbar { display: none; }
-  .fd-sidebar-scroll { scrollbar-width: none; -ms-overflow-style: none; }
-  .fd-sidebar-scroll::-webkit-scrollbar { display: none; }
+  .fd-scrollbar { scrollbar-width: thin; scrollbar-color: rgba(161,161,170,0.4) transparent; }
+  .fd-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+  .fd-scrollbar::-webkit-scrollbar-track { background: transparent; }
+  .fd-scrollbar::-webkit-scrollbar-thumb { background: rgba(161, 161, 170, 0.45); border-radius: 999px; }
+  .fd-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(113, 113, 122, 0.65); }
+
+  .fd-sidebar-scroll { scrollbar-width: none; }
+  .fd-sidebar-scroll:hover { scrollbar-width: thin; scrollbar-color: rgba(161,161,170,0.4) transparent; }
+  .fd-sidebar-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+  .fd-sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+  .fd-sidebar-scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 999px; transition: background 0.3s; }
+  .fd-sidebar-scroll:hover::-webkit-scrollbar-thumb { background: rgba(161, 161, 170, 0.45); }
+  .fd-sidebar-scroll:hover::-webkit-scrollbar-thumb:hover { background: rgba(113, 113, 122, 0.65); }
 
   /* Soft, solid background — Admin dashboard match */
   .fd-app-bg {
@@ -82,23 +91,35 @@ const FD_STYLES = `
   .fd-dealdeck-card {
     background: #FFFFFF;
     border: 1px solid rgba(226, 232, 240, 0.8);
-    box-shadow: 0px 18px 40px 0px rgba(56, 189, 248, 0.08);
-    transition: box-shadow 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0px 18px 40px 0px rgba(112, 144, 176, 0.08);
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     cursor: pointer;
+    outline: none !important;
+    -webkit-tap-highlight-color: transparent;
   }
   .fd-dealdeck-card:hover {
-    box-shadow: 0px 24px 48px 0px rgba(56, 189, 248, 0.18);
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0px 24px 48px 0px rgba(112, 144, 176, 0.16);
+  }
+  .fd-dealdeck-card:focus, .fd-dealdeck-card:active, .fd-dealdeck-card:focus-visible {
+    outline: none !important;
   }
 
-  /* Focus card — replaces the old purple/indigo solid fill with a light teal/sky gradient */
+  /* Focus card - no color, just a subtle border/shadow to indicate selection */
   .fd-dealdeck-focus-card {
-    background: linear-gradient(135deg, #D4A373 0%, #B3835B 100%) !important;
-    box-shadow: 0px 20px 45px 0px rgba(212, 163, 115, 0.32) !important;
-    transition: box-shadow 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    background: #ffffff !important;
+    border: 2px solid #e4e4e7 !important;
+    box-shadow: 0px 12px 32px 0px rgba(0, 0, 0, 0.08) !important;
+    transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
     cursor: pointer;
+    outline: none !important;
+    -webkit-tap-highlight-color: transparent;
   }
   .fd-dealdeck-focus-card:hover {
-    box-shadow: 0px 26px 55px 0px rgba(212, 163, 115, 0.42) !important;
+    box-shadow: 0px 16px 40px 0px rgba(0, 0, 0, 0.12) !important;
+  }
+  .fd-dealdeck-focus-card:focus, .fd-dealdeck-focus-card:active, .fd-dealdeck-focus-card:focus-visible {
+    outline: none !important;
   }
 
   /* Decorative glow blob tucked into KPI card corners, appears on hover */
@@ -831,7 +852,7 @@ export default function FrontDeskDashboard() {
   })();
 
   return (
-    <div className="h-[calc(100vh-6rem)] relative bg-[#F8F1E3] font-sans text-zinc-800 p-6 flex flex-col lg:flex-row gap-6 overflow-hidden">
+    <div className="h-[calc(100vh-6rem)] w-full max-w-full overflow-hidden relative fd-app-bg p-6 flex flex-col lg:flex-row gap-6">
       <style>{FD_STYLES}</style>
 
       {/* ═══════════════════════════════════════════════════════
@@ -841,7 +862,7 @@ export default function FrontDeskDashboard() {
         initial={{ opacity: 0, x: -30 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
-        className="w-full lg:w-72 shrink-0 h-full rounded-[2rem] overflow-y-auto fd-scrollbar p-6 flex flex-col gap-6 fd-dealdeck-sidebar z-30"
+        className="w-full lg:w-72 shrink-0 h-full rounded-[2rem] p-6 flex flex-col gap-6 fd-dealdeck-sidebar"
       >
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center justify-center shadow-xs">
@@ -854,7 +875,7 @@ export default function FrontDeskDashboard() {
         </div>
 
         {/* Navigation Categories */}
-        <div className="flex flex-col gap-4 flex-1">
+        <div className="flex flex-col gap-4 flex-1 overflow-y-auto fd-sidebar-scroll pb-8 pr-1 min-h-0">
           {/* Section: Menu */}
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Menu</p>
@@ -946,30 +967,31 @@ export default function FrontDeskDashboard() {
               </button>
             </div>
           </div>
-        </div>
 
-        {/* Section: History — pinned footer action, matches admin & Housekeeping convention */}
-        {accessLevel !== 'EXECUTIVE' && (
-          <div className="pt-4 border-t border-zinc-100 shrink-0">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">History &amp; Ledger</p>
-            <button
-              onClick={() => { setViewMode('history'); loadAllBookings(); }}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'history'
-                ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
-                : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
-                }`}
-            >
-              <History size={16} /> Booking History Log
-            </button>
-          </div>
-        )}
+          {/* Section: History */}
+          {accessLevel !== 'EXECUTIVE' && (
+            <div className="pt-4 border-t border-zinc-100 shrink-0 mt-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">History &amp; Ledger</p>
+              <button
+                onClick={() => { setViewMode('history'); loadAllBookings(); }}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'history'
+                  ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
+                  }`}
+              >
+                <span className="flex items-center gap-3"><History size={16} /> Booking History Log</span>
+              </button>
+            </div>
+          )}
+
+        </div>
 
       </motion.div>
 
       {/* ═══════════════════════════════════════════════════════
           MAIN WORKSPACE CANVAS
           ═══════════════════════════════════════════════════════ */}
-      <div className="flex-1 flex flex-col gap-6 overflow-y-auto fd-scrollbar min-w-0 pr-2 pb-6">
+      <div className="flex-1 h-full overflow-y-auto fd-scrollbar pr-2 flex flex-col gap-6 min-w-0 z-10 pb-10">
 
         {/* BROADCAST BANNER */}
         <AnimatePresence>
@@ -1076,95 +1098,152 @@ export default function FrontDeskDashboard() {
           </div>
         </motion.div>
 
-        {/* 4 TOP KPI STATS CARD ROW — tilting glass cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {/* 4 TOP KPI STATS CARD ROW — TravelDashboard style */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
           {/* Card 1: Total Occupancy */}
-          <TiltCard
-            glowHex="#14b8a6"
+          <motion.div
             onClick={() => { setViewMode('active'); setActiveFilter('all'); }}
-            className={`fd-kpi-tilt rounded-[2rem] p-6 flex flex-col justify-between relative overflow-hidden h-36 select-none ${activeFilter === 'all' && viewMode === 'active' ? 'fd-dealdeck-focus-card text-white' : 'fd-dealdeck-card text-zinc-900 bg-white'
-              }`}
+            whileHover={{ y: -8, scale: 1.02 }}
+            style={{ '--kpi-glow': 'rgba(14,165,233,0.35)' }}
+            className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between border bg-gradient-to-br from-sky-50 via-white to-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_24px_-16px_rgba(0,0,0,0.15)] transition-shadow duration-500 hover:shadow-[0_20px_45px_-18px_var(--kpi-glow)] ring-1 ring-sky-500/10 cursor-pointer ${activeFilter === 'all' && viewMode === 'active' ? 'fd-dealdeck-focus-card' : 'border-zinc-200/70'}`}
           >
-            <div className={`fd-kpi-blob ${activeFilter === 'all' && viewMode === 'active' ? 'bg-white/30' : 'bg-[#D4A373]/20'}`} />
-            <div className="relative flex items-start justify-between">
-              <div>
-                <p className={`text-[10px] font-bold uppercase tracking-wider ${activeFilter === 'all' && viewMode === 'active' ? 'text-white/80' : 'text-zinc-400'}`}>Total Occupancy</p>
-                <h3 className="text-3xl font-black mt-1 leading-none"><CountUp value={Math.round((inhouseCount / 20) * 100)} suffix="%" /></h3>
+            <div
+              className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
+              style={{ background: 'rgba(14,165,233,0.35)' }}
+            />
+            <div className="relative flex-1 min-w-0 pr-1">
+              <div className="flex items-start justify-between mb-3">
+                <motion.div
+                  whileHover={{ rotate: -8, scale: 1.1 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 14 }}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-[#0ea5e9] text-white shadow-lg shadow-[#0ea5e9]/30"
+                >
+                  <BedDouble size={16} />
+                </motion.div>
               </div>
-              <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'all' && viewMode === 'active' ? 'bg-white/20 text-white' : 'bg-amber-50 text-[#D4A373]'
-                }`}>
-                <TrendingUp size={10} /> +2.08%
-              </span>
+              <motion.p className="text-2xl lg:text-xl xl:text-2xl font-black text-zinc-900 tracking-tight leading-none mb-1.5">
+                <CountUp value={Math.round((inhouseCount / 20) * 100)} suffix="%" />
+              </motion.p>
+              <p className="text-[11px] lg:text-[9.5px] xl:text-[10px] font-bold uppercase tracking-wide text-zinc-500 leading-tight mb-1">Total Occupancy</p>
+              <p className="text-[9px] text-zinc-400 leading-tight truncate">Rooms occupied today ({inhouseCount} stays)</p>
             </div>
-            <p className={`relative text-[10px] mt-auto ${activeFilter === 'all' && viewMode === 'active' ? 'text-white/60' : 'text-zinc-400'}`}>Rooms occupied today ({inhouseCount} stays)</p>
-          </TiltCard>
+            <div className="relative shrink-0 ml-2 sm:ml-4 flex items-center justify-center">
+              <svg className="w-12 h-12 sm:w-14 sm:h-14 rotate-[-90deg]">
+                <circle cx="50%" cy="50%" r="20" fill="none" stroke="rgba(14,165,233,0.15)" strokeWidth="4" />
+                <motion.circle cx="50%" cy="50%" r="20" fill="none" stroke="#0ea5e9" strokeWidth="4.5" strokeDasharray={2 * Math.PI * 20} strokeDashoffset={2 * Math.PI * 20} animate={{ strokeDashoffset: (2 * Math.PI * 20) * (1 - Math.min((inhouseCount / 20), 1)) }} transition={{ duration: 1.3, ease: "easeOut" }} strokeLinecap="round" />
+              </svg>
+            </div>
+          </motion.div>
 
           {/* Card 2: Arrivals Today */}
-          <TiltCard
-            glowHex="#10b981"
+          <motion.div
             onClick={() => { setViewMode('active'); setActiveFilter('arrivals'); }}
-            className={`fd-kpi-tilt rounded-[2rem] p-6 flex flex-col justify-between relative overflow-hidden h-36 select-none ${activeFilter === 'arrivals' && viewMode === 'active' ? 'fd-dealdeck-focus-card text-white' : 'fd-dealdeck-card text-zinc-900 bg-white'
-              }`}
+            whileHover={{ y: -8, scale: 1.02 }}
+            style={{ '--kpi-glow': 'rgba(16,185,129,0.35)' }}
+            className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between border bg-gradient-to-br from-emerald-50 via-white to-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_24px_-16px_rgba(0,0,0,0.15)] transition-shadow duration-500 hover:shadow-[0_20px_45px_-18px_var(--kpi-glow)] ring-1 ring-emerald-500/10 cursor-pointer ${activeFilter === 'arrivals' && viewMode === 'active' ? 'fd-dealdeck-focus-card' : 'border-zinc-200/70'}`}
           >
-            <div className={`fd-kpi-blob ${activeFilter === 'arrivals' && viewMode === 'active' ? 'bg-white/30' : 'bg-emerald-300/40'}`} />
-            <div className="relative flex items-start justify-between">
-              <div>
-                <p className={`text-[10px] font-bold uppercase tracking-wider ${activeFilter === 'arrivals' && viewMode === 'active' ? 'text-white/80' : 'text-zinc-400'}`}>Arrivals Today</p>
-                <h3 className="text-3xl font-black mt-1 leading-none"><CountUp value={arrivalsCount} /></h3>
+            <div
+              className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
+              style={{ background: 'rgba(16,185,129,0.35)' }}
+            />
+            <div className="relative flex-1 min-w-0 pr-1">
+              <div className="flex items-start justify-between mb-3">
+                <motion.div
+                  whileHover={{ rotate: -8, scale: 1.1 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 14 }}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-[#10b981] text-white shadow-lg shadow-[#10b981]/30"
+                >
+                  <LogIn size={16} />
+                </motion.div>
               </div>
-              <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'arrivals' && viewMode === 'active' ? 'bg-white/20 text-white' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                }`}>
-                <TrendingUp size={10} /> +12.4%
-              </span>
+              <motion.p className="text-2xl lg:text-xl xl:text-2xl font-black text-zinc-900 tracking-tight leading-none mb-1.5">
+                <CountUp value={arrivalsCount} />
+              </motion.p>
+              <p className="text-[11px] lg:text-[9.5px] xl:text-[10px] font-bold uppercase tracking-wide text-zinc-500 leading-tight mb-1">Arrivals Today</p>
+              <p className="text-[9px] text-zinc-400 leading-tight truncate">Scheduled check-ins</p>
             </div>
-            <p className={`relative text-[10px] mt-auto ${activeFilter === 'arrivals' && viewMode === 'active' ? 'text-white/60' : 'text-zinc-400'}`}>Scheduled check-ins for the day</p>
-          </TiltCard>
+            <div className="relative shrink-0 ml-2 sm:ml-4 border rounded-xl bg-white p-1.5 shadow-sm border-emerald-500/20">
+              <svg className="w-12 h-8 sm:w-16 sm:h-9 overflow-visible" viewBox="0 0 60 32">
+                <motion.path d="M0 22 Q8 6, 16 16 T32 3 T48 12 T60 8" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: 'easeOut' }} />
+                <motion.circle cx="60" cy="8" r="3" fill="#10b981" initial={{ scale: 0 }} animate={{ scale: [0, 1.4, 1] }} transition={{ duration: 0.5, delay: 1.3 }} />
+              </svg>
+            </div>
+          </motion.div>
 
           {/* Card 3: Departures Today */}
-          <TiltCard
-            glowHex="#f59e0b"
+          <motion.div
             onClick={() => { setViewMode('active'); setActiveFilter('departures'); }}
-            className={`fd-kpi-tilt rounded-[2rem] p-6 flex flex-col justify-between relative overflow-hidden h-36 select-none ${activeFilter === 'departures' && viewMode === 'active' ? 'fd-dealdeck-focus-card text-white' : 'fd-dealdeck-card text-zinc-900 bg-white'
-              }`}
+            whileHover={{ y: -8, scale: 1.02 }}
+            style={{ '--kpi-glow': 'rgba(245,158,11,0.35)' }}
+            className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between border bg-gradient-to-br from-amber-50 via-white to-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_24px_-16px_rgba(0,0,0,0.15)] transition-shadow duration-500 hover:shadow-[0_20px_45px_-18px_var(--kpi-glow)] ring-1 ring-amber-500/10 cursor-pointer ${activeFilter === 'departures' && viewMode === 'active' ? 'fd-dealdeck-focus-card' : 'border-zinc-200/70'}`}
           >
-            <div className={`fd-kpi-blob ${activeFilter === 'departures' && viewMode === 'active' ? 'bg-white/30' : 'bg-amber-300/40'}`} />
-            <div className="relative flex items-start justify-between">
-              <div>
-                <p className={`text-[10px] font-bold uppercase tracking-wider ${activeFilter === 'departures' && viewMode === 'active' ? 'text-white/80' : 'text-zinc-400'}`}>Departures Today</p>
-                <h3 className="text-3xl font-black mt-1 leading-none"><CountUp value={departuresCount} /></h3>
+            <div
+              className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
+              style={{ background: 'rgba(245,158,11,0.35)' }}
+            />
+            <div className="relative flex-1 min-w-0 pr-1">
+              <div className="flex items-start justify-between mb-3">
+                <motion.div
+                  whileHover={{ rotate: -8, scale: 1.1 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 14 }}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-[#f59e0b] text-white shadow-lg shadow-[#f59e0b]/30"
+                >
+                  <LogOut size={16} />
+                </motion.div>
               </div>
-              <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'departures' && viewMode === 'active' ? 'bg-white/20 text-white' : 'bg-amber-50 text-amber-700 border border-amber-100'
-                }`}>
-                Balanced
-              </span>
+              <motion.p className="text-2xl lg:text-xl xl:text-2xl font-black text-zinc-900 tracking-tight leading-none mb-1.5">
+                <CountUp value={departuresCount} />
+              </motion.p>
+              <p className="text-[11px] lg:text-[9.5px] xl:text-[10px] font-bold uppercase tracking-wide text-zinc-500 leading-tight mb-1">Departures Today</p>
+              <p className="text-[9px] text-zinc-400 leading-tight truncate">Scheduled check-outs</p>
             </div>
-            <p className={`relative text-[10px] mt-auto ${activeFilter === 'departures' && viewMode === 'active' ? 'text-white/60' : 'text-zinc-400'}`}>Scheduled room check-outs</p>
-          </TiltCard>
+            <div className="relative shrink-0 ml-2 sm:ml-4 border rounded-xl bg-white p-1.5 shadow-sm border-amber-500/20">
+              <svg className="w-12 h-8 sm:w-16 sm:h-9 overflow-visible" viewBox="0 0 60 32">
+                <motion.path d="M0 8 Q8 20, 16 12 T32 25 T48 18 T60 22" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: 'easeOut' }} />
+                <motion.circle cx="60" cy="22" r="3" fill="#f59e0b" initial={{ scale: 0 }} animate={{ scale: [0, 1.4, 1] }} transition={{ duration: 0.5, delay: 1.3 }} />
+              </svg>
+            </div>
+          </motion.div>
 
           {/* Card 4: Overstay Warnings */}
-          <TiltCard
-            glowHex="#fb7185"
+          <motion.div
             onClick={() => { setViewMode('active'); setActiveFilter('pending_checkout'); }}
-            className={`fd-kpi-tilt rounded-[2rem] p-6 flex flex-col justify-between relative overflow-hidden h-36 select-none ${activeFilter === 'pending_checkout' && viewMode === 'active' ? 'fd-dealdeck-focus-card text-white' : 'fd-dealdeck-card text-zinc-900 bg-white'
-              }`}
+            whileHover={{ y: -8, scale: 1.02 }}
+            style={{ '--kpi-glow': 'rgba(225,29,72,0.35)' }}
+            className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between border bg-gradient-to-br from-rose-50 via-white to-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_24px_-16px_rgba(0,0,0,0.15)] transition-shadow duration-500 hover:shadow-[0_20px_45px_-18px_var(--kpi-glow)] ring-1 ring-rose-500/10 cursor-pointer ${activeFilter === 'pending_checkout' && viewMode === 'active' ? 'fd-dealdeck-focus-card' : 'border-zinc-200/70'}`}
           >
-            <div className={`fd-kpi-blob ${activeFilter === 'pending_checkout' && viewMode === 'active' ? 'bg-white/30' : 'bg-rose-300/40'}`} />
-            <div className="relative flex items-start justify-between">
-              <div>
-                <p className={`text-[10px] font-bold uppercase tracking-wider ${activeFilter === 'pending_checkout' && viewMode === 'active' ? 'text-white/80' : 'text-zinc-400'}`}>Overstay Warnings</p>
-                <h3 className="text-3xl font-black mt-1 leading-none"><CountUp value={pendingCheckoutsCount} /></h3>
+            <div
+              className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
+              style={{ background: 'rgba(225,29,72,0.35)' }}
+            />
+            <div className="relative flex-1 min-w-0 pr-1">
+              <div className="flex items-start justify-between mb-3">
+                <motion.div
+                  whileHover={{ rotate: -8, scale: 1.1 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 14 }}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-[#e11d48] text-white shadow-lg shadow-[#e11d48]/30"
+                >
+                  <AlertTriangle size={16} />
+                </motion.div>
               </div>
-              <motion.span
-                animate={pendingCheckoutsCount > 0 && !(activeFilter === 'pending_checkout' && viewMode === 'active') ? { scale: [1, 1.08, 1] } : {}}
-                transition={{ duration: 1.4, repeat: Infinity }}
-                className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'pending_checkout' && viewMode === 'active' ? 'bg-white/20 text-white' : (pendingCheckoutsCount > 0 ? 'bg-rose-50 text-rose-700 border border-rose-100' : 'bg-zinc-100 text-zinc-500')
-                  }`}
-              >
-                {pendingCheckoutsCount > 0 ? 'Action Needed' : 'All Clear'}
-              </motion.span>
+              <motion.p className="text-2xl lg:text-xl xl:text-2xl font-black text-zinc-900 tracking-tight leading-none mb-1.5">
+                <CountUp value={pendingCheckoutsCount} />
+              </motion.p>
+              <p className="text-[11px] lg:text-[9.5px] xl:text-[10px] font-bold uppercase tracking-wide text-zinc-500 leading-tight mb-1">Overstay Warnings</p>
+              <p className="text-[9px] text-zinc-400 leading-tight truncate">Past 11:00 AM limit</p>
             </div>
-            <p className={`relative text-[10px] mt-auto ${activeFilter === 'pending_checkout' && viewMode === 'active' ? 'text-white/60' : 'text-zinc-400'}`}>Guests past 11:00 AM limit</p>
-          </TiltCard>
+            <div className="relative shrink-0 ml-2 sm:ml-4 flex items-end gap-1.5 h-10 px-2 py-1 rounded-xl bg-white border border-rose-500/20 shadow-sm">
+              {[...Array(5)].map((_, i) => (
+                <motion.div
+                  key={i}
+                  className={`w-1.5 rounded-full ${pendingCheckoutsCount > 0 && (i === 3 || i === 4) ? 'bg-[#e11d48]' : 'bg-[#e11d48]/30'}`}
+                  initial={{ height: 4 }}
+                  animate={{ height: pendingCheckoutsCount > 0 ? [10, 20, 28, 14, 24][i] : [8, 12, 6, 8, 4][i] }}
+                  transition={{ duration: 0.8, delay: i * 0.1, type: "spring" }}
+                />
+              ))}
+            </div>
+          </motion.div>
         </div>
 
         {/* WALK-IN BOOKING QUICK PANEL — light gradient, no black/purple */}
@@ -1566,10 +1645,52 @@ export default function FrontDeskDashboard() {
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {/* Inventory available rooms list - MOVED BELOW ACTIVE STAYS */}
+            <motion.div
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.28, duration: 0.4 }}
+              className="bg-white rounded-[2rem] p-6 shadow-[0px_18px_40px_rgba(56,189,248,0.06)] border border-zinc-100 flex flex-col gap-5 mt-auto"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider flex items-center gap-2">
+                    <CheckCircle2 size={16} className="text-emerald-500" /> Room Inventory
+                  </h3>
+                  <p className="text-[10px] text-zinc-400 mt-0.5">Vacant rooms available for immediate check-in</p>
+                </div>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={async () => { await loadAvailableRooms(); setModalType('available_rooms'); }}
+                  className="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-bold hover:bg-emerald-100 transition-colors"
+                >
+                  View Details
+                </motion.button>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
+                {roomTypeStats.length === 0 ? (
+                  <span className="text-xs text-zinc-400 italic col-span-full">No rooms available</span>
+                ) : (
+                  roomTypeStats.map((stat, idx) => (
+                    <div key={idx} className="flex flex-col items-center justify-center py-4 px-2 rounded-xl border relative overflow-hidden group" style={{ backgroundColor: `${stat.color}08`, borderColor: `${stat.color}20` }}>
+                      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" style={{ backgroundImage: `linear-gradient(to bottom right, transparent, ${stat.color}15)` }} />
+                      <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest text-center relative z-10">{stat.name}</span>
+                      <div className="flex items-end gap-1.5 mt-2 relative z-10">
+                        <span className="text-3xl font-black leading-none tracking-tighter" style={{ color: stat.color }}>{stat.vacant}</span>
+                        <span className="text-[9px] font-bold text-zinc-400 mb-1">LEFT</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
           </div>
 
           {/* RIGHT SIDEBAR PANEL: CONCENTRIC ROOM CHART & DETAILS */}
-          <div className="flex flex-col gap-6">
+          <div className="w-full lg:w-78 shrink-0 h-full overflow-y-auto fd-sidebar-scroll flex flex-col gap-6 pb-10 pr-1">
 
             {/* Concentric Progress Rings */}
             <motion.div
@@ -1604,42 +1725,7 @@ export default function FrontDeskDashboard() {
               </div>
             </motion.div>
 
-            {/* Inventory available rooms list */}
-            <motion.div
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.28, duration: 0.4 }}
-              className="bg-white rounded-[2rem] p-6 shadow-[0px_18px_40px_rgba(56,189,248,0.08)] border border-zinc-100 flex flex-col gap-4"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider flex items-center gap-2">
-                    <CheckCircle2 size={16} className="text-emerald-500" /> Room Inventory
-                  </h3>
-                  <p className="text-[10px] text-zinc-400 mt-0.5">Vacant rooms ready for walk-ins</p>
-                </div>
-                <motion.button
-                  whileHover={{ x: 2 }}
-                  onClick={async () => { await loadAvailableRooms(); setModalType('available_rooms'); }}
-                  className="text-[10px] font-bold text-[#D4A373] hover:text-[#B3835B]"
-                >
-                  View Details
-                </motion.button>
-              </div>
 
-              <div className="flex flex-col gap-2">
-                {roomTypeStats.length === 0 ? (
-                  <span className="text-xs text-zinc-400 italic">No rooms available</span>
-                ) : (
-                  roomTypeStats.map((stat, idx) => (
-                    <div key={idx} className={`flex justify-between items-center py-2 px-3 rounded-xl border`} style={{ backgroundColor: `${stat.color}15`, borderColor: `${stat.color}30` }}>
-                      <span className="text-xs font-bold text-zinc-800">{stat.name} (Vacant)</span>
-                      <span className="text-xs font-bold text-zinc-500">{stat.vacant} Available</span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </motion.div>
 
           </div>
         </div>

@@ -67,18 +67,30 @@ const FD_STYLES = `
     box-shadow: 0px 18px 40px 0px rgba(56, 189, 248, 0.08);
     transition: box-shadow 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
     cursor: pointer;
+    outline: none !important;
+    -webkit-tap-highlight-color: transparent;
   }
   .fd-dealdeck-card:hover {
     box-shadow: 0px 24px 48px 0px rgba(56, 189, 248, 0.18);
   }
+  .fd-dealdeck-card:focus, .fd-dealdeck-card:active, .fd-dealdeck-card:focus-visible {
+    outline: none !important;
+  }
 
   .fd-dealdeck-focus-card {
-    box-shadow: 0px 20px 45px 0px rgba(212, 163, 115, 0.32) !important;
-    transition: box-shadow 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    background: #ffffff !important;
+    border: 2px solid #e4e4e7 !important;
+    box-shadow: 0px 12px 32px 0px rgba(0, 0, 0, 0.08) !important;
+    transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
     cursor: pointer;
+    outline: none !important;
+    -webkit-tap-highlight-color: transparent;
   }
   .fd-dealdeck-focus-card:hover {
-    box-shadow: 0px 26px 55px 0px rgba(212, 163, 115, 0.42) !important;
+    box-shadow: 0px 16px 40px 0px rgba(0, 0, 0, 0.12) !important;
+  }
+  .fd-dealdeck-focus-card:focus, .fd-dealdeck-focus-card:active, .fd-dealdeck-focus-card:focus-visible {
+    outline: none !important;
   }
 
   .fd-kpi-blob {
@@ -866,110 +878,146 @@ export default function HousekeepingDashboard() {
         {/* 4 TOP KPI STATS CARD ROW */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {/* Card 1: Needs Cleaning */}
-          <TiltCard
+          <motion.div
             onClick={() => setActiveFilter('dirty')}
-            glowHex="#f43f5e"
-            className={`fd-kpi-tilt rounded-[2rem] p-6 flex flex-col justify-between relative overflow-hidden h-36 select-none cursor-pointer ${activeFilter === 'dirty'
-              ? 'fd-dealdeck-focus-card text-white bg-gradient-to-br from-[#D4A373] to-[#B3835B]'
-              : 'fd-dealdeck-card text-zinc-900 bg-white'
-              }`}
+            whileHover={{ y: -8, scale: 1.02 }}
+            style={{ '--kpi-glow': 'rgba(225,29,72,0.35)' }}
+            className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between border bg-gradient-to-br from-rose-50 via-white to-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_24px_-16px_rgba(0,0,0,0.15)] transition-shadow duration-500 hover:shadow-[0_20px_45px_-18px_var(--kpi-glow)] ring-1 ring-rose-500/10 cursor-pointer ${activeFilter === 'dirty' ? 'fd-dealdeck-focus-card' : 'border-zinc-200/70'}`}
           >
-            <div className={`fd-kpi-blob ${activeFilter === 'dirty' ? 'bg-white/30' : 'bg-rose-500/10'}`} />
-            <div className="flex items-start justify-between relative z-10">
-              <div>
-                <p className={`text-[10px] font-bold uppercase tracking-wider ${activeFilter === 'dirty' ? 'text-white/80' : 'text-zinc-400'
-                  }`}>Needs Cleaning</p>
-                <h3 className="text-3xl font-black mt-1 leading-none"><CountUp value={stats.dirty} /></h3>
+            <div
+              className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
+              style={{ background: 'rgba(225,29,72,0.35)' }}
+            />
+            <div className="relative flex-1 min-w-0 pr-1">
+              <div className="flex items-start justify-between mb-3">
+                <motion.div
+                  whileHover={{ rotate: -8, scale: 1.1 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 14 }}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-[#e11d48] text-white shadow-lg shadow-[#e11d48]/30"
+                >
+                  <Droplets size={16} />
+                </motion.div>
               </div>
-              <motion.span
-                animate={stats.dirty > 0 && activeFilter !== 'dirty' ? { scale: [1, 1.08, 1] } : {}}
-                transition={{ duration: 1.6, repeat: Infinity }}
-                className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'dirty' ? 'bg-white/20 text-white' : 'bg-amber-50 text-[#D4A373] border border-rose-100'
-                  }`}>
-                <Droplets size={10} /> Dirty
-              </motion.span>
+              <motion.p className="text-2xl lg:text-xl xl:text-2xl font-black text-zinc-900 tracking-tight leading-none mb-1.5">
+                <CountUp value={stats.dirty} />
+              </motion.p>
+              <p className="text-[11px] lg:text-[9.5px] xl:text-[10px] font-bold uppercase tracking-wide text-zinc-500 leading-tight mb-1">Needs Cleaning</p>
+              <p className="text-[9px] text-zinc-400 leading-tight truncate">Requires attention</p>
             </div>
-            <p className={`relative z-10 text-[10px] mt-auto ${activeFilter === 'dirty' ? 'text-white/60' : 'text-zinc-400'
-              }`}>Rooms requiring housekeeping attention</p>
-          </TiltCard>
+            <div className="relative shrink-0 ml-2 sm:ml-4 border rounded-xl bg-white p-1.5 shadow-sm border-rose-500/20">
+              <svg className="w-12 h-8 sm:w-16 sm:h-9 overflow-visible" viewBox="0 0 60 32">
+                <motion.path d="M0 16 Q8 4, 16 20 T32 8 T48 24 T60 12" fill="none" stroke="#e11d48" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="4 4" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: 'easeOut' }} />
+                <motion.circle cx="32" cy="8" r="2.5" fill="#e11d48" initial={{ scale: 0 }} animate={{ scale: [0, 1.2, 1] }} transition={{ duration: 0.5, delay: 1 }} />
+              </svg>
+            </div>
+          </motion.div>
 
           {/* Card 2: In Progress */}
-          <TiltCard
+          <motion.div
             onClick={() => setActiveFilter('cleaning')}
-            glowHex="#f59e0b"
-            className={`fd-kpi-tilt rounded-[2rem] p-6 flex flex-col justify-between relative overflow-hidden h-36 select-none cursor-pointer ${activeFilter === 'cleaning'
-              ? 'fd-dealdeck-focus-card text-white bg-gradient-to-br from-[#D4A373] to-[#B3835B]'
-              : 'fd-dealdeck-card text-zinc-900 bg-white'
-              }`}
+            whileHover={{ y: -8, scale: 1.02 }}
+            style={{ '--kpi-glow': 'rgba(245,158,11,0.35)' }}
+            className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between border bg-gradient-to-br from-amber-50 via-white to-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_24px_-16px_rgba(0,0,0,0.15)] transition-shadow duration-500 hover:shadow-[0_20px_45px_-18px_var(--kpi-glow)] ring-1 ring-amber-500/10 cursor-pointer ${activeFilter === 'cleaning' ? 'fd-dealdeck-focus-card' : 'border-zinc-200/70'}`}
           >
-            <div className={`fd-kpi-blob ${activeFilter === 'cleaning' ? 'bg-white/30' : 'bg-amber-500/10'}`} />
-            <div className="flex items-start justify-between relative z-10">
-              <div>
-                <p className={`text-[10px] font-bold uppercase tracking-wider ${activeFilter === 'cleaning' ? 'text-white/80' : 'text-zinc-400'
-                  }`}>In Progress</p>
-                <h3 className="text-3xl font-black mt-1 leading-none"><CountUp value={stats.cleaning} /></h3>
+            <div
+              className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
+              style={{ background: 'rgba(245,158,11,0.35)' }}
+            />
+            <div className="relative flex-1 min-w-0 pr-1">
+              <div className="flex items-start justify-between mb-3">
+                <motion.div
+                  whileHover={{ rotate: -8, scale: 1.1 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 14 }}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-[#f59e0b] text-white shadow-lg shadow-[#f59e0b]/30"
+                >
+                  <motion.span animate={{ rotate: 360 }} transition={{ duration: 3, repeat: Infinity, ease: 'linear' }} className="inline-flex">
+                    <Sparkles size={16} />
+                  </motion.span>
+                </motion.div>
               </div>
-              <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'cleaning' ? 'bg-white/20 text-white' : 'bg-amber-50 text-[#D4A373] border border-amber-100'
-                }`}>
-                <motion.span animate={{ rotate: 360 }} transition={{ duration: 3, repeat: Infinity, ease: 'linear' }} className="inline-flex">
-                  <Sparkles size={10} />
-                </motion.span>
-                Cleaning
-              </span>
+              <motion.p className="text-2xl lg:text-xl xl:text-2xl font-black text-zinc-900 tracking-tight leading-none mb-1.5">
+                <CountUp value={stats.cleaning} />
+              </motion.p>
+              <p className="text-[11px] lg:text-[9.5px] xl:text-[10px] font-bold uppercase tracking-wide text-zinc-500 leading-tight mb-1">In Progress</p>
+              <p className="text-[9px] text-zinc-400 leading-tight truncate">Currently being cleaned</p>
             </div>
-            <p className={`relative z-10 text-[10px] mt-auto ${activeFilter === 'cleaning' ? 'text-white/60' : 'text-zinc-400'
-              }`}>Rooms currently being cleaned</p>
-          </TiltCard>
+            <div className="relative shrink-0 ml-2 sm:ml-4 flex items-center justify-center">
+              <svg className="w-12 h-12 sm:w-14 sm:h-14 rotate-[-90deg]">
+                <circle cx="50%" cy="50%" r="20" fill="none" stroke="rgba(245,158,11,0.15)" strokeWidth="4" />
+                <motion.circle cx="50%" cy="50%" r="20" fill="none" stroke="#f59e0b" strokeWidth="4.5" strokeDasharray={2 * Math.PI * 20} strokeDashoffset={2 * Math.PI * 20} animate={{ strokeDashoffset: (2 * Math.PI * 20) * 0.3 }} transition={{ duration: 2, ease: "easeInOut", repeat: Infinity, repeatType: "mirror" }} strokeLinecap="round" />
+              </svg>
+            </div>
+          </motion.div>
 
           {/* Card 3: Awaiting Inspection */}
-          <TiltCard
+          <motion.div
             onClick={() => setActiveFilter('inspecting')}
-            glowHex="#3b82f6"
-            className={`fd-kpi-tilt rounded-[2rem] p-6 flex flex-col justify-between relative overflow-hidden h-36 select-none cursor-pointer ${activeFilter === 'inspecting'
-              ? 'fd-dealdeck-focus-card text-white bg-gradient-to-br from-[#D4A373] to-[#B3835B]'
-              : 'fd-dealdeck-card text-zinc-900 bg-white'
-              }`}
+            whileHover={{ y: -8, scale: 1.02 }}
+            style={{ '--kpi-glow': 'rgba(14,165,233,0.35)' }}
+            className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between border bg-gradient-to-br from-sky-50 via-white to-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_24px_-16px_rgba(0,0,0,0.15)] transition-shadow duration-500 hover:shadow-[0_20px_45px_-18px_var(--kpi-glow)] ring-1 ring-sky-500/10 cursor-pointer ${activeFilter === 'inspecting' ? 'fd-dealdeck-focus-card' : 'border-zinc-200/70'}`}
           >
-            <div className={`fd-kpi-blob ${activeFilter === 'inspecting' ? 'bg-white/30' : 'bg-blue-500/10'}`} />
-            <div className="flex items-start justify-between relative z-10">
-              <div>
-                <p className={`text-[10px] font-bold uppercase tracking-wider ${activeFilter === 'inspecting' ? 'text-white/80' : 'text-zinc-400'
-                  }`}>Awaiting Inspection</p>
-                <h3 className="text-3xl font-black mt-1 leading-none"><CountUp value={stats.inspecting} /></h3>
+            <div
+              className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
+              style={{ background: 'rgba(14,165,233,0.35)' }}
+            />
+            <div className="relative flex-1 min-w-0 pr-1">
+              <div className="flex items-start justify-between mb-3">
+                <motion.div
+                  whileHover={{ rotate: -8, scale: 1.1 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 14 }}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-[#0ea5e9] text-white shadow-lg shadow-[#0ea5e9]/30"
+                >
+                  <Eye size={16} />
+                </motion.div>
               </div>
-              <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'inspecting' ? 'bg-white/20 text-white' : 'bg-amber-50 text-[#D4A373] border border-blue-100'
-                }`}>
-                <Eye size={10} /> Inspecting
-              </span>
+              <motion.p className="text-2xl lg:text-xl xl:text-2xl font-black text-zinc-900 tracking-tight leading-none mb-1.5">
+                <CountUp value={stats.inspecting} />
+              </motion.p>
+              <p className="text-[11px] lg:text-[9.5px] xl:text-[10px] font-bold uppercase tracking-wide text-zinc-500 leading-tight mb-1">Inspecting</p>
+              <p className="text-[9px] text-zinc-400 leading-tight truncate">Waiting for approval</p>
             </div>
-            <p className={`relative z-10 text-[10px] mt-auto ${activeFilter === 'inspecting' ? 'text-white/60' : 'text-zinc-400'
-              }`}>Rooms waiting for supervisor approval</p>
-          </TiltCard>
+            <div className="relative shrink-0 ml-2 sm:ml-4 border rounded-xl bg-white p-1.5 shadow-sm border-[#0ea5e9]/20">
+              <svg className="w-12 h-8 sm:w-16 sm:h-9 overflow-visible" viewBox="0 0 60 32">
+                <motion.path d="M10 16 L50 16" fill="none" stroke="rgba(14,165,233,0.2)" strokeWidth="4" strokeLinecap="round" />
+                <motion.path d="M10 16 L30 16" fill="none" stroke="#0ea5e9" strokeWidth="4" strokeLinecap="round" animate={{ x: [0, 20, 0] }} transition={{ duration: 1.5, ease: 'easeInOut', repeat: Infinity }} />
+              </svg>
+            </div>
+          </motion.div>
 
           {/* Card 4: Clean & Available */}
-          <TiltCard
+          <motion.div
             onClick={() => setActiveFilter('all')}
-            glowHex="#10b981"
-            className={`fd-kpi-tilt rounded-[2rem] p-6 flex flex-col justify-between relative overflow-hidden h-36 select-none cursor-pointer ${activeFilter === 'all'
-              ? 'fd-dealdeck-focus-card text-white bg-gradient-to-br from-[#D4A373] to-[#B3835B]'
-              : 'fd-dealdeck-card text-zinc-900 bg-white'
-              }`}
+            whileHover={{ y: -8, scale: 1.02 }}
+            style={{ '--kpi-glow': 'rgba(16,185,129,0.35)' }}
+            className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between border bg-gradient-to-br from-emerald-50 via-white to-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_24px_-16px_rgba(0,0,0,0.15)] transition-shadow duration-500 hover:shadow-[0_20px_45px_-18px_var(--kpi-glow)] ring-1 ring-emerald-500/10 cursor-pointer ${activeFilter === 'all' ? 'fd-dealdeck-focus-card' : 'border-zinc-200/70'}`}
           >
-            <div className={`fd-kpi-blob ${activeFilter === 'all' ? 'bg-white/30' : 'bg-emerald-500/10'}`} />
-            <div className="flex items-start justify-between relative z-10">
-              <div>
-                <p className={`text-[10px] font-bold uppercase tracking-wider ${activeFilter === 'all' ? 'text-white/80' : 'text-zinc-400'
-                  }`}>Clean & Available</p>
-                <h3 className="text-3xl font-black mt-1 leading-none"><CountUp value={stats.available} /></h3>
+            <div
+              className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
+              style={{ background: 'rgba(16,185,129,0.35)' }}
+            />
+            <div className="relative flex-1 min-w-0 pr-1">
+              <div className="flex items-start justify-between mb-3">
+                <motion.div
+                  whileHover={{ rotate: -8, scale: 1.1 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 14 }}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-[#10b981] text-white shadow-lg shadow-[#10b981]/30"
+                >
+                  <CheckCircle2 size={16} />
+                </motion.div>
               </div>
-              <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'all' ? 'bg-white/20 text-white' : 'bg-amber-50 text-[#D4A373] border border-emerald-100'
-                }`}>
-                <CheckCircle2 size={10} /> Ready
-              </span>
+              <motion.p className="text-2xl lg:text-xl xl:text-2xl font-black text-zinc-900 tracking-tight leading-none mb-1.5">
+                <CountUp value={stats.available} />
+              </motion.p>
+              <p className="text-[11px] lg:text-[9.5px] xl:text-[10px] font-bold uppercase tracking-wide text-zinc-500 leading-tight mb-1">Clean & Ready</p>
+              <p className="text-[9px] text-zinc-400 leading-tight truncate">Fully vacant rooms</p>
             </div>
-            <p className={`relative z-10 text-[10px] mt-auto ${activeFilter === 'all' ? 'text-white/60' : 'text-zinc-400'
-              }`}>Vacant and fully cleaned rooms</p>
-          </TiltCard>
+            <div className="relative shrink-0 ml-2 sm:ml-4 border rounded-xl bg-white p-1.5 shadow-sm border-[#10b981]/20">
+              <svg className="w-12 h-8 sm:w-16 sm:h-9 overflow-visible" viewBox="0 0 60 32">
+                <motion.path d="M0 24 Q15 24, 30 16 T60 8" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: 'easeOut' }} />
+                <motion.circle cx="60" cy="8" r="3" fill="#10b981" initial={{ scale: 0 }} animate={{ scale: [0, 1.4, 1] }} transition={{ duration: 0.5, delay: 1.3 }} />
+              </svg>
+            </div>
+          </motion.div>
         </div>
 
         {/* DIRECT MAINTENANCE QUICK PANEL — shimmering gradient border, matches Front Desk's Walk-In panel */}

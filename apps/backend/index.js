@@ -186,7 +186,7 @@ const logAuditAction = async (userId, action, details) => {
     let hotelId = null;
     if (userId) {
       // Use COALESCE to handle pre-migration state gracefully
-      const uRes = await pool.query('SELECT name, COALESCE(access_level::text, role, \'SYSTEM\') as display_role, hotel_id FROM users WHERE id = $1', [userId]);
+      const uRes = await pool.query('SELECT name, COALESCE(access_level::text, role::text, \'SYSTEM\') as display_role, hotel_id FROM users WHERE id = $1', [userId]);
       if (uRes.rows.length > 0) {
         name = uRes.rows[0].name;
         role = uRes.rows[0].display_role;
