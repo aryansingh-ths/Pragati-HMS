@@ -10,6 +10,8 @@ import {
   Target, Percent, Users, UserCheck, LockKeyhole, Undo2, History, ShieldAlert,
   ArrowRightLeft, FileBarChart2, FileSpreadsheet, FileDown, LogOut, Zap
 } from 'lucide-react';
+import DepartmentHRModule from '../components/DepartmentHRModule';
+import StaffDirectoryModule from '../components/StaffDirectoryModule';
 
 // =============================================
 // SVG DONUT CHART (payment method split)
@@ -931,7 +933,20 @@ export default function FinanceDashboard() {
           { key: 'bank', label: 'Bank & Deposits', icon: <Landmark size={15} /> },
         ],
       }
-    ] : [])
+    ] : []),
+    ...(accessLevel === 'MANAGER' ? [{
+      heading: 'Managerial',
+      items: [
+        { key: 'overview', label: 'Operations', icon: <Building2 size={15} /> },
+        { key: 'hr_hub', label: 'HR Hub', icon: <Users size={15} /> }
+      ]
+    }] : []),
+    {
+      heading: 'Company',
+      items: [
+        { key: 'directory', label: 'Info Directory', icon: <Users size={15} /> }
+      ]
+    }
   ];
   const navItems = navGroups.flatMap(g => g.items);
 
@@ -2373,6 +2388,19 @@ export default function FinanceDashboard() {
                   </div>
                 </motion.div>
               )}
+
+              {/* TAB: HR HUB */}
+              {activeTab === 'hr_hub' && accessLevel === 'MANAGER' && (
+                <DepartmentHRModule departmentName="FINANCE" />
+              )}
+
+              {/* TAB: DIRECTORY */}
+              {activeTab === 'directory' && (
+                <div className="h-[800px] overflow-hidden rounded-[2rem] shadow-2xl shadow-indigo-900/5">
+                  <StaffDirectoryModule />
+                </div>
+              )}
+
             </div>
           )}
         </AnimatePresence>

@@ -61,10 +61,12 @@ export default function App() {
   }, []);
 
   const hasAccess = (dept) => {
-    const role = userRole?.toUpperCase();
-    if (role === 'SUPER_ADMIN' || role === 'ADMIN') return true;
-    if (role === dept) return true;
-    if (Array.isArray(userDepartments) && userDepartments.includes(dept)) return true;
+    if (!userRole) return false;
+    const role = userRole.toUpperCase();
+    if (role.includes('SUPER_ADMIN') || role.includes('ADMIN')) return true;
+    if (role.includes(dept)) return true;
+    if (Array.isArray(userDepartments) && userDepartments.some(d => d.includes(dept))) return true;
+    if (dept === 'FRONTDESK' && (role.includes('FRONT_DESK') || role.includes('RECEPTION') || (Array.isArray(userDepartments) && (userDepartments.some(d => d.includes('FRONT_DESK') || d.includes('RECEPTION')))))) return true;
     return false;
   };
 
@@ -156,7 +158,7 @@ export default function App() {
             } />
 
             {/* ROUTE 3: PROTECTED FRONT DESK OPERATIONS WORKSPACE */}
-            <Route element={<ProtectedRoute isAllowed={hasAccess('FRONT_DESK') || hasAccess('RECEPTION')} />}>
+            <Route element={<ProtectedRoute isAllowed={hasAccess('FRONTDESK')} />}>
               <Route path="/dashboard/front-desk" element={<FrontDeskDashboard />} />
             </Route>
 

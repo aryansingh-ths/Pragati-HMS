@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { UserCircle, Settings, Menu, X } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import NotificationBell from './NotificationBell';
 
 const NAV_ITEMS = ['Home', 'About', 'Experience', 'Dining', 'Gallery', 'Suites', 'Contact Us'];
 const GOLD = '#C9971E';
@@ -44,7 +45,7 @@ export default function Header({
             }
           }
         }
-      } catch(e) { console.error('Failed to fetch hotels:', e); }
+      } catch (e) { console.error('Failed to fetch hotels:', e); }
     };
 
     if (userRole === 'SUPER_ADMIN') {
@@ -95,10 +96,11 @@ export default function Header({
     return '/dashboard/front-desk';
   };
 
-  const isStaffRole = (role) =>
-    ['super_admin', 'admin', 'staff', 'reception', 'front_desk', 'housekeeping', 'finance', 'sales', 'travel', 'restaurant'].includes(
-      role?.toLowerCase()
-    );
+  const isStaffRole = (role) => {
+    if (!role) return false;
+    const r = role.toLowerCase();
+    return ['super_admin', 'admin', 'staff', 'frontdesk', 'front_desk', 'reception', 'housekeeping', 'finance', 'sales', 'travel', 'restaurant'].some(staffRole => r.includes(staffRole));
+  };
 
   const isHome = location.pathname === '/';
   const isDashboard = location.pathname.startsWith('/dashboard');
@@ -117,7 +119,34 @@ export default function Header({
     }, 50);
   };
 
-  const handleLogout = () => {
+  // Shared fetch helper for NotificationBell
+  const headerFetchWithAuth = useCallback(async (url, options = {}) => {
+    const token = sessionStorage.getItem('hms_token');
+    if (!token) return null;
+    return fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        ...(options.headers || {})
+      }
+    });
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      const token = sessionStorage.getItem('hms_token');
+      if (token) {
+        await fetch('http://localhost:3000/api/auth/logout', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+      }
+    } catch (err) {
+      console.error('Failed to register logout with backend:', err);
+    }
     setUserRole(null);
     setAuthToken(null);
     setViewMode('guest');
@@ -202,11 +231,11 @@ export default function Header({
 
         {/* Right cluster: account controls + mobile nav toggle */}
         <div className="flex items-center gap-3 shrink-0">
-          
+
           {userRole === 'SUPER_ADMIN' && isDashboard && hotels.length > 1 && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="hidden md:block">
-              <select 
-                value={selectedHotelId} 
+              <select
+                value={selectedHotelId}
                 onChange={handleHotelChange}
                 className="px-3 py-1.5 rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-700 bg-white shadow-sm hover:border-orange-300 transition-colors cursor-pointer outline-none"
               >
@@ -216,6 +245,11 @@ export default function Header({
                 ))}
               </select>
             </motion.div>
+          )}
+
+          {/* Notification Bell - visible to all logged-in staff */}
+          {userRole && isDashboard && (
+            <NotificationBell fetchWithAuth={headerFetchWithAuth} />
           )}
 
           <AnimatePresence mode="wait">
@@ -246,7 +280,7 @@ export default function Header({
                         if (depts.length > 1 && userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN') {
                           return 'MULTI-ACCESS';
                         }
-                      } catch(e) {}
+                      } catch (e) { }
                       return userRole.replace('_', ' ');
                     })()}
                   </span>

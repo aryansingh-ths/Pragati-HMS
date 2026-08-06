@@ -6,9 +6,11 @@ import {
   AlertTriangle, CheckCircle2, Clock, XCircle, Send, FileText, DollarSign,
   ArrowUpRight, Star, ChevronRight, PieChart, Trophy, CalendarClock, Eye,
   PhoneCall, Mail, CheckSquare, ListTodo, Flame, Activity, ShieldCheck, Globe,
-  User, Building2, MapPin, BarChart3, ArrowRight, Percent, TrendingDown, LogOut,
+  User, Users, Building2, MapPin, BarChart3, ArrowRight, Percent, TrendingDown, LogOut,
   RefreshCw, Zap
 } from 'lucide-react';
+import DepartmentHRModule from '../components/DepartmentHRModule';
+import StaffDirectoryModule from '../components/StaffDirectoryModule';
 
 // =============================================
 // SVG DONUT CHART
@@ -506,7 +508,20 @@ export default function SalesExecutiveDashboard() {
           { key: 'ota', label: 'OTA Performance', icon: <Globe size={15} /> },
         ],
       }
-    ] : [])
+    ] : []),
+    ...(accessLevel === 'MANAGER' ? [{
+      heading: 'Managerial',
+      items: [
+        { key: 'overview', label: 'Operations', icon: <Building2 size={15} /> },
+        { key: 'hr_hub', label: 'HR Hub', icon: <Users size={15} /> }
+      ]
+    }] : []),
+    {
+      heading: 'Company',
+      items: [
+        { key: 'directory', label: 'Info Directory', icon: <Users size={15} /> }
+      ]
+    }
   ];
   const navItems = navGroups.flatMap(g => g.items);
 
@@ -1114,6 +1129,18 @@ export default function SalesExecutiveDashboard() {
                     </div>
                   </div>
                 </motion.div>
+              )}
+
+              {/* TAB: HR HUB */}
+              {activeTab === 'hr_hub' && accessLevel === 'MANAGER' && (
+                <DepartmentHRModule departmentName="SALES" />
+              )}
+
+              {/* TAB: DIRECTORY */}
+              {activeTab === 'directory' && (
+                <div className="h-[800px] overflow-hidden rounded-[2rem] shadow-2xl shadow-indigo-900/5">
+                  <StaffDirectoryModule />
+                </div>
               )}
 
             </div>

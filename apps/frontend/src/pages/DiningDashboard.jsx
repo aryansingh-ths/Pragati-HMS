@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
+import DepartmentHRModule from '../components/DepartmentHRModule';
+import StaffDirectoryModule from '../components/StaffDirectoryModule';
 import {
   Utensils, Coffee, Clock, CheckCircle2, ChefHat, Receipt,
   Calendar, Users, BellRing, Building2, Search, ArrowUpRight,
@@ -306,7 +308,20 @@ export default function DiningDashboard() {
         { key: 'menu', label: 'Menu & Inventory', icon: <Utensils size={15} /> }, 
         { key: 'billing', label: 'Billing & Settlements', icon: <Receipt size={15} /> }
       ] 
-    }] : [])
+    }] : []),
+    ...(accessLevel === 'MANAGER' ? [{
+      heading: 'Managerial',
+      items: [
+        { key: 'overview', label: 'Operations', icon: <Building2 size={15} /> },
+        { key: 'hr_hub', label: 'HR Hub', icon: <Users size={15} /> }
+      ]
+    }] : []),
+    {
+      heading: 'Company',
+      items: [
+        { key: 'directory', label: 'Info Directory', icon: <Users size={15} /> }
+      ]
+    }
   ];
 
   return (
@@ -638,6 +653,18 @@ export default function DiningDashboard() {
                   <h3 className="font-bold text-lg text-zinc-900 mb-2">Billing Module</h3>
                   <p className="text-sm">Connects directly to the main Finance ledger. (See Finance Dashboard)</p>
                 </motion.div>
+              )}
+
+              {/* TAB: HR HUB */}
+              {activeTab === 'hr_hub' && accessLevel === 'MANAGER' && (
+                <DepartmentHRModule departmentName="DINING" />
+              )}
+
+              {/* TAB: DIRECTORY */}
+              {activeTab === 'directory' && (
+                <div className="h-[800px] overflow-hidden rounded-[2rem] shadow-2xl shadow-indigo-900/5">
+                  <StaffDirectoryModule />
+                </div>
               )}
 
             </div>

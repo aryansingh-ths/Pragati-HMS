@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import StaffDirectoryModule from '../components/StaffDirectoryModule';
 import {
   Activity, Users, Lock, Unlock, Sparkles, DollarSign,
   Sliders, Wrench, Loader2, Plus, Trash2, X, ChevronDown, ChevronUp, Edit,
@@ -486,6 +487,10 @@ export default function AdminDashboard() {
   // Forms & Actions state
   const [broadcastForm, setBroadcastForm] = useState({ targetDept: 'ALL', message: '', hotel_id: '' });
   const [broadcastSuccess, setBroadcastSuccess] = useState(false);
+  const [notifSendMode, setNotifSendMode] = useState('group'); // 'group' | 'individual'
+  const [directTargetEmail, setDirectTargetEmail] = useState('');
+  const [notifPriority, setNotifPriority] = useState('NORMAL');
+
 
   // ─── Broadcast States ──────────────────────────────────────
   const [broadcasts, setBroadcasts] = useState([]);
@@ -501,6 +506,7 @@ export default function AdminDashboard() {
   const [onboardSuccess, setOnboardSuccess] = useState(null);
   const [onboardError, setOnboardError] = useState(null);
   const [staffFilter, setStaffFilter] = useState('ALL');
+  const [propertyFilter, setPropertyFilter] = useState('ALL');
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [showOnboardModal, setShowOnboardModal] = useState(false);
   const [systemAdmins, setSystemAdmins] = useState([]);
@@ -513,7 +519,10 @@ export default function AdminDashboard() {
   const [addAdminForm, setAddAdminForm] = useState({ name: '', email: '', password: '', role: 'ADMIN', hotel_id: '' });
   const [editingUser, setEditingUser] = useState(null);
   const [editAccessForm, setEditAccessForm] = useState({ access_level: 'EXECUTIVE', department: ['FRONT_DESK'], hotel_id: '', designation: '' });
-  const [managementSubTab, setManagementSubTab] = useState('properties');
+  const [managementSubTab, setManagementSubTab] = useState("properties");
+  const [showProperties, setShowProperties] = useState(true);
+  const [collapsedStaffGroups, setCollapsedStaffGroups] = useState({});
+  const [showStaff, setShowStaff] = useState(true);
 
   // Salary Drawer state
   const [staffSalaries, setStaffSalaries] = useState([]);
@@ -521,17 +530,17 @@ export default function AdminDashboard() {
 
   // Profile Edit state
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
-  const [profileForm, setProfileForm] = useState({ 
-    name: sessionStorage.getItem('hms_name') || '', 
-    designation: sessionStorage.getItem('hms_designation') || 'Administrator' 
+  const [profileForm, setProfileForm] = useState({
+    name: sessionStorage.getItem('hms_name') || '',
+    designation: sessionStorage.getItem('hms_designation') || 'Administrator'
   });
 
   const fetchWithAuth = useCallback(async (url, options = {}) => {
     const token = sessionStorage.getItem('hms_token');
-    if (!token) { 
+    if (!token) {
       sessionStorage.clear();
-      window.location.href = '/login'; 
-      return null; 
+      window.location.href = '/login';
+      return null;
     }
     try {
       let finalUrl = url;
@@ -543,10 +552,10 @@ export default function AdminDashboard() {
         ...options,
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...options.headers }
       });
-      if (res.status === 401 || res.status === 403) { 
+      if (res.status === 401 || res.status === 403) {
         sessionStorage.clear();
-        window.location.href = '/login'; 
-        return null; 
+        window.location.href = '/login';
+        return null;
       }
       return res;
     } catch (err) { return null; }
@@ -562,7 +571,7 @@ export default function AdminDashboard() {
           });
           const json = await res.json();
           if (json.data && json.data.hotels) setHotels(json.data.hotels);
-        } catch (err) {}
+        } catch (err) { }
       };
       fetchHotels();
     }
@@ -700,6 +709,25 @@ export default function AdminDashboard() {
     return () => clearInterval(interval);
   }, [activeTab, auditLive, auditSearch, fetchWithAuth]);
 
+  // Poll staff shifts automatically to keep online/offline status updated
+  useEffect(() => {
+    let interval;
+    if (activeTab === 'hr') {
+      interval = setInterval(async () => {
+        try {
+          const shiftsRes = await fetchWithAuth('http://localhost:3000/api/Admin/shifts');
+          if (shiftsRes?.ok) {
+            const data = await shiftsRes.json();
+            setStaffShifts(data.data?.shifts || []);
+          }
+        } catch (e) {
+          console.error("Live staff shifts fetch failed", e);
+        }
+      }, 10000);
+    }
+    return () => clearInterval(interval);
+  }, [activeTab, fetchWithAuth]);
+
   useEffect(() => {
     if (selectedStaff) {
       const salaryData = staffSalaries.find(s => s.user_id === selectedStaff.id);
@@ -807,7 +835,7 @@ export default function AdminDashboard() {
   };
 
   const handlePushAllToAll = async () => {
-    if(!window.confirm("CAUTION: This will overwrite ALL yield rules for ALL properties. Continue?")) return;
+    if (!window.confirm("CAUTION: This will overwrite ALL yield rules for ALL properties. Continue?")) return;
     try {
       for (const key of Object.keys(yieldRules)) {
         await handleSaveYieldRule(key, yieldRules[key], true, false);
@@ -841,6 +869,29 @@ export default function AdminDashboard() {
 
   const handleUpdateStaffProfile = async (field, value) => {
     if (!selectedStaff || !selectedStaff.id) return;
+
+    // Check if we are updating a special permission toggle
+    if (['can_process_refunds', 'can_apply_discounts', 'can_overbook'].includes(field)) {
+      const updated = {
+        role: selectedStaff.role || 'FRONT_DESK',
+        can_process_refunds: selectedStaff.can_process_refunds,
+        can_apply_discounts: selectedStaff.can_apply_discounts,
+        can_overbook: selectedStaff.can_overbook,
+        [field]: value
+      };
+      const res = await fetch(`http://localhost:3000/api/super-admin/users/${selectedStaff.id}/permissions`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
+        body: JSON.stringify(updated),
+      });
+      if (res.ok) {
+        setSelectedStaff(prev => ({ ...prev, [field]: value }));
+        loadAdminData();
+      }
+      return;
+    }
+
+    // Otherwise, handle normal profile updates (Name, Email)
     const payload = {
       name: field === 'name' ? value : selectedStaff.name,
       email: field === 'email' ? value : selectedStaff.email
@@ -850,9 +901,11 @@ export default function AdminDashboard() {
       body: JSON.stringify(payload)
     });
     if (res?.ok) {
+      setSelectedStaff(prev => ({ ...prev, [field]: value }));
       loadAdminData();
     }
   };
+
 
   const handleSaveGuestFlags = async (guestId, payload) => {
     const res = await fetchWithAuth(`http://localhost:3000/api/Admin/crm/guests/${guestId}`, {
@@ -869,17 +922,50 @@ export default function AdminDashboard() {
   const handleTriggerBroadcast = async (e) => {
     e.preventDefault();
     if (!broadcastForm.message.trim()) return;
-    const res = await fetchWithAuth('http://localhost:3000/api/Admin/broadcast', {
-      method: 'POST', body: JSON.stringify(broadcastForm)
-    });
+
+    let res;
+    if (notifSendMode === 'individual') {
+      // Use new notification system for individual sends
+      if (!directTargetEmail.trim()) { alert('Please enter a target email address.'); return; }
+      res = await fetchWithAuth('http://localhost:3000/api/notifications', {
+        method: 'POST',
+        body: JSON.stringify({
+          message: broadcastForm.message,
+          type: 'DIRECT',
+          priority: notifPriority,
+          targetEmail: directTargetEmail.trim(),
+          hotel_id: broadcastForm.hotel_id || null
+        })
+      });
+    } else {
+      // Also create a notification alongside the old broadcast for the new bell system
+      res = await fetchWithAuth('http://localhost:3000/api/Admin/broadcast', {
+        method: 'POST', body: JSON.stringify(broadcastForm)
+      });
+      // Additionally push to new notification system
+      await fetchWithAuth('http://localhost:3000/api/notifications', {
+        method: 'POST',
+        body: JSON.stringify({
+          message: broadcastForm.message,
+          type: broadcastForm.targetDept === 'ALL' ? 'GLOBAL' : 'DEPARTMENT',
+          priority: notifPriority,
+          targetDept: broadcastForm.targetDept,
+          hotel_id: broadcastForm.hotel_id || null
+        })
+      });
+    }
+
     if (res?.ok) {
       setBroadcastSuccess(true);
       setBroadcastForm({ targetDept: 'ALL', message: '', hotel_id: '' });
+      setDirectTargetEmail('');
+      setNotifPriority('NORMAL');
       setTimeout(() => setBroadcastSuccess(false), 3000);
       const auditRes = await fetchWithAuth('http://localhost:3000/api/Admin/audit-logs');
       if (auditRes?.ok) setAuditLogs((await auditRes.json()).data.logs || []);
     } else {
-      alert("❌ Failed to send operational broadcast alert.");
+      const errData = await res?.json().catch(() => null);
+      alert(errData?.error || '❌ Failed to send notification.');
     }
   };
 
@@ -1328,7 +1414,17 @@ export default function AdminDashboard() {
               >
                 <Clock size={15} /> Operations Log
               </button>
-              
+
+              <button
+                onClick={() => setActiveTab('directory')}
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === 'directory'
+                  ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
+                  }`}
+              >
+                <Users size={15} /> Info Directory
+              </button>
+
               {isSuperAdmin && (
                 <button
                   onClick={() => setActiveTab('system_admins')}
@@ -1460,20 +1556,20 @@ export default function AdminDashboard() {
                           <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1">Edit Profile</h3>
                           <div>
                             <label className="block text-[10px] font-bold text-zinc-500 uppercase mb-1">Name</label>
-                            <input 
-                              type="text" 
-                              value={profileForm.name} 
-                              onChange={e => setProfileForm({...profileForm, name: e.target.value})} 
-                              className="w-full bg-zinc-50 border border-zinc-200 rounded-lg py-1.5 px-3 text-xs font-bold text-zinc-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20" 
+                            <input
+                              type="text"
+                              value={profileForm.name}
+                              onChange={e => setProfileForm({ ...profileForm, name: e.target.value })}
+                              className="w-full bg-zinc-50 border border-zinc-200 rounded-lg py-1.5 px-3 text-xs font-bold text-zinc-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20"
                             />
                           </div>
                           <div>
                             <label className="block text-[10px] font-bold text-zinc-500 uppercase mb-1">Designation</label>
-                            <input 
-                              type="text" 
-                              value={profileForm.designation} 
-                              onChange={e => setProfileForm({...profileForm, designation: e.target.value})} 
-                              className="w-full bg-zinc-50 border border-zinc-200 rounded-lg py-1.5 px-3 text-xs font-bold text-zinc-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20" 
+                            <input
+                              type="text"
+                              value={profileForm.designation}
+                              onChange={e => setProfileForm({ ...profileForm, designation: e.target.value })}
+                              className="w-full bg-zinc-50 border border-zinc-200 rounded-lg py-1.5 px-3 text-xs font-bold text-zinc-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20"
                             />
                           </div>
                           <div className="flex gap-2 mt-2">
@@ -2586,6 +2682,57 @@ export default function AdminDashboard() {
                       </div>
 
                       <form onSubmit={handleTriggerBroadcast} className="relative space-y-4">
+                        {/* Send Mode Toggle */}
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="flex items-center bg-zinc-100/80 rounded-xl p-1 gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setNotifSendMode('group')}
+                              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${notifSendMode === 'group'
+                                  ? 'bg-white text-zinc-900 shadow-sm'
+                                  : 'text-zinc-400 hover:text-zinc-600'
+                                }`}
+                            >
+                              📢 Broadcast to Group
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setNotifSendMode('individual')}
+                              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${notifSendMode === 'individual'
+                                  ? 'bg-white text-violet-700 shadow-sm'
+                                  : 'text-zinc-400 hover:text-zinc-600'
+                                }`}
+                            >
+                              @ Send to Individual
+                            </button>
+                          </div>
+                          <div className="flex items-center gap-1.5 ml-auto">
+                            <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Priority:</label>
+                            <select
+                              value={notifPriority}
+                              onChange={e => setNotifPriority(e.target.value)}
+                              className="text-[10px] font-bold px-2 py-1 rounded-lg border border-zinc-200 bg-white text-zinc-700 outline-none cursor-pointer"
+                            >
+                              <option value="NORMAL">Normal</option>
+                              <option value="URGENT">🔴 Urgent</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Individual Email Input (only in individual mode) */}
+                        {notifSendMode === 'individual' && (
+                          <div className="mb-2">
+                            <label className="block text-[10px] font-bold uppercase text-violet-500 tracking-wider mb-2">Recipient Email</label>
+                            <input
+                              type="email"
+                              required
+                              placeholder="e.g. frontdesk@pragati.com"
+                              value={directTargetEmail}
+                              onChange={e => setDirectTargetEmail(e.target.value)}
+                              className="w-full bg-violet-50/50 border border-violet-200/60 focus:border-violet-400 focus:ring-2 focus:ring-violet-400/30 rounded-xl py-2.5 px-3 text-xs font-bold text-zinc-700 outline-none transition-shadow shadow-sm placeholder:text-zinc-400 placeholder:font-medium"
+                            />
+                          </div>
+                        )}
                         <div className="flex flex-col sm:flex-row gap-4">
                           <div className="sm:w-1/3">
                             <label className="block text-[10px] font-bold uppercase text-rose-500 tracking-wider mb-2">Target Department</label>
@@ -2668,91 +2815,7 @@ export default function AdminDashboard() {
                     </motion.div>
                   </div>
 
-                  {/* Broadcast History */}
-                  <div className="mt-6">
-                    <motion.div
-                      initial={{ opacity: 0, y: 14 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      whileHover={{ y: -3 }}
-                      transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.1 }}
-                      className="group relative overflow-hidden bg-white rounded-[2rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-zinc-200"
-                    >
-                      <div className="absolute inset-0 pointer-events-none opacity-70" />
-                      <div className="bc-orb -bottom-14 -left-14 w-48 h-48 bg-[#D4A373]/10" style={{ animation: 'bc-float 8s ease-in-out infinite reverse' }} />
-                      <div className="bc-sheen" />
 
-                      <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 border-b border-zinc-100 pb-3">
-                        <div className="flex items-center gap-3">
-                          <div className="relative w-9 h-9">
-                            <span className="bc-wave" />
-                            <motion.div
-                              whileHover={{ rotate: -10, scale: 1.1 }}
-                              animate={{ scale: [1, 1.08, 1] }}
-                              transition={{ scale: { duration: 1.8, repeat: Infinity }, rotate: { type: 'spring', stiffness: 400, damping: 14 } }}
-                              className="relative w-9 h-9 rounded-xl bg-[#D4A373] flex items-center justify-center shadow-sm"
-                            >
-                              <Clock size={16} className="text-white" />
-                            </motion.div>
-                          </div>
-                          <h3 className="text-sm font-black uppercase tracking-wider text-zinc-900">Broadcast History Log</h3>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Date:</label>
-                          <input
-                            type="date"
-                            value={broadcastDateFilter}
-                            onChange={(e) => setBroadcastDateFilter(e.target.value)}
-                            className="text-[10px] p-1.5 px-2 border border-zinc-200/80 rounded-lg text-zinc-600 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 bg-white/50 backdrop-blur-sm shadow-sm transition-all"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="relative space-y-3 overflow-y-auto max-h-96 pr-2 fd-scrollbar">
-                        {broadcasts
-                          .filter(b => {
-                            if (!broadcastDateFilter) return true;
-                            const d = b.created_at ? new Date(b.created_at) : null;
-                            if (!d) return true;
-                            const localDateStr = d.toLocaleDateString('en-CA');
-                            return localDateStr === broadcastDateFilter;
-                          })
-                          .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
-                          .map((broadcast) => (
-                            <motion.div
-                              key={broadcast.id}
-                              whileHover={{ x: 2, backgroundColor: 'rgba(255, 251, 235, 0.6)' }}
-                              className="p-4 rounded-2xl bg-zinc-50/60 backdrop-blur-sm border border-zinc-100 transition-colors flex flex-col sm:flex-row sm:items-center gap-4"
-                            >
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1.5">
-                                  <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border shadow-sm ${broadcast.target_dept === 'ALL' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-rose-50 text-rose-600 border-rose-100'
-                                    }`}>
-                                    {broadcast.target_dept === 'ALL' ? 'Global' : broadcast.target_dept}
-                                  </span>
-                                  {!selectedHotelId && broadcast.hotel_name && (
-                                    <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border shadow-sm bg-teal-50 text-teal-600 border-teal-100">
-                                      {broadcast.hotel_name}
-                                    </span>
-                                  )}
-                                  <span className="text-[10px] text-zinc-400 font-mono bg-white/60 px-1.5 rounded">
-                                    {broadcast.created_at ? new Date(broadcast.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'Unknown Date'}
-                                  </span>
-                                </div>
-                                <p className="text-sm font-bold text-zinc-800">{broadcast.message}</p>
-                                <p className="text-[10px] text-zinc-500 mt-1">Sent by: <span className="font-semibold text-zinc-700">{broadcast.sender_name}</span></p>
-                              </div>
-                            </motion.div>
-                          ))}
-
-                        {broadcasts.filter(b => !broadcastDateFilter || (b.created_at && new Date(b.created_at).toLocaleDateString('en-CA') === broadcastDateFilter)).length === 0 && (
-                          <div className="text-center py-8">
-                            <Clock size={24} className="mx-auto text-zinc-300 mb-2 opacity-50" />
-                            <p className="text-xs text-zinc-400 font-medium">No broadcast history found for the selected date.</p>
-                          </div>
-                        )}
-                      </div>
-                    </motion.div>
-                  </div>
                 </motion.div>
               )}
 
@@ -3319,7 +3382,7 @@ export default function AdminDashboard() {
                             </motion.div>
                             <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Dynamic Pricing &amp; Yield Engine</h3>
                           </div>
-                          
+
                           {isSuperAdmin && (
                             <button
                               onClick={handlePushAllToAll}
@@ -4235,44 +4298,74 @@ export default function AdminDashboard() {
                     </motion.button>
                   </motion.div>
 
-                  {/* ─── DEPARTMENT FILTER TABS ─── */}
-                  <div className="relative flex flex-wrap gap-2 bg-white/60 backdrop-blur-sm border border-zinc-200/60 rounded-2xl p-2 shadow-sm">
-                    {[
-                      { key: 'ALL', label: 'All Staff' },
-                      { key: 'FRONT_DESK', label: 'Front Desk' },
-                      { key: 'HOUSEKEEPING', label: 'Housekeeping' },
-                      { key: 'Admin', label: 'Admin' },
-                      { key: 'FINANCE', label: 'Finance' },
-                      { key: 'RESTAURANT', label: 'Dining' },
-                      { key: 'SALES', label: 'Sales' },
-                      { key: 'TRAVEL', label: 'Travel' }
-                    ].map(tab => (
-                      <motion.button
-                        key={tab.key}
-                        whileHover={{ y: -1 }}
-                        whileTap={{ scale: 0.96 }}
-                        onClick={() => setStaffFilter(tab.key)}
-                        className={`relative z-10 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-colors overflow-hidden ${staffFilter === tab.key
-                          ? 'text-white'
-                          : 'bg-white text-zinc-500 border border-zinc-200/60 hover:bg-zinc-50 hover:text-zinc-800'
-                          }`}
+                  {/* ✨ DEPARTMENT & PROPERTY FILTER TABS ✨ */}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-white/60 backdrop-blur-sm border border-zinc-200/60 rounded-2xl p-2 shadow-sm mb-4">
+                    {/* Role/Department Filters */}
+                    <div className="flex-1 flex flex-wrap gap-2">
+                      {[
+                        { key: 'ALL', label: 'All Staff' },
+                        { key: 'FRONT_DESK', label: 'Front Desk' },
+                        { key: 'HOUSEKEEPING', label: 'Housekeeping' },
+                        { key: 'Admin', label: 'Admin' },
+                        { key: 'FINANCE', label: 'Finance' },
+                        { key: 'RESTAURANT', label: 'Dining' },
+                        { key: 'SALES', label: 'Sales' },
+                        { key: 'TRAVEL', label: 'Travel' }
+                      ].map(tab => (
+                        <motion.button
+                          key={tab.key}
+                          whileHover={{ y: -1 }}
+                          whileTap={{ scale: 0.96 }}
+                          onClick={() => setStaffFilter(tab.key)}
+                          className={`relative z-10 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-colors overflow-hidden ${staffFilter === tab.key
+                            ? 'text-white'
+                            : 'bg-white text-zinc-500 border border-zinc-200/60 hover:bg-zinc-50 hover:text-zinc-800'
+                            }`}
+                        >
+                          {staffFilter === tab.key && (
+                            <motion.span
+                              layoutId="hr-filter-pill"
+                              transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                              className={`absolute inset-0 bg-[#D4A373] shadow-md rounded-full`}
+                            />
+                          )}
+                          <span className="relative">{tab.label}</span>
+                        </motion.button>
+                      ))}
+                    </div>
+
+                    {/* Property Filter Dropdown */}
+                    <div className="relative shrink-0">
+                      <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
+                      <select
+                        value={propertyFilter}
+                        onChange={(e) => setPropertyFilter(e.target.value)}
+                        className="w-48 pl-9 pr-8 py-1.5 bg-white border border-zinc-200 rounded-xl text-[10px] font-bold text-zinc-700 outline-none focus:border-[#D4A373] focus:ring-1 focus:ring-[#D4A373] appearance-none shadow-sm cursor-pointer"
                       >
-                        {staffFilter === tab.key && (
-                          <motion.span
-                            layoutId="hr-filter-pill"
-                            transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-                            className={`absolute inset-0 bg-[#D4A373] shadow-md rounded-full`}
-                          />
-                        )}
-                        <span className="relative">{tab.label}</span>
-                      </motion.button>
-                    ))}
+                        <option value="ALL">All Properties</option>
+                        <option value="GLOBAL">Global / Unassigned</option>
+                        {hotels.map(h => (
+                          <option key={h.id} value={h.id}>{h.name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" />
+                    </div>
                   </div>
 
-                  {/* ─── LIVE STAFF DIRECTORY GRID ─── */}
+                  {/* ✨ LIVE STAFF DIRECTORY GRID ✨ */}
                   <div className="space-y-2.5">
                     {staffPermissions
-                      .filter(sp => staffFilter === 'ALL' || sp.role === staffFilter)
+                      .filter(sp => {
+                        const matchesRole = staffFilter === 'ALL' ? true :
+                          staffFilter === 'FRONT_DESK' ? (sp.role === 'RECEPTION' || sp.role === 'FRONT_DESK') :
+                            staffFilter === 'Admin' || staffFilter === 'ADMIN' ? sp.role === 'ADMIN' :
+                              staffFilter === 'SALES' ? sp.role?.includes('SALES') :
+                                sp.role === staffFilter;
+                        const matchesProperty = propertyFilter === 'ALL' ? true :
+                          propertyFilter === 'GLOBAL' ? !sp.hotel_id :
+                            sp.hotel_id === propertyFilter;
+                        return matchesRole && matchesProperty;
+                      })
                       .map((sp, idx) => {
                         const isOnline = staffShifts.some(s => s.email === sp.email && s.is_active);
                         const initials = (sp.name || '').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
@@ -4352,12 +4445,12 @@ export default function AdminDashboard() {
                       <motion.div
                         whileHover={{ y: -3 }}
                         transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                        className="relative overflow-hidden bg-white rounded-[2rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-zinc-200 space-y-4"
+                        className="relative overflow-hidden bg-white rounded-[2rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-zinc-200 space-y-4 flex flex-col"
                       >
                         <div className="absolute inset-0 pointer-events-none opacity-60" />
                         <div className="hr-orb -top-12 -right-12 w-40 h-40 bg-[#D4A373]/10" style={{ animation: 'hr-float 8s ease-in-out infinite' }} />
 
-                        <div className="relative flex items-center justify-between border-b border-zinc-100 pb-3">
+                        <div className="relative flex items-center justify-between border-b border-zinc-100 pb-3 mt-4">
                           <div className="flex items-center gap-2">
                             <motion.div whileHover={{ rotate: -10, scale: 1.1 }} className="w-8 h-8 rounded-xl bg-[#D4A373] flex items-center justify-center shadow-sm">
                               <Clock size={15} className="text-white" />
@@ -4375,26 +4468,36 @@ export default function AdminDashboard() {
                           </div>
                         </div>
 
-                        <div className="relative space-y-2 overflow-y-auto max-h-80 fd-sidebar-scroll pr-1">
+                        <div className="relative space-y-2 overflow-y-auto max-h-80 fd-sidebar-scroll pr-1 mt-4">
                           {staffShifts
                             .filter(s => {
-                              if (!shiftDateFilter) return true;
-                              // Format database timestamp to YYYY-MM-DD in local time
-                              const localDateStr = new Date(s.login_time).toLocaleDateString('en-CA'); // en-CA gives YYYY-MM-DD
-                              return localDateStr === shiftDateFilter;
+                              if (shiftDateFilter) {
+                                const localDateStr = new Date(s.login_time).toLocaleDateString('en-CA');
+                                if (localDateStr !== shiftDateFilter) return false;
+                              }
+                              if (propertyFilter !== 'ALL') {
+                                if (propertyFilter === 'GLOBAL' && s.hotel_id) return false;
+                                if (propertyFilter !== 'GLOBAL' && s.hotel_id !== propertyFilter) return false;
+                              }
+                              return true;
                             })
                             .map((shift, idx) => {
                               const shiftInitials = (shift.name || '').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
                               const shiftGradient = {
-                                FRONT_DESK: 'from-sky-400 to-blue-500',
                                 RECEPTION: 'from-sky-400 to-blue-500',
+                                FRONT_DESK: 'from-sky-400 to-blue-500',
                                 HOUSEKEEPING: 'from-amber-400 to-orange-500',
-                                Admin: 'from-indigo-400 to-violet-500',
+                                ADMIN: 'from-indigo-400 to-violet-500',
+                                SUPER_ADMIN: 'from-indigo-600 to-indigo-800',
                                 FINANCE: 'from-emerald-400 to-teal-500',
                                 RESTAURANT: 'from-rose-400 to-red-500',
-                                SALES: 'from-fuchsia-400 to-purple-500',
+                                SALES_HEAD: 'from-fuchsia-400 to-purple-500',
+                                SALES_EXECUTIVE: 'from-fuchsia-400 to-purple-500',
                                 TRAVEL: 'from-cyan-400 to-sky-500'
-                              }[shift.role] || 'from-zinc-400 to-zinc-500';
+                              }[shift.role?.toUpperCase()] || 'from-zinc-400 to-zinc-500';
+
+                              const hotelName = hotels.find(h => h.id === shift.hotel_id)?.name || (shift.hotel_id ? 'Unknown Property' : 'Global HQ');
+
                               const durationMins = shift.duration_minutes || 0;
                               const durationHrs = Math.floor(durationMins / 60);
                               const durationRemMins = durationMins % 60;
@@ -4414,7 +4517,10 @@ export default function AdminDashboard() {
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <p className="text-xs font-bold text-zinc-900 truncate">{shift.name}</p>
-                                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                      <span className="text-[8px] font-bold text-zinc-500 bg-white border border-zinc-200 px-1.5 py-0.5 rounded shadow-sm truncate max-w-[100px]">
+                                        {hotelName}
+                                      </span>
                                       <p className="text-[9px] text-zinc-400 font-mono">
                                         In: {new Date(shift.login_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
                                       </p>
@@ -4423,7 +4529,7 @@ export default function AdminDashboard() {
                                           Out: {new Date(shift.logout_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
                                         </p>
                                       )}
-                                      <span className="text-[9px] font-bold text-indigo-600 bg-indigo-100/70 border border-indigo-200 px-1.5 py-0.5 rounded-md font-mono">
+                                      <span className="text-[9px] font-bold text-indigo-600 bg-indigo-100/70 border border-indigo-200 px-1.5 py-0.5 rounded-md font-mono shadow-sm">
                                         ⏱ {durationStr}
                                       </span>
                                     </div>
@@ -4432,8 +4538,8 @@ export default function AdminDashboard() {
                                     }`}>
                                     {shift.is_active ? (
                                       <span className="flex items-center gap-1">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
-                                        ACTIVE
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+                                        LIVE
                                       </span>
                                     ) : 'ENDED'}
                                   </span>
@@ -4617,6 +4723,32 @@ export default function AdminDashboard() {
                           <div className="flex-1 overflow-y-auto fd-sidebar-scroll p-6">
 
                             <div className="space-y-6">
+                              {/* Special Access Toggles */}
+                              <div className="bg-white/50 border border-zinc-100 rounded-2xl p-5 shadow-sm space-y-4">
+                                <h4 className="text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-2">Special Permissions</h4>
+                                {[
+                                  { key: 'can_process_refunds', title: 'Refund Approval Access', desc: 'Allow user to approve and process refunds' },
+                                  { key: 'can_apply_discounts', title: 'Discount Approval Access', desc: 'Allow user to override rates and grant discounts' },
+                                  { key: 'can_overbook', title: 'Overbooking Access', desc: 'Allow user to overbook room capacities manually' }
+                                ].map(perm => (
+                                  <div key={perm.key} className="flex items-center justify-between pb-3 border-b border-zinc-100/60 last:border-0 last:pb-0">
+                                    <div>
+                                      <p className="text-sm font-bold text-zinc-800">{perm.title}</p>
+                                      <p className="text-[9px] font-medium text-zinc-400">{perm.desc}</p>
+                                    </div>
+                                    <button
+                                      onClick={() => handleUpdateStaffProfile(perm.key, !selectedStaff[perm.key])}
+                                      className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${selectedStaff[perm.key] ? 'bg-indigo-500' : 'bg-zinc-200'}`}
+                                    >
+                                      <motion.div
+                                        animate={{ x: selectedStaff[perm.key] ? 24 : 2 }}
+                                        className="absolute top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-white shadow-sm"
+                                      />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+
                               <form onSubmit={handleSaveSalaryConfig} className="space-y-5">
                                 <div>
                                   <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-2">Monthly Base Salary (₹)</label>
@@ -4967,7 +5099,16 @@ export default function AdminDashboard() {
 
                 </motion.div>
               )}
-              
+
+              {/* TAB: GLOBAL DIRECTORY */}
+              {activeTab === 'directory' && (
+                <motion.div key="directory" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="h-full">
+                  <div className="bg-white rounded-[2rem] p-6 lg:p-10 shadow-2xl shadow-indigo-900/5 h-[800px] overflow-hidden">
+                    <StaffDirectoryModule />
+                  </div>
+                </motion.div>
+              )}
+
               {/* TAB: PROPERTY & ADMIN MANAGEMENT (SUPER ADMIN ONLY) */}
               {isSuperAdmin && activeTab === 'system_admins' && (
                 <motion.div key="system_admins" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
@@ -4982,11 +5123,10 @@ export default function AdminDashboard() {
                       <button
                         key={tab.key}
                         onClick={() => setManagementSubTab(tab.key)}
-                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                          managementSubTab === tab.key
-                            ? 'bg-gradient-to-r from-[#D4A373] to-[#c49060] text-white shadow-md shadow-[#D4A373]/25'
-                            : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800'
-                        }`}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all ${managementSubTab === tab.key
+                          ? 'bg-gradient-to-r from-[#D4A373] to-[#c49060] text-white shadow-md shadow-[#D4A373]/25'
+                          : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800'
+                          }`}
                       >
                         {tab.icon} {tab.label}
                       </button>
@@ -4998,9 +5138,14 @@ export default function AdminDashboard() {
                     <div className="space-y-6">
                       <div className="bg-white rounded-[2rem] border border-zinc-200 p-8 shadow-sm">
                         <div className="flex justify-between items-center mb-8">
-                          <div>
-                            <h2 className="text-2xl font-black text-zinc-900 tracking-tight">Property Portfolio</h2>
-                            <p className="text-zinc-500 text-sm mt-1">Manage all hotel properties under your ownership</p>
+                          <div className="flex items-center gap-3">
+                            <div>
+                              <h2 className="text-2xl font-black text-zinc-900 tracking-tight">Property Portfolio</h2>
+                              <p className="text-zinc-500 text-sm mt-1">Manage all hotel properties under your ownership</p>
+                            </div>
+                            <button onClick={() => setShowProperties(!showProperties)} className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center hover:bg-zinc-200 transition-colors" title={showProperties ? "Collapse Portfolio" : "Expand Portfolio"}>
+                              {showProperties ? <ChevronUp size={16} className="text-zinc-500" /> : <ChevronDown size={16} className="text-zinc-500" />}
+                            </button>
                           </div>
                           <motion.button
                             whileHover={{ scale: 1.04, y: -1 }}
@@ -5012,55 +5157,58 @@ export default function AdminDashboard() {
                           </motion.button>
                         </div>
 
-                        {hotels.length === 0 ? (
-                          <div className="text-center py-16 text-zinc-400">
-                            <Building2 size={40} className="mx-auto mb-3 opacity-20" />
-                            <p className="text-sm font-medium">No properties registered yet.</p>
-                            <p className="text-xs mt-1">Click "Add Property" to register your first hotel.</p>
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {hotels.map(hotel => (
-                              <motion.div
-                                key={hotel.id}
-                                whileHover={{ y: -3, boxShadow: '0 12px 32px -8px rgba(212,163,115,0.18)' }}
-                                className="relative p-6 bg-gradient-to-br from-white to-zinc-50/80 border border-zinc-200 rounded-2xl flex flex-col gap-4 group transition-all overflow-hidden"
-                              >
-                                <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-[#D4A373]/10 to-transparent rounded-bl-[3rem]" />
+                        <div className={showProperties ? 'block' : 'hidden'}>
+                          {hotels.length === 0 ? (
+                            <div className="text-center py-16 text-zinc-400">
+                              <Building2 size={40} className="mx-auto mb-3 opacity-20" />
+                              <p className="text-sm font-medium">No properties registered yet.</p>
+                              <p className="text-xs mt-1">Click "Add Property" to register your first hotel.</p>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                              {hotels.map(hotel => (
+                                <motion.div
+                                  key={hotel.id}
+                                  whileHover={{ y: -3, boxShadow: '0 12px 32px -8px rgba(212,163,115,0.18)' }}
+                                  className="relative p-6 bg-gradient-to-br from-white to-zinc-50/80 border border-zinc-200 rounded-2xl flex flex-col gap-4 group transition-all overflow-hidden"
+                                >
+                                  <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-[#D4A373]/10 to-transparent rounded-bl-[3rem]" />
 
-                                <div className="flex items-start gap-4">
-                                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#D4A373] to-[#b8895a] text-white flex items-center justify-center font-black text-lg shadow-md shadow-[#D4A373]/20 shrink-0">
-                                    <Building2 size={20} />
-                                  </div>
-                                  <div className="min-w-0">
-                                    <h3 className="font-bold text-zinc-900 text-lg truncate">{hotel.name}</h3>
-                                    <p className="text-xs text-zinc-500 truncate">{hotel.location || hotel.address || '—'}</p>
-                                  </div>
-                                </div>
 
-                                <div className="flex gap-3 mt-1">
-                                  <div className="flex-1 bg-indigo-50/70 border border-indigo-100 rounded-xl p-3 text-center">
-                                    <p className="text-lg font-black text-indigo-700">{hotel.room_count || 0}</p>
-                                    <p className="text-[9px] font-bold uppercase tracking-wider text-indigo-400">Rooms</p>
+                                  <div className="flex items-start gap-4">
+                                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#D4A373] to-[#b8895a] text-white flex items-center justify-center font-black text-lg shadow-md shadow-[#D4A373]/20 shrink-0">
+                                      <Building2 size={20} />
+                                    </div>
+                                    <div className="min-w-0">
+                                      <h3 className="font-bold text-zinc-900 text-lg truncate">{hotel.name}</h3>
+                                      <p className="text-xs text-zinc-500 truncate">{hotel.location || hotel.address || '—'}</p>
+                                    </div>
                                   </div>
-                                  <div className="flex-1 bg-emerald-50/70 border border-emerald-100 rounded-xl p-3 text-center">
-                                    <p className="text-lg font-black text-emerald-700">{hotel.admin_count || 0}</p>
-                                    <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-400">Admins</p>
-                                  </div>
-                                </div>
 
-                                <div className="mt-auto pt-4 border-t border-zinc-100 flex justify-end">
-                                  <button
-                                    onClick={() => handleDeleteProperty(hotel.id, hotel.name)}
-                                    className="text-[10px] font-bold text-red-400 hover:text-white hover:bg-red-500 px-3 py-1.5 rounded-lg transition-all border border-red-200 hover:border-red-500 hover:shadow-sm uppercase tracking-wider"
-                                  >
-                                    Remove Property
-                                  </button>
-                                </div>
-                              </motion.div>
-                            ))}
-                          </div>
-                        )}
+                                  <div className="flex gap-3 mt-1">
+                                    <div className="flex-1 bg-indigo-50/70 border border-indigo-100 rounded-xl p-3 text-center">
+                                      <p className="text-lg font-black text-indigo-700">{hotel.room_count || 0}</p>
+                                      <p className="text-[9px] font-bold uppercase tracking-wider text-indigo-400">Rooms</p>
+                                    </div>
+                                    <div className="flex-1 bg-emerald-50/70 border border-emerald-100 rounded-xl p-3 text-center">
+                                      <p className="text-lg font-black text-emerald-700">{hotel.admin_count || 0}</p>
+                                      <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-400">Admins</p>
+                                    </div>
+                                  </div>
+
+                                  <div className="mt-auto pt-4 border-t border-zinc-100 flex justify-end">
+                                    <button
+                                      onClick={() => handleDeleteProperty(hotel.id, hotel.name)}
+                                      className="text-[10px] font-bold text-red-400 hover:text-white hover:bg-red-500 px-3 py-1.5 rounded-lg transition-all border border-red-200 hover:border-red-500 hover:shadow-sm uppercase tracking-wider"
+                                    >
+                                      Remove Property
+                                    </button>
+                                  </div>
+                                </motion.div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
@@ -5099,12 +5247,22 @@ export default function AdminDashboard() {
 
                               return (
                                 <div key={hotelId || 'global'}>
-                                  <div className="flex items-center gap-2 mb-4">
-                                    <Building2 size={14} className="text-[#D4A373]" />
-                                    <h3 className="text-sm font-black uppercase tracking-wider text-zinc-700">{hotelName}</h3>
-                                    <span className="text-[9px] font-bold bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded-full">{usersInGroup.length}</span>
-                                  </div>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                  <button
+                                    onClick={() => setCollapsedStaffGroups(prev => ({ ...prev, [hotelId || 'global']: !prev[hotelId || 'global'] }))}
+                                    className="flex items-center justify-between w-full mb-4 bg-zinc-50 hover:bg-zinc-100 p-3 rounded-xl transition-colors border border-zinc-100 group"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-8 h-8 rounded-lg bg-white border border-zinc-200 shadow-sm flex items-center justify-center text-[#D4A373]">
+                                        <Building2 size={16} />
+                                      </div>
+                                      <h3 className="text-sm font-black uppercase tracking-wider text-zinc-700 group-hover:text-[#D4A373] transition-colors">{hotelName}</h3>
+                                      <span className="text-[10px] font-bold bg-white border border-zinc-200 text-zinc-500 px-2 py-0.5 rounded-full shadow-sm">{usersInGroup.length} staff</span>
+                                    </div>
+                                    <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center border border-zinc-200 shadow-sm text-zinc-400 group-hover:text-zinc-600 transition-colors">
+                                      {collapsedStaffGroups[hotelId || 'global'] ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                                    </div>
+                                  </button>
+                                  <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 ${collapsedStaffGroups[hotelId || 'global'] ? 'hidden' : 'block'}`}>
                                     {usersInGroup.map(user => {
                                       const roleColors = {
                                         SUPER_ADMIN: 'from-rose-500 to-fuchsia-600',
@@ -5132,7 +5290,10 @@ export default function AdminDashboard() {
                                               <h4 className="font-bold text-zinc-900 text-sm truncate">{user.name}</h4>
                                               <p className="text-[10px] font-mono text-zinc-400 truncate">{user.designation || user.email}</p>
                                               <div className="flex flex-wrap gap-1 mt-1">
-                                                {(Array.isArray(user.department) ? user.department : (user.department ? [user.department] : [])).map(d => (
+                                                <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100 shadow-sm">
+                                                  {user.access_level || user.role || 'STAFF'}
+                                                </span>
+                                                {[...new Set(Array.isArray(user.department) ? user.department : (user.department ? [user.department] : []))].map(d => (
                                                   <span key={d} className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-500">
                                                     {String(d).replace(/_/g, ' ')}
                                                   </span>
@@ -5457,42 +5618,42 @@ export default function AdminDashboard() {
                               </div>
                               <div className="col-span-2">
                                 <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Departments</label>
-                                  <div className="grid grid-cols-2 gap-2 bg-zinc-50 border border-zinc-200 rounded-xl p-3">
-                                    {[
-                                      { value: 'GLOBAL', label: 'Global / All' },
-                                      { value: 'FRONT_DESK', label: 'Front Desk' },
-                                      { value: 'HOUSEKEEPING', label: 'Housekeeping' },
-                                      { value: 'FINANCE', label: 'Finance' },
-                                      { value: 'RESTAURANT', label: 'Dining' },
-                                      { value: 'SALES', label: 'Sales' },
-                                      { value: 'TRAVEL', label: 'Travel' }
-                                    ].map(dept => (
-                                      <label key={dept.value} className="flex items-center gap-2 cursor-pointer group">
-                                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${editAccessForm.department?.includes(dept.value) ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300 bg-white group-hover:border-indigo-400'}`}>
-                                          {editAccessForm.department?.includes(dept.value) && (
-                                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                                          )}
-                                        </div>
-                                        <input
-                                          type="checkbox"
-                                          className="hidden"
-                                          checked={editAccessForm.department?.includes(dept.value) || false}
-                                          onChange={(e) => {
-                                            const currentDepts = editAccessForm.department || [];
-                                            if (e.target.checked) {
-                                              setEditAccessForm({ ...editAccessForm, department: [...currentDepts, dept.value] });
-                                            } else {
-                                              setEditAccessForm({ ...editAccessForm, department: currentDepts.filter(d => d !== dept.value) });
-                                            }
-                                          }}
-                                        />
-                                        <span className="text-xs font-medium text-zinc-700">{dept.label}</span>
-                                      </label>
-                                    ))}
-                                  </div>
+                                <div className="grid grid-cols-2 gap-2 bg-zinc-50 border border-zinc-200 rounded-xl p-3">
+                                  {[
+                                    { value: 'GLOBAL', label: 'Global / All' },
+                                    { value: 'FRONT_DESK', label: 'Front Desk' },
+                                    { value: 'HOUSEKEEPING', label: 'Housekeeping' },
+                                    { value: 'FINANCE', label: 'Finance' },
+                                    { value: 'RESTAURANT', label: 'Dining' },
+                                    { value: 'SALES', label: 'Sales' },
+                                    { value: 'TRAVEL', label: 'Travel' }
+                                  ].map(dept => (
+                                    <label key={dept.value} className="flex items-center gap-2 cursor-pointer group">
+                                      <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${editAccessForm.department?.includes(dept.value) ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300 bg-white group-hover:border-indigo-400'}`}>
+                                        {editAccessForm.department?.includes(dept.value) && (
+                                          <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                        )}
+                                      </div>
+                                      <input
+                                        type="checkbox"
+                                        className="hidden"
+                                        checked={editAccessForm.department?.includes(dept.value) || false}
+                                        onChange={(e) => {
+                                          const currentDepts = editAccessForm.department || [];
+                                          if (e.target.checked) {
+                                            setEditAccessForm({ ...editAccessForm, department: [...currentDepts, dept.value] });
+                                          } else {
+                                            setEditAccessForm({ ...editAccessForm, department: currentDepts.filter(d => d !== dept.value) });
+                                          }
+                                        }}
+                                      />
+                                      <span className="text-xs font-medium text-zinc-700">{dept.label}</span>
+                                    </label>
+                                  ))}
                                 </div>
                               </div>
-                            
+                            </div>
+
                             <div>
                               <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Designation (Title)</label>
                               <input
@@ -5503,7 +5664,7 @@ export default function AdminDashboard() {
                                 className="w-full bg-zinc-50 border border-zinc-200 rounded-xl py-2.5 px-3 text-xs font-bold text-zinc-700 outline-none focus:ring-2 focus:ring-indigo-400/30"
                               />
                             </div>
-                            
+
                             <div>
                               <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Property Assignment</label>
                               <select
@@ -5517,7 +5678,7 @@ export default function AdminDashboard() {
                                 ))}
                               </select>
                             </div>
-                            
+
                             <div className="flex gap-3 pt-2">
                               <button type="button" onClick={() => setEditingUser(null)} className="flex-1 py-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-500 hover:bg-zinc-50 transition-colors">Cancel</button>
                               <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-500 text-white text-xs font-bold shadow-md hover:shadow-lg transition-shadow">Save Changes</motion.button>

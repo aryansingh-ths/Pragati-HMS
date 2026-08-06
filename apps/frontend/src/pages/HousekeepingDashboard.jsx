@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import DepartmentHRModule from '../components/DepartmentHRModule';
+import StaffDirectoryModule from '../components/StaffDirectoryModule';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, animate } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, ClipboardCheck, AlertTriangle, CheckCircle2,
+import { Users, Sparkles, ClipboardCheck, AlertTriangle, CheckCircle2,
   BedDouble, ArrowRight, Loader2, X, RefreshCw,
   Droplets, Eye, Wrench, ShieldCheck, PackageOpen,
   Plus, Minus, Send, AlertCircle, Building2, TrendingUp, Clock,
@@ -400,6 +402,7 @@ export default function HousekeepingDashboard() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'dirty' | 'cleaning' | 'inspecting'
+  const [viewMode, setViewMode] = useState('kanban');
 
   // ─── Modal States ──────────────────────────────────────────
   const [modalType, setModalType] = useState('none'); // 'none' | 'amenity' | 'damage'
@@ -749,6 +752,40 @@ export default function HousekeepingDashboard() {
               </button>
             </div>
           </div>
+
+          {/* Section: Managerial */}
+          {accessLevel === 'MANAGER' && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2 mt-4">Managerial</p>
+              <div className="flex flex-col gap-1">
+                <button
+                  onClick={() => { setViewMode('kanban'); }}
+                  className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'kanban' ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'}`}
+                >
+                  <span className="flex items-center gap-3"><Building2 size={16} /> Operations</span>
+                </button>
+                <button
+                  onClick={() => { setViewMode('hr_hub'); }}
+                  className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'hr_hub' ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'}`}
+                >
+                  <span className="flex items-center gap-3"><Users size={16} /> HR Hub</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2 mt-4">Company</p>
+            <div className="flex flex-col gap-1">
+              <button
+                onClick={() => { setViewMode('directory'); }}
+                className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'directory' ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'}`}
+              >
+                <span className="flex items-center gap-3"><Users size={16} /> Info Directory</span>
+              </button>
+            </div>
+          </div>
+
         </div>
 
       </motion.div>
@@ -864,7 +901,9 @@ export default function HousekeepingDashboard() {
         </AnimatePresence>
 
         {/* 4 TOP KPI STATS CARD ROW */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {viewMode === 'kanban' && (
+          <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {/* Card 1: Needs Cleaning */}
           <TiltCard
             onClick={() => setActiveFilter('dirty')}
@@ -1190,6 +1229,21 @@ export default function HousekeepingDashboard() {
           <ArrowRight size={12} className="text-zinc-300" />
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400" /> Available</span>
         </motion.div>
+          </>
+        )}
+
+        {/* VIEW: HR HUB */}
+        {viewMode === 'hr_hub' && accessLevel === 'MANAGER' && (
+          <DepartmentHRModule departmentName="HOUSEKEEPING" />
+        )}
+
+        {/* VIEW: DIRECTORY */}
+        {viewMode === 'directory' && (
+          <div className="h-[800px] overflow-hidden rounded-[2rem] shadow-2xl shadow-indigo-900/5">
+            <StaffDirectoryModule />
+          </div>
+        )}
+
       </div>
 
       {/* ═══════════════════════════════════════════════════════

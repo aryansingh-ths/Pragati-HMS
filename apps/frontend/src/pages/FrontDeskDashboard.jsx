@@ -9,6 +9,8 @@ import {
   RefreshCw, Filter, Sparkles, Wifi, TrendingUp, ShieldCheck,
   Radio, Zap, Hotel, FileText, LogOut
 } from 'lucide-react';
+import DepartmentHRModule from '../components/DepartmentHRModule';
+import StaffDirectoryModule from '../components/StaffDirectoryModule';
 
 const API_BASE = 'http://localhost:3000';
 
@@ -42,6 +44,11 @@ const FD_STYLES = `
   .fd-scrollbar::-webkit-scrollbar { display: none; }
   .fd-sidebar-scroll { scrollbar-width: none; -ms-overflow-style: none; }
   .fd-sidebar-scroll::-webkit-scrollbar { display: none; }
+
+  .fd-app-bg { scrollbar-width: none; -ms-overflow-style: none; }
+  .fd-app-bg::-webkit-scrollbar { display: none; }
+  html:has(.fd-app-bg) { scrollbar-width: none; -ms-overflow-style: none; }
+  html:has(.fd-app-bg)::-webkit-scrollbar { display: none; }
 
   /* Soft, solid background — Admin dashboard match */
   .fd-app-bg {
@@ -849,7 +856,7 @@ export default function FrontDeskDashboard() {
           </div>
           <div>
             <h1 className="font-serif font-black text-[25px] text-zinc-500 text-base leading-none">Front Desk</h1>
-            <span className="text-[9px] font-bold text-[#D4A373] uppercase tracking-widest mt-1 block">HMS Reception</span>
+            <span className="text-[9px] font-bold text-[#D4A373] uppercase tracking-widest mt-1 block">HMS Front Desk</span>
           </div>
         </div>
 
@@ -949,9 +956,10 @@ export default function FrontDeskDashboard() {
         </div>
 
         {/* Section: History — pinned footer action, matches admin & Housekeeping convention */}
+        {/* Section: History & Managerial */}
         {accessLevel !== 'EXECUTIVE' && (
-          <div className="pt-4 border-t border-zinc-100 shrink-0">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">History &amp; Ledger</p>
+          <div className="pt-4 border-t border-zinc-100 shrink-0 space-y-1">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">History & Ledger</p>
             <button
               onClick={() => { setViewMode('history'); loadAllBookings(); }}
               className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'history'
@@ -960,6 +968,27 @@ export default function FrontDeskDashboard() {
                 }`}
             >
               <History size={16} /> Booking History Log
+            </button>
+            {accessLevel === 'MANAGER' && (
+              <button
+                onClick={() => setViewMode('hr_hub')}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'hr_hub'
+                  ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
+                  }`}
+              >
+                <Users size={16} /> HR Hub
+              </button>
+            )}
+
+            <button
+              onClick={() => setViewMode('directory')}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'directory'
+                ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+                : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
+                }`}
+            >
+              <Users size={16} /> Info Directory
             </button>
           </div>
         )}
@@ -1076,6 +1105,7 @@ export default function FrontDeskDashboard() {
           </div>
         </motion.div>
 
+        {viewMode !== 'hr_hub' && viewMode !== 'directory' && (<>
         {/* 4 TOP KPI STATS CARD ROW — tilting glass cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {/* Card 1: Total Occupancy */}
@@ -1642,7 +1672,20 @@ export default function FrontDeskDashboard() {
             </motion.div>
 
           </div>
+
         </div>
+        </>)}
+
+          {viewMode === 'hr_hub' && accessLevel === 'MANAGER' && (
+             <DepartmentHRModule departmentName="FRONT_DESK" />
+          )}
+
+          {viewMode === 'directory' && (
+            <div className="h-[800px] overflow-hidden rounded-[2rem] shadow-2xl shadow-indigo-900/5">
+              <StaffDirectoryModule />
+            </div>
+          )}
+
       </div>
 
       {/* ═══════════════════════════════════════════════════════

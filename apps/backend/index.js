@@ -90,6 +90,9 @@ app.post('/api/auth/login', async (req, res) => {
       { expiresIn: '24h' }
     );
 
+    // Close any existing open shifts for this user before starting a new one
+    await pool.query('UPDATE staff_shifts SET logout_time = NOW() WHERE user_id = $1 AND logout_time IS NULL', [user.id]);
+    
     await pool.query('INSERT INTO staff_shifts (user_id) VALUES ($1)', [user.id]);
     await logAuditAction(user.id, 'Staff Login', `User logged into dashboard: ${user.email} (${accessLevel})`);
 
@@ -115,7 +118,7 @@ const logAuditAction = async (userId, action, details) => {
     let hotelId = null;
     if (userId) {
       // Use COALESCE to handle pre-migration state gracefully
-      const uRes = await pool.query('SELECT name, COALESCE(access_level::text, role, \'SYSTEM\') as display_role, hotel_id FROM users WHERE id = $1', [userId]);
+      const uRes = await pool.query('SELECT name, COALESCE(access_level::text, role::text, \'SYSTEM\') as display_role, hotel_id FROM users WHERE id = $1', [userId]);
       if (uRes.rows.length > 0) {
         name = uRes.rows[0].name;
         role = uRes.rows[0].display_role;
@@ -172,13 +175,9 @@ app.patch('/api/users/profile', verifyToken, async (req, res) => {
 app.post('/api/auth/logout', verifyToken, async (req, res) => {
   try {
     const userId = req.user.userId;
+    // Close ALL active sessions for this user to ensure they appear offline immediately
     await pool.query(
-      `UPDATE staff_shifts SET logout_time = NOW()
-       WHERE id = (
-         SELECT id FROM staff_shifts
-         WHERE user_id = $1 AND logout_time IS NULL
-         ORDER BY login_time DESC LIMIT 1
-       )`,
+      `UPDATE staff_shifts SET logout_time = NOW() WHERE user_id = $1 AND logout_time IS NULL`,
       [userId]
     );
     await logAuditAction(userId, 'Staff Logout', `User logged out of dashboard`);
@@ -213,6 +212,9 @@ const requireRole = (allowedRoles) => {
     const hasDepartmentClearance = allowedRoles.some(role => {
       const dept = deptMap[role] || role;
       if (Array.isArray(req.user.department)) {
+        return req.user.department.includes(dept) || req.user.department.includes(role);
+      }
+      if (typeof req.user.department === 'string') {
         return req.user.department.includes(dept) || req.user.department.includes(role);
       }
       return req.user.department === dept || req.user.department === role;
@@ -332,10 +334,25 @@ app.delete('/api/super-admin/hotels/:id', verifyToken, requireRole(['SUPER_ADMIN
   }
 });
 
+// Global Staff Directory (Accessible by any logged-in staff)
+app.get('/api/directory', verifyToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT u.id, u.name, u.email, u.contact_number, u.role, u.designation, u.access_level, array_to_json(u.department) as department, h.name as hotel_name 
+      FROM users u 
+      LEFT JOIN hotels h ON u.hotel_id = h.id 
+      ORDER BY u.created_at DESC
+    `);
+    res.json({ status: 'success', data: { staff: result.rows } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch directory' });
+  }
+});
+
 app.get('/api/super-admin/users', verifyToken, requireRole(['SUPER_ADMIN']), async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT u.id, u.name, u.email, u.role, u.access_level, array_to_json(u.department) as department, h.name as hotel_name, u.hotel_id 
+      SELECT u.id, u.name, u.email, u.contact_number, u.role, u.access_level, array_to_json(u.department) as department, h.name as hotel_name, u.hotel_id 
       FROM users u 
       LEFT JOIN hotels h ON u.hotel_id = h.id 
       ORDER BY u.created_at DESC
@@ -359,6 +376,21 @@ app.post('/api/super-admin/users', verifyToken, requireRole(['SUPER_ADMIN']), as
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'Email already exists' });
     res.status(500).json({ error: 'Failed to create admin' });
+  }
+});
+
+app.patch('/api/super-admin/users/:id/profile', verifyToken, requireRole(['SUPER_ADMIN']), async (req, res) => {
+  const { name, email, designation, contact_number } = req.body;
+  if (!name || !email) return res.status(400).json({ error: 'Missing name or email' });
+  try {
+    await pool.query(
+      `UPDATE users SET name = $1, email = $2, designation = $3, contact_number = $4 WHERE id = $5`,
+      [name, email, designation || null, contact_number || null, req.params.id]
+    );
+    res.json({ status: 'success', message: 'Profile updated' });
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Email already exists' });
+    res.status(500).json({ error: 'Failed to update user profile' });
   }
 });
 
@@ -1330,13 +1362,13 @@ app.post('/api/Admin/rooms', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']),
   try {
     // Room number must be unique per hotel
     const check = await pool.query(
-      targetHotelId 
-        ? 'SELECT id FROM rooms WHERE room_number = $1 AND hotel_id = $2' 
+      targetHotelId
+        ? 'SELECT id FROM rooms WHERE room_number = $1 AND hotel_id = $2'
         : 'SELECT id FROM rooms WHERE room_number = $1 AND hotel_id IS NULL',
       targetHotelId ? [room_number, targetHotelId] : [room_number]
     );
     if (check.rows.length > 0) return res.status(400).json({ error: 'Room number already exists in inventory.' });
-    
+
     await pool.query(
       "INSERT INTO rooms (room_number, room_type_id, status, room_blocked, hotel_id) VALUES ($1, $2, 'AVAILABLE', false, $3)",
       [room_number, room_type_id, targetHotelId || null]
@@ -1348,6 +1380,33 @@ app.post('/api/Admin/rooms', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']),
 });
 
 // 6. REMOVE ROOM FROM INVENTORY (Force Delete connected records)
+app.put('/api/Admin/users/:id', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
+  const { id } = req.params;
+  try {
+    const updates = [];
+    const values = [];
+    let i = 1;
+
+    const allowedFields = ['name', 'email', 'can_grant_discount'];
+    for (const [key, val] of Object.entries(req.body)) {
+      if (allowedFields.includes(key)) {
+        updates.push(`${key} = $${i}`);
+        values.push(val);
+        i++;
+      }
+    }
+
+    if (updates.length === 0) return res.status(400).json({ error: 'No valid fields provided' });
+
+    values.push(id);
+    await pool.query(`UPDATE users SET ${updates.join(', ')} WHERE id = $${i}`, values);
+    res.json({ status: 'success' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update user profile' });
+  }
+});
+
 app.delete('/api/Admin/rooms/:id', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   const { id } = req.params;
   try {
@@ -1549,7 +1608,7 @@ app.post('/api/channel-Admin/webhook', async (req, res) => {
 
       const roomRes = await pool.query('SELECT hotel_id FROM rooms WHERE id = $1', [assignedRoomId]);
       const hotelId = roomRes.rows.length > 0 ? roomRes.rows[0].hotel_id : null;
-        
+
       const bRes = await pool.query(
         `INSERT INTO bookings (guest_id, room_id, check_in_date, check_out_date, total_price, status, source, ota_reference, hotel_id) VALUES ($1, $2, $3, $4, $5, 'CONFIRMED', 'OTA', $6, $7) RETURNING id;`,
         [guestId, assignedRoomId, check_in_date, check_out_date, total_price, ota_reference, hotelId]
@@ -1658,7 +1717,7 @@ app.get('/api/Admin/permissions', verifyToken, requireRole(['ADMIN', 'SUPER_ADMI
 
 
     const permQuery = `
-      SELECT u.id, u.name, u.email, u.role, COALESCE(p.can_process_refunds, false) as can_process_refunds, COALESCE(p.can_apply_discounts, false) as can_apply_discounts, COALESCE(p.can_overbook, false) as can_overbook
+      SELECT u.id, u.name, u.email, u.role, u.hotel_id, COALESCE(p.can_process_refunds, false) as can_process_refunds, COALESCE(p.can_apply_discounts, false) as can_apply_discounts, COALESCE(p.can_overbook, false) as can_overbook
       FROM users u LEFT JOIN user_permissions p ON u.id = p.user_id
       WHERE ${getHotelFilter(req, 'u')}
       ORDER BY u.role, u.name;
@@ -1696,7 +1755,7 @@ app.get('/api/Admin/shifts', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']),
 
 
     const shiftQuery = `
-      SELECT s.id, u.id as user_id, u.name, u.email, u.role, s.login_time, s.logout_time, (CASE WHEN s.logout_time IS NULL THEN true ELSE false END) as is_active, ROUND(EXTRACT(EPOCH FROM (COALESCE(s.logout_time, NOW()) - s.login_time)) / 60)::int AS duration_minutes
+      SELECT s.id, u.id as user_id, u.name, u.email, u.role, u.hotel_id, s.login_time, s.logout_time, (CASE WHEN s.logout_time IS NULL THEN true ELSE false END) as is_active, ROUND(EXTRACT(EPOCH FROM (COALESCE(s.logout_time, NOW()) - s.login_time)) / 60)::int AS duration_minutes
       FROM staff_shifts s JOIN users u ON s.user_id = u.id
       WHERE ${getHotelFilter(req, 'u')}
       ORDER BY s.login_time DESC LIMIT 60;
@@ -1814,6 +1873,139 @@ app.get('/api/broadcasts', verifyToken, async (req, res) => {
   }
 });
 
+// ==========================================
+// 8b. NOTIFICATION CENTER ENDPOINTS
+// ==========================================
+
+// GET all notifications relevant to the logged-in user
+app.get('/api/notifications', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const userRes = await pool.query('SELECT role, hotel_id FROM users WHERE id = $1', [userId]);
+    const userRole = userRes.rows.length > 0 ? userRes.rows[0].role : 'NONE';
+    const userHotelId = userRes.rows.length > 0 ? userRes.rows[0].hotel_id : null;
+
+    const result = await pool.query(`
+      SELECT n.*,
+        (CASE WHEN nr.id IS NOT NULL OR n.sender_id = $1 THEN true ELSE false END) as is_read,
+        nr.read_at
+      FROM notifications n
+      LEFT JOIN notification_reads nr ON nr.notification_id = n.id AND nr.user_id = $1
+      WHERE (
+        n.target_user_id = $1
+        OR (n.notification_type = 'DEPARTMENT' AND UPPER(n.target_dept) = UPPER($2))
+        OR n.notification_type = 'GLOBAL'
+        OR $2 = 'SUPER_ADMIN'
+      )
+      AND (n.expires_at IS NULL OR n.expires_at > NOW())
+      AND (n.hotel_id IS NULL OR n.hotel_id = $3 OR $2 = 'SUPER_ADMIN')
+      ORDER BY n.created_at DESC
+      LIMIT 100
+    `, [userId, userRole, userHotelId]);
+
+    res.json({ status: 'success', data: { notifications: result.rows } });
+  } catch (err) {
+    console.error('Fetch notifications error:', err);
+    res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+});
+
+// POST create a new notification (admin only)
+app.post('/api/notifications', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
+  const { message, type, priority, targetDept, targetEmail, hotel_id } = req.body;
+  if (!message) return res.status(400).json({ error: 'Message content is required' });
+
+  try {
+    const senderRes = await pool.query('SELECT name FROM users WHERE id = $1', [req.user.userId]);
+    const senderName = senderRes.rows.length > 0 ? senderRes.rows[0].name : 'Admin';
+
+    let targetUserId = null;
+    const notificationType = type || 'GLOBAL';
+
+    // If DIRECT, look up user by email
+    if (notificationType === 'DIRECT' && targetEmail) {
+      const targetRes = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [targetEmail.trim()]);
+      if (targetRes.rows.length === 0) {
+        return res.status(404).json({ error: `No user found with email: ${targetEmail}` });
+      }
+      targetUserId = targetRes.rows[0].id;
+    }
+
+    await pool.query(
+      `INSERT INTO notifications (message, notification_type, priority, target_dept, target_user_id, sender_id, sender_name, hotel_id, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW() + INTERVAL '72 hours')`,
+      [
+        message,
+        notificationType,
+        priority || 'NORMAL',
+        targetDept || (notificationType === 'GLOBAL' ? 'ALL' : null),
+        targetUserId,
+        req.user.userId,
+        senderName,
+        hotel_id || null
+      ]
+    );
+
+    await logAuditAction(
+      req.user.userId,
+      'Notification Sent',
+      `Sent ${notificationType} notification${targetEmail ? ` to ${targetEmail}` : ''}: "${message}"`
+    );
+
+    res.json({ status: 'success', message: 'Notification dispatched successfully' });
+  } catch (err) {
+    console.error('Create notification error:', err);
+    res.status(500).json({ error: 'Failed to create notification' });
+  }
+});
+
+// PATCH mark a single notification as read
+app.patch('/api/notifications/:id/read', verifyToken, async (req, res) => {
+  try {
+    await pool.query(
+      `INSERT INTO notification_reads (user_id, notification_id)
+       VALUES ($1, $2)
+       ON CONFLICT (user_id, notification_id) DO NOTHING`,
+      [req.user.userId, req.params.id]
+    );
+    res.json({ status: 'success' });
+  } catch (err) {
+    console.error('Mark notification read error:', err);
+    res.status(500).json({ error: 'Failed to mark notification as read' });
+  }
+});
+
+// PATCH mark all notifications as read for the logged-in user
+app.patch('/api/notifications/read-all', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const userRes = await pool.query('SELECT role, hotel_id FROM users WHERE id = $1', [userId]);
+    const userRole = userRes.rows.length > 0 ? userRes.rows[0].role : 'NONE';
+    const userHotelId = userRes.rows.length > 0 ? userRes.rows[0].hotel_id : null;
+
+    await pool.query(`
+      INSERT INTO notification_reads (user_id, notification_id)
+      SELECT $1, n.id FROM notifications n
+      LEFT JOIN notification_reads nr ON nr.notification_id = n.id AND nr.user_id = $1
+      WHERE nr.id IS NULL
+      AND n.sender_id IS DISTINCT FROM $1
+      AND (
+        n.target_user_id = $1
+        OR (n.notification_type = 'DEPARTMENT' AND UPPER(n.target_dept) = UPPER($2))
+        OR n.notification_type = 'GLOBAL'
+        OR $2 = 'SUPER_ADMIN'
+      )
+      AND (n.expires_at IS NULL OR n.expires_at > NOW())
+      AND (n.hotel_id IS NULL OR n.hotel_id = $3 OR $2 = 'SUPER_ADMIN')
+    `, [userId, userRole, userHotelId]);
+
+    res.json({ status: 'success', message: 'All notifications marked as read' });
+  } catch (err) {
+    console.error('Mark all read error:', err);
+    res.status(500).json({ error: 'Failed to mark all notifications as read' });
+  }
+});
+
 // 9. HR lifecycle: Onboard Employee
 app.post('/api/Admin/staff/onboard', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   const { email, password, name, role } = req.body;
@@ -1821,7 +2013,9 @@ app.post('/api/Admin/staff/onboard', verifyToken, requireRole(['ADMIN', 'SUPER_A
   try {
     await pool.query('BEGIN');
     const hash = await bcrypt.hash(password, 10);
-    const newUser = await pool.query('INSERT INTO users (email, password_hash, name, role) VALUES ($1, $2, $3, $4) RETURNING id, email, name, role;', [email.toLowerCase().trim(), hash, name, role || 'FRONT_DESK']);
+    const designationMapping = { RECEPTION: 'Front Desk Agent', HOUSEKEEPING: 'Housekeeper', FINANCE: 'Accountant', RESTAURANT: 'Restaurant Staff', SALES: 'Sales Agent', TRAVEL: 'Travel Desk', ADMIN: 'Administrator' };
+    const defaultDesignation = designationMapping[role || 'RECEPTION'] || 'Staff Member';
+    const newUser = await pool.query('INSERT INTO users (email, password_hash, name, role, hotel_id, designation) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, email, name, role;', [email.toLowerCase().trim(), hash, name, role || 'RECEPTION', req.user.hotelId || null, defaultDesignation]);
     await pool.query('INSERT INTO user_permissions (user_id, can_process_refunds, can_apply_discounts, can_overbook) VALUES ($1, true, true, true)', [newUser.rows[0].id]);
     await pool.query('COMMIT');
     await logAuditAction(req.user.userId, 'Onboard Staff Member', `Provisioned new staff user profile: ${email} (${role})`);
@@ -1829,17 +2023,18 @@ app.post('/api/Admin/staff/onboard', verifyToken, requireRole(['ADMIN', 'SUPER_A
   } catch (err) {
     await pool.query('ROLLBACK');
     if (err.code === '23505') return res.status(400).json({ error: 'An account with this email address already exists' });
-    res.status(500).json({ error: 'Failed to complete employee provisioning process' });
+    console.error("Failed to onboard:", err);
+    res.status(500).json({ error: 'Failed to complete employee provisioning process: ' + err.message });
   }
 });
 
 // 10. HR lifecycle: Update Employee Details
 app.patch('/api/Admin/staff/:id', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   const { id } = req.params;
-  const { name, email } = req.body;
+  const { name, email, can_grant_discount } = req.body;
   if (!name || !email) return res.status(400).json({ error: 'Name and email are required' });
   try {
-    const updated = await pool.query('UPDATE users SET name = $1, email = $2 WHERE id = $3 RETURNING id, email, name, role;', [name, email.toLowerCase().trim(), id]);
+    const updated = await pool.query('UPDATE users SET name = $1, email = $2, can_grant_discount = COALESCE($3, can_grant_discount) WHERE id = $4 RETURNING id, email, name, role;', [name, email.toLowerCase().trim(), can_grant_discount, id]);
     if (updated.rows.length === 0) return res.status(404).json({ error: 'User not found' });
     await logAuditAction(req.user.userId, 'Update Staff Member', `Updated profile for ${email}`);
     res.json({ status: 'success', data: { user: updated.rows[0] } });
@@ -2201,6 +2396,28 @@ async function runMigrations() {
           created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
           expires_at TIMESTAMP WITH TIME ZONE
       );
+
+      CREATE TABLE IF NOT EXISTS notifications (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          message TEXT NOT NULL,
+          notification_type VARCHAR(20) NOT NULL DEFAULT 'GLOBAL',
+          priority VARCHAR(10) NOT NULL DEFAULT 'NORMAL',
+          target_dept VARCHAR(50),
+          target_user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+          sender_id UUID REFERENCES users(id) ON DELETE SET NULL,
+          sender_name VARCHAR(255) NOT NULL,
+          hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          expires_at TIMESTAMP WITH TIME ZONE
+      );
+
+      CREATE TABLE IF NOT EXISTS notification_reads (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+          notification_id UUID REFERENCES notifications(id) ON DELETE CASCADE,
+          read_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(user_id, notification_id)
+      );
     `);
 
     console.log('✅ Auto-migrations completed successfully.');
@@ -2212,7 +2429,8 @@ async function runMigrations() {
       "ALTER TABLE broadcasts ADD COLUMN hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE",
       "ALTER TABLE hotels ADD COLUMN location TEXT",
       "ALTER TABLE users ADD COLUMN email VARCHAR(255) UNIQUE",
-      "ALTER TABLE users ADD COLUMN designation VARCHAR(255) DEFAULT 'Administrator'"
+      "ALTER TABLE users ADD COLUMN designation VARCHAR(255) DEFAULT 'Administrator'",
+      "ALTER TABLE users ADD COLUMN can_grant_discount BOOLEAN DEFAULT false"
     ];
 
     for (const query of columnsToAdd) {
@@ -2230,7 +2448,7 @@ async function runMigrations() {
         ALTER COLUMN department TYPE department_type[] 
         USING ARRAY[department];
       `);
-    } catch(err) {}
+    } catch (err) { }
 
     // Historical migration for department and designation removed 
     // to prevent overwriting user-modified data on server restart.
@@ -2241,13 +2459,13 @@ async function runMigrations() {
       try {
         await pool.query(`ALTER TABLE ${tbl} ADD COLUMN IF NOT EXISTS hotel_id UUID REFERENCES hotels(id)`);
         await pool.query(`UPDATE ${tbl} SET hotel_id = $1 WHERE hotel_id IS NULL`, [hotelId]);
-      } catch(err) {}
+      } catch (err) { }
     }
-    
+
     try {
       await pool.query("ALTER TABLE yield_rules DROP CONSTRAINT yield_rules_pkey");
       await pool.query("ALTER TABLE yield_rules ADD PRIMARY KEY (hotel_id, key)");
-    } catch(err) {}
+    } catch (err) { }
 
     const travelRoleCheck = await pool.query("SELECT 1 FROM pg_enum WHERE enumlabel = 'TRAVEL' AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'user_role')");
     if (travelRoleCheck.rows.length === 0) await pool.query("ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'TRAVEL'");

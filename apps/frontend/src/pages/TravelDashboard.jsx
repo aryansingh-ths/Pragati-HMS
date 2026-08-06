@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { Plane, MapPin, Users, Wallet, Clock, CheckCircle2, AlertTriangle, RefreshCw,
   Download, Plus, X, Loader2, Search, Filter, TrendingUp, Building2, ArrowUpRight,
   ShieldCheck, PieChart, Compass, CalendarClock, Phone, Mail, Star, Ban, CreditCard, LogOut, Zap } from 'lucide-react';
+import DepartmentHRModule from '../components/DepartmentHRModule';
+import StaffDirectoryModule from '../components/StaffDirectoryModule';
 
 const API_BASE = 'http://localhost:3000';
 const getToken = () => sessionStorage.getItem('hms_token');
@@ -392,6 +394,19 @@ export default function TravelDashboard() {
         ...(accessLevel !== 'EXECUTIVE' ? [{ key: 'customers', label: 'Customers', icon: <Users size={15} /> }] : []),
       ],
     },
+    ...(accessLevel === 'MANAGER' ? [{
+      heading: 'Managerial',
+      items: [
+        { key: 'overview', label: 'Operations', icon: <Building2 size={15} /> },
+        { key: 'hr_hub', label: 'HR Hub', icon: <Users size={15} /> }
+      ]
+    }] : []),
+    {
+      heading: 'Company',
+      items: [
+        { key: 'directory', label: 'Info Directory', icon: <Users size={15} /> }
+      ]
+    }
   ];
 
   const themeMap = {
@@ -945,6 +960,19 @@ export default function TravelDashboard() {
                   </div>
                 </motion.div>
               )}
+
+              {/* TAB: HR HUB */}
+              {activeTab === 'hr_hub' && accessLevel === 'MANAGER' && (
+                <DepartmentHRModule departmentName="TRAVEL" />
+              )}
+
+              {/* TAB: DIRECTORY */}
+              {activeTab === 'directory' && (
+                <div className="h-[800px] overflow-hidden rounded-[2rem] shadow-2xl shadow-indigo-900/5">
+                  <StaffDirectoryModule />
+                </div>
+              )}
+
             </div>
           )}
         </AnimatePresence>
