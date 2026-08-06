@@ -1,0 +1,63 @@
+
+C:\Users\user\Desktop\hms-app\apps\frontend\src\pages\AdminDashboard.jsx
+     1:8   warning  'React' is defined but never used                                                                                 no-unused-vars
+     2:10  warning  'motion' is defined but never used                                                                                no-unused-vars
+     2:18  warning  'AnimatePresence' is defined but never used                                                                       no-unused-vars
+     5:3   warning  'Activity' is defined but never used                                                                              no-unused-vars
+     5:13  warning  'Users' is defined but never used                                                                                 no-unused-vars
+     5:20  warning  'Lock' is defined but never used                                                                                  no-unused-vars
+     5:26  warning  'Unlock' is defined but never used                                                                                no-unused-vars
+     5:34  warning  'Sparkles' is defined but never used                                                                              no-unused-vars
+     5:44  warning  'DollarSign' is defined but never used                                                                            no-unused-vars
+     6:3   warning  'Sliders' is defined but never used                                                                               no-unused-vars
+     6:12  warning  'Wrench' is defined but never used                                                                                no-unused-vars
+     6:20  warning  'Loader2' is defined but never used                                                                               no-unused-vars
+     6:29  warning  'Plus' is defined but never used                                                                                  no-unused-vars
+     6:35  warning  'Trash2' is defined but never used                                                                                no-unused-vars
+     6:43  warning  'X' is defined but never used                                                                                     no-unused-vars
+     6:46  warning  'ChevronDown' is defined but never used                                                                           no-unused-vars
+     6:59  warning  'ChevronUp' is defined but never used                                                                             no-unused-vars
+     6:70  warning  'Edit' is defined but never used                                                                                  no-unused-vars
+     7:3   warning  'TrendingUp' is defined but never used                                                                            no-unused-vars
+     7:15  warning  'AlertTriangle' is defined but never used                                                                         no-unused-vars
+     7:30  warning  'Clock' is defined but never used                                                                                 no-unused-vars
+     7:37  warning  'BedDouble' is defined but never used                                                                             no-unused-vars
+     7:48  warning  'Zap' is defined but never used                                                                                   no-unused-vars
+     7:53  warning  'ArrowUpRight' is defined but never used                                                                          no-unused-vars
+     7:67  warning  'ArrowDownRight' is defined but never used                                                                        no-unused-vars
+     8:3   warning  'UserCheck' is defined but never used                                                                             no-unused-vars
+     8:14  warning  'UserX' is defined but never used                                                                                 no-unused-vars
+     8:21  warning  'ShieldAlert' is defined but never used                                                                           no-unused-vars
+     8:34  warning  'Hammer' is defined but never used                                                                                no-unused-vars
+     8:42  warning  'Eye' is defined but never used                                                                                   no-unused-vars
+     8:47  warning  'CircleDot' is defined but never used                                                                             no-unused-vars
+     8:58  warning  'RefreshCw' is defined but never used                                                                             no-unused-vars
+     8:69  warning  'CheckCircle' is defined but never used                                                                           no-unused-vars
+     9:3   warning  'LogIn' is defined but never used                                                                                 no-unused-vars
+     9:10  warning  'DoorOpen' is defined but never used                                                                              no-unused-vars
+     9:20  warning  'Maximize2' is defined but never used                                                                             no-unused-vars
+     9:31  warning  'Search' is defined but never used                                                                                no-unused-vars
+     9:39  warning  'LogOut' is defined but never used                                                                                no-unused-vars
+     9:47  warning  'Building2' is defined but never used                                                                             no-unused-vars
+    13:10  warning  'DonutChart' is defined but never used                                                                            no-unused-vars
+    43:17  warning  'circ' is assigned a value but never used                                                                         no-unused-vars
+    70:10  warning  'MiniBarChart' is defined but never used                                                                          no-unused-vars
+   178:10  warning  'OccupancyTrendLine' is defined but never used                                                                    no-unused-vars
+   382:10  warning  'SlaCountdownTimer' is defined but never used                                                                     no-unused-vars
+   457:27  warning  'setSelectedHotelId' is assigned a value but never used                                                           no-unused-vars
+   494:10  warning  'broadcastDateFilter' is assigned a value but never used                                                          no-unused-vars
+   494:31  warning  'setBroadcastDateFilter' is assigned a value but never used                                                       no-unused-vars
+   554:14  warning  'err' is defined but never used                                                                                   no-unused-vars
+   567:18  warning  'err' is defined but never used                                                                                   no-unused-vars
+   567:23  error    Empty block statement                                                                                             no-empty
+   677:41  warning  React Hook useEffect has a missing dependency: 'loadAdminData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+   818:14  warning  'err' is defined but never used                                                                                   no-unused-vars
+   823:9   warning  'handleSavePermissions' is assigned a value but never used                                                        no-unused-vars
+   961:14  warning  'err' is defined but never used                                                                                   no-unused-vars
+  1537:29  warning  'circ' is assigned a value but never used                                                                         no-unused-vars
+  3830:77  warning  'i' is defined but never used                                                                                     no-unused-vars
+  4458:37  warning  'totalHrs' is assigned a value but never used                                                                     no-unused-vars
+  4459:37  warning  'remMins' is assigned a value but never used                                                                      no-unused-vars
+
+✖ 58 problems (1 error, 57 warnings)
+

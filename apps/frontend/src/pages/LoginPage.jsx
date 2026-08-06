@@ -52,13 +52,13 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
           redirectPath = '/workspace-selector';
         } else {
           const primaryDept = department[0];
-          if (accessLevel === 'ADMIN' && primaryDept === 'GLOBAL') redirectPath = '/dashboard/Admin';
-          else if (primaryDept === 'FRONT_DESK' || role === 'RECEPTION' || role === 'FRONT_DESK') redirectPath = '/dashboard/front-desk';
-          else if (primaryDept === 'HOUSEKEEPING' || role === 'HOUSEKEEPING') redirectPath = '/dashboard/housekeeping';
-          else if (primaryDept === 'FINANCE' || role === 'FINANCE') redirectPath = '/dashboard/finance';
-          else if (primaryDept === 'SALES' || role === 'SALES') redirectPath = '/dashboard/sales';
-          else if (primaryDept === 'TRAVEL' || role === 'TRAVEL') redirectPath = '/dashboard/travel';
-          else if (primaryDept === 'RESTAURANT' || role === 'RESTAURANT') redirectPath = '/dashboard/dining';
+          if (accessLevel.includes('ADMIN') && primaryDept.includes('GLOBAL')) redirectPath = '/dashboard/Admin';
+          else if (primaryDept.includes('FRONTDESK') || role.includes('FRONTDESK') || primaryDept.includes('FRONT_DESK') || role.includes('FRONT_DESK') || primaryDept.includes('RECEPTION') || role.includes('RECEPTION')) redirectPath = '/dashboard/front-desk';
+          else if (primaryDept.includes('HOUSEKEEPING') || role.includes('HOUSEKEEPING')) redirectPath = '/dashboard/housekeeping';
+          else if (primaryDept.includes('FINANCE') || role.includes('FINANCE')) redirectPath = '/dashboard/finance';
+          else if (primaryDept.includes('SALES') || role.includes('SALES')) redirectPath = '/dashboard/sales';
+          else if (primaryDept.includes('TRAVEL') || role.includes('TRAVEL')) redirectPath = '/dashboard/travel';
+          else if (primaryDept.includes('RESTAURANT') || role.includes('RESTAURANT') || primaryDept.includes('DINING') || role.includes('DINING')) redirectPath = '/dashboard/dining';
         }
 
         completeLogin(role, token, redirectPath);

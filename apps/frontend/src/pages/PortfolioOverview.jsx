@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import StaffDirectoryModule from '../components/StaffDirectoryModule';
 import { 
   Building2, Users, DollarSign, Activity, Plus, 
   MapPin, LogIn, ChevronDown, ShieldCheck, 
@@ -278,7 +279,8 @@ export default function PortfolioOverview() {
             {[
               { id: 'overview', icon: Activity, label: 'Performance' },
               { id: 'properties', icon: Building2, label: 'Properties' },
-              { id: 'administrators', icon: Users, label: 'Access Control' }
+              { id: 'administrators', icon: Users, label: 'Access Control' },
+              { id: 'directory', icon: Users, label: 'Info Directory' }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -469,8 +471,15 @@ export default function PortfolioOverview() {
               </GlassCard>
             </motion.div>
           )}
-        </AnimatePresence>
 
+          {/* DIRECTORY TAB */}
+          {activeTab === 'directory' && (
+            <div className="bg-white rounded-[2rem] p-6 lg:p-10 shadow-2xl shadow-indigo-900/5">
+              <StaffDirectoryModule />
+            </div>
+          )}
+
+        </AnimatePresence>
       </div>
 
       {/* ADD PROPERTY MODAL */}
