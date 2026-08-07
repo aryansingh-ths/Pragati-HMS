@@ -92,7 +92,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     // Close any existing open shifts for this user before starting a new one
     await pool.query('UPDATE staff_shifts SET logout_time = NOW() WHERE user_id = $1 AND logout_time IS NULL', [user.id]);
-    
+
     await pool.query('INSERT INTO staff_shifts (user_id) VALUES ($1)', [user.id]);
     await logAuditAction(user.id, 'Staff Login', `User logged into dashboard: ${user.email} (${accessLevel})`);
 
@@ -2074,73 +2074,6 @@ app.get('/api/Admin/analytics', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN'
   }
 });
 
-// ==========================================
-// DINING MODULE ENDPOINTS
-// ==========================================
-const requireDining = requireRole(['RESTAURANT', 'ADMIN']);
-
-app.get('/api/dining/kots', verifyToken, requireDining, async (req, res) => {
-  try {
-    const result = await pool.query(`SELECT * FROM dining_kots WHERE ${getHotelFilter(req)} ORDER BY created_at DESC`);
-    res.json({ status: 'success', data: result.rows });
-  } catch (err) { res.status(500).json({ error: 'Failed to fetch KOTs' }); }
-});
-
-app.post('/api/dining/kots', verifyToken, requireDining, async (req, res) => {
-  const { table, items, type } = req.body;
-  try {
-    const result = await pool.query('INSERT INTO dining_kots (table_number, items, type, hotel_id) VALUES ($1, $2, $3, $4) RETURNING *', [table, items, type || 'Dine-in', req.user.hotelId]);
-    res.status(201).json({ status: 'success', data: result.rows[0] });
-  } catch (err) { res.status(500).json({ error: 'Failed to create KOT' }); }
-});
-
-app.get('/api/dining/tables', verifyToken, requireDining, async (req, res) => {
-  try {
-    const result = await pool.query(`SELECT * FROM dining_tables WHERE ${getHotelFilter(req)} ORDER BY id ASC`);
-    res.json({ status: 'success', data: result.rows });
-  } catch (err) { res.status(500).json({ error: 'Failed to fetch tables' }); }
-});
-
-app.get('/api/dining/menu', verifyToken, requireDining, async (req, res) => {
-  try {
-    const result = await pool.query(`SELECT * FROM dining_menu WHERE ${getHotelFilter(req)} ORDER BY orders DESC`);
-    res.json({ status: 'success', data: result.rows });
-  } catch (err) { res.status(500).json({ error: 'Failed to fetch menu' }); }
-});
-
-app.get('/api/dining/overview', verifyToken, requireDining, async (req, res) => {
-  try {
-    const activeKotsRes = await pool.query(`SELECT COUNT(*) FROM dining_kots WHERE status != 'Served' AND ${getHotelFilter(req)}`);
-    const occupiedTablesRes = await pool.query(`SELECT COUNT(*) FROM dining_tables WHERE status = 'Occupied' AND ${getHotelFilter(req)}`);
-    const totalTablesRes = await pool.query(`SELECT COUNT(*) FROM dining_tables WHERE ${getHotelFilter(req)}`);
-
-    const activeKots = parseInt(activeKotsRes.rows[0].count);
-    const occupiedTables = parseInt(occupiedTablesRes.rows[0].count);
-    const totalTables = parseInt(totalTablesRes.rows[0].count);
-
-    res.json({
-      status: 'success',
-      data: {
-        metrics: [
-          { label: "Today's Revenue", value: "₹42,500", sub: "Rooms & Walk-ins", iconName: 'Receipt', theme: '#D4A373' },
-          { label: "Active KOTs", value: activeKots.toString(), sub: "Orders preparing in kitchen", iconName: 'Flame', theme: 'rose' },
-          { label: "Avg Prep Time", value: "18m", sub: "-2m compared to yesterday", iconName: 'Clock', theme: '#D4A373' },
-          { label: "Tables Occupied", value: `${occupiedTables}/${totalTables}`, sub: `${Math.round((occupiedTables / totalTables) * 100 || 0)}% current seating capacity`, iconName: 'Users', theme: 'indigo' },
-        ],
-        orderTrend: [
-          { label: 'Mon', value: 84 }, { label: 'Tue', value: 92 }, { label: 'Wed', value: 110 },
-          { label: 'Thu', value: 105 }, { label: 'Fri', value: 135 }, { label: 'Sat', value: 156 },
-          { label: 'Today', value: 88, isToday: true },
-        ],
-        salesSplit: [
-          { label: 'In-Room Dining', value: 45, color: '#0ea5e9' },
-          { label: 'Restaurant Dine-in', value: 30, color: '#f59e0b' },
-          { label: 'Bar & Lounge', value: 13, color: '#ec4899' },
-        ]
-      }
-    });
-  } catch (err) { res.status(500).json({ error: 'Failed to fetch overview' }); }
-});
 
 // ==========================================
 // Sales ENDPOINTS
@@ -2227,6 +2160,264 @@ app.get('/api/sales/booking-modes', verifyToken, requireSales, async (req, res) 
     res.json({ status: 'success', data: result.rows });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch booking modes' });
+  }
+});
+
+// ==========================================
+// DINING ENDPOINTS
+// ==========================================
+const requireDining = requireRole(['DINING', 'RESTAURANT', 'ADMIN']);
+
+app.get('/api/dining/tables', verifyToken, requireDining, async (req, res) => {
+  try {
+    const result = await pool.query(`SELECT * FROM dining_tables WHERE ${getHotelFilter(req)} ORDER BY table_number ASC`);
+    res.json({ status: 'success', data: result.rows });
+  } catch (err) { res.status(500).json({ error: 'Failed to fetch tables' }); }
+});
+
+app.post('/api/dining/tables', verifyToken, requireDining, async (req, res) => {
+  const { number, capacity } = req.body;
+  try {
+    const result = await pool.query(
+      `INSERT INTO dining_tables (table_number, capacity, hotel_id) VALUES ($1, $2, $3) RETURNING *`,
+      [number, capacity || 4, req.user.hotelId]
+    );
+    res.json({ status: 'success', data: result.rows[0] });
+  } catch (err) { res.status(500).json({ error: 'Failed to add table' }); }
+});
+
+app.delete('/api/dining/tables/:id', verifyToken, requireDining, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM dining_tables WHERE id=$1 AND hotel_id=$2', [req.params.id, req.user.hotelId]);
+    res.json({ status: 'success' });
+  } catch (err) { res.status(500).json({ error: 'Failed to delete table' }); }
+});
+
+app.patch('/api/dining/tables/:id/status', verifyToken, requireDining, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `UPDATE dining_tables SET status=$1 WHERE id=$2 AND hotel_id=$3 RETURNING *`,
+      [req.body.status, req.params.id, req.user.hotelId]
+    );
+    res.json({ status: 'success', data: result.rows[0] });
+  } catch (err) { res.status(500).json({ error: 'Failed to update table status' }); }
+});
+
+app.get('/api/dining/menu', verifyToken, requireDining, async (req, res) => {
+  try {
+    const result = await pool.query(`SELECT * FROM dining_menu WHERE ${getHotelFilter(req)} ORDER BY category, item ASC`);
+    res.json({ status: 'success', data: result.rows });
+  } catch (err) { res.status(500).json({ error: 'Failed to fetch menu' }); }
+});
+
+app.post('/api/dining/menu', verifyToken, requireDining, async (req, res) => {
+  const { item, category, price, dietary, is_spicy, is_gluten_free, contains_nuts } = req.body;
+  try {
+    const result = await pool.query(
+      `INSERT INTO dining_menu (item, category, price, dietary, is_spicy, is_gluten_free, contains_nuts, hotel_id) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [item, category, price, dietary, is_spicy, is_gluten_free, contains_nuts, req.user.hotelId]
+    );
+    res.json({ status: 'success', data: result.rows[0] });
+  } catch (err) { res.status(500).json({ error: 'Failed to add menu item' }); }
+});
+
+app.patch('/api/dining/menu/:id', verifyToken, requireDining, async (req, res) => {
+  const { item, category, price, dietary, is_spicy, is_gluten_free, contains_nuts } = req.body;
+  try {
+    const result = await pool.query(
+      `UPDATE dining_menu SET item=$1, category=$2, price=$3, dietary=$4, is_spicy=$5, is_gluten_free=$6, contains_nuts=$7 WHERE id=$8 AND hotel_id=$9 RETURNING *`,
+      [item, category, price, dietary, is_spicy, is_gluten_free, contains_nuts, req.params.id, req.user.hotelId]
+    );
+    res.json({ status: 'success', data: result.rows[0] });
+  } catch (err) { res.status(500).json({ error: 'Failed to update menu item' }); }
+});
+
+app.delete('/api/dining/menu/:id', verifyToken, requireDining, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM dining_menu WHERE id=$1 AND hotel_id=$2', [req.params.id, req.user.hotelId]);
+    res.json({ status: 'success' });
+  } catch (err) { res.status(500).json({ error: 'Failed to delete menu item' }); }
+});
+
+app.get('/api/dining/kots', verifyToken, requireDining, async (req, res) => {
+  try {
+    const result = await pool.query(`SELECT * FROM dining_kots WHERE ${getHotelFilter(req)} ORDER BY created_at DESC LIMIT 50`);
+    res.json({ status: 'success', data: result.rows });
+  } catch (err) { res.status(500).json({ error: 'Failed to fetch KOTs' }); }
+});
+
+app.post('/api/dining/kots', verifyToken, requireDining, async (req, res) => {
+  const { table, items, type } = req.body;
+  try {
+    const result = await pool.query(
+      `INSERT INTO dining_kots (table_number, items, type, hotel_id) VALUES ($1, $2, $3, $4) RETURNING *`,
+      [table, items, type || 'Dine-in', req.user.hotelId]
+    );
+    res.json({ status: 'success', data: result.rows[0] });
+  } catch (err) { res.status(500).json({ error: 'Failed to create KOT' }); }
+});
+
+app.patch('/api/dining/kots/:id/status', verifyToken, requireDining, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `UPDATE dining_kots SET status=$1 WHERE id=$2 AND hotel_id=$3 RETURNING *`,
+      [req.body.status, req.params.id, req.user.hotelId]
+    );
+    res.json({ status: 'success', data: result.rows[0] });
+  } catch (err) { res.status(500).json({ error: 'Failed to update KOT status' }); }
+});
+
+app.get('/api/dining/overview', verifyToken, requireDining, async (req, res) => {
+  try {
+    const filter = getHotelFilter(req);
+    const activeKotsRes = await pool.query(`SELECT COUNT(*) FROM dining_kots WHERE status != 'Served' AND ${filter}`);
+    const occupiedTablesRes = await pool.query(`SELECT COUNT(*) FROM dining_tables WHERE status = 'Occupied' AND ${filter}`);
+    const totalTablesRes = await pool.query(`SELECT COUNT(*) FROM dining_tables WHERE ${filter}`);
+
+    // 1. Today's Revenue
+    const revRes = await pool.query(`SELECT SUM(total_amount) as rev FROM dining_billing_records WHERE ${filter} AND DATE(created_at) = CURRENT_DATE`);
+    const revenueToday = parseFloat(revRes.rows[0].rev || 0);
+
+    // 2. Avg Prep Time (for Active KOTs)
+    const prepRes = await pool.query(`SELECT AVG(EXTRACT(EPOCH FROM (NOW() - created_at)))/60 as avg_prep FROM dining_kots WHERE status != 'Served' AND ${filter}`);
+    const avgPrep = Math.round(parseFloat(prepRes.rows[0].avg_prep || 0));
+
+    // 3. Order Trend (Last 7 days)
+    const trendRes = await pool.query(`
+      SELECT TO_CHAR(DATE(created_at), 'Dy') as label, COUNT(*) as value, DATE(created_at) = CURRENT_DATE as "isToday"
+      FROM dining_kots
+      WHERE ${filter} AND created_at >= CURRENT_DATE - INTERVAL '6 days'
+      GROUP BY DATE(created_at)
+      ORDER BY DATE(created_at) ASC
+    `);
+    const orderTrend = trendRes.rows;
+    if (orderTrend.length === 0) {
+      orderTrend.push({ label: 'Today', value: 0, isToday: true });
+    }
+
+    // 4. Sales Split by Outlet (based on KOT type)
+    const splitRes = await pool.query(`
+      SELECT type, COUNT(*) as count 
+      FROM dining_kots 
+      WHERE ${filter}
+      GROUP BY type
+    `);
+    const totalOrders = splitRes.rows.reduce((sum, r) => sum + parseInt(r.count), 0);
+    const salesSplit = splitRes.rows.map(r => {
+      const p = totalOrders > 0 ? Math.round((parseInt(r.count) / totalOrders) * 100) : 0;
+      let color = '#f59e0b';
+      let label = 'Restaurant Dine-in';
+      if (r.type === 'Room Service') { color = '#0ea5e9'; label = 'In-Room Dining'; }
+      if (r.type === 'Bar') { color = '#ec4899'; label = 'Bar & Lounge'; }
+      return { label, value: p, color };
+    });
+
+    const activeKots = parseInt(activeKotsRes.rows[0].count);
+    const occupiedTables = parseInt(occupiedTablesRes.rows[0].count);
+    const totalTables = parseInt(totalTablesRes.rows[0].count);
+
+    res.json({
+      status: 'success',
+      data: {
+        metrics: [
+          { label: "Today's Revenue", value: `₹${revenueToday.toLocaleString()}`, sub: "Rooms & Walk-ins", iconName: 'Receipt', theme: '#D4A373' },
+          { label: "Active KOTs", value: activeKots.toString(), sub: "Orders preparing in kitchen", iconName: 'Flame', theme: 'rose' },
+          { label: "Avg Prep Time", value: `${avgPrep}m`, sub: "For active orders", iconName: 'Clock', theme: '#D4A373' },
+          { label: "Tables Occupied", value: `${occupiedTables}/${totalTables}`, sub: `${Math.round((occupiedTables / totalTables) * 100 || 0)}% current seating capacity`, iconName: 'Users', theme: 'indigo' },
+        ],
+        orderTrend,
+        salesSplit
+      }
+    });
+  } catch (err) { res.status(500).json({ error: 'Failed to fetch overview' }); }
+});
+
+app.get('/api/dining/inventory', verifyToken, requireDining, async (req, res) => {
+  try {
+    const filter = getHotelFilter(req);
+    const itemsRes = await pool.query(`SELECT * FROM dining_inventory_items WHERE ${filter} ORDER BY name ASC`);
+    const procurementRes = await pool.query(`SELECT * FROM dining_procurement_logs WHERE ${filter} ORDER BY date DESC`);
+    const wastageRes = await pool.query(`SELECT * FROM dining_wastage_logs WHERE ${filter} ORDER BY date DESC`);
+
+    const revenueRes = await pool.query(`SELECT SUM(total_amount) as rev FROM dining_billing_records WHERE ${filter} AND DATE(created_at) = CURRENT_DATE`);
+    const revenueToday = parseFloat(revenueRes.rows[0].rev || 0);
+
+    const spendRes = await pool.query(`SELECT SUM(amount) as spend FROM dining_procurement_logs WHERE ${filter} AND date = CURRENT_DATE`);
+    const procurementSpendToday = parseFloat(spendRes.rows[0].spend || 0);
+
+    const utilizedRes = await pool.query(`SELECT SUM((par_level - stock) * unit_cost) as util FROM dining_inventory_items WHERE ${filter}`);
+    const utilizedValueToday = parseFloat(utilizedRes.rows[0].util || 0);
+
+    const spendCatRes = await pool.query(`
+      SELECT category, SUM(amount) as total 
+      FROM dining_procurement_logs 
+      WHERE ${filter} 
+      GROUP BY category
+    `);
+    const colors = ['#f43f5e', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
+    const spendCategories = spendCatRes.rows.map((r, i) => ({
+      label: r.category,
+      value: parseFloat(r.total),
+      color: colors[i % colors.length]
+    }));
+
+    res.json({
+      status: 'success',
+      data: {
+        items: itemsRes.rows,
+        procurement: procurementRes.rows,
+        wastage: wastageRes.rows,
+        stats: {
+          revenueToday,
+          procurementSpendToday,
+          utilizedValueToday,
+          grossProfitToday: revenueToday - procurementSpendToday,
+          spendCategories
+        }
+      }
+    });
+  } catch (err) { res.status(500).json({ error: 'Failed to fetch inventory' }); }
+});
+
+app.get('/api/dining/in-house-guests', verifyToken, requireDining, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT b.id as booking_id, g.name as guest_name, r.room_number
+      FROM bookings b
+      JOIN guests g ON b.guest_id = g.id
+      JOIN rooms r ON b.room_id = r.id
+      WHERE b.status = 'CHECKED_IN' AND ${getHotelFilter(req, 'b')}
+      ORDER BY r.room_number ASC
+    `);
+    res.json({ status: 'success', data: result.rows });
+  } catch (err) { res.status(500).json({ error: 'Failed to fetch guests' }); }
+});
+
+app.post('/api/dining/settle-bill', verifyToken, requireDining, async (req, res) => {
+  const { table_number, payment_method, is_room_charge, booking_id, total_amount, room_number } = req.body;
+  try {
+    await pool.query('BEGIN');
+
+    const billRes = await pool.query(
+      `INSERT INTO dining_billing_records (hotel_id, table_number, total_amount, payment_method, is_room_charge, booking_id, room_number)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [req.user.hotelId, table_number, total_amount, payment_method, is_room_charge, booking_id || null, room_number]
+    );
+
+    if (is_room_charge && booking_id) {
+      await pool.query(
+        `INSERT INTO ledger_transactions (booking_id, amount, transaction_type, status)
+         VALUES ($1, $2, $3, $4)`,
+        [booking_id, total_amount, 'Dining Charge', 'Pending']
+      );
+    }
+
+    await pool.query('COMMIT');
+    res.json({ status: 'success', data: billRes.rows[0] });
+  } catch (err) {
+    await pool.query('ROLLBACK');
+    res.status(500).json({ error: 'Failed to settle bill' });
   }
 });
 

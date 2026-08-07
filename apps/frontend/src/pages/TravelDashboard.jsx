@@ -397,7 +397,7 @@ export default function TravelDashboard() {
     ...(accessLevel === 'MANAGER' ? [{
       heading: 'Managerial',
       items: [
-        { key: 'overview', label: 'Operations', icon: <Building2 size={15} /> },
+
         { key: 'hr_hub', label: 'HR Hub', icon: <Users size={15} /> }
       ]
     }] : []),

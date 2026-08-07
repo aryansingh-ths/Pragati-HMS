@@ -509,16 +509,13 @@ export default function SalesExecutiveDashboard() {
         ],
       }
     ] : []),
-    ...(accessLevel === 'MANAGER' ? [{
-      heading: 'Managerial',
-      items: [
-        { key: 'overview', label: 'Operations', icon: <Building2 size={15} /> },
-        { key: 'hr_hub', label: 'HR Hub', icon: <Users size={15} /> }
-      ]
-    }] : []),
     {
-      heading: 'Company',
+      heading: '',
       items: [
+        ...(accessLevel === 'MANAGER' ? [
+
+          { key: 'hr_hub', label: 'HR Hub', icon: <Users size={15} /> }
+        ] : []),
         { key: 'directory', label: 'Info Directory', icon: <Users size={15} /> }
       ]
     }
@@ -563,9 +560,9 @@ export default function SalesExecutiveDashboard() {
         </div>
 
         <div className="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto pr-1 justify-start">
-          {navGroups.map(group => (
-            <div key={group.heading}>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">{group.heading}</p>
+          {navGroups.map((group, index) => (
+            <div key={group.heading || `group-${index}`}>
+              {group.heading && <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">{group.heading}</p>}
               <div className="flex flex-col gap-1">
                 {group.items.map(item => (
                   <button

@@ -1219,12 +1219,7 @@ export default function AdminDashboard() {
         .fd-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(113, 113, 122, 0.65); }
 
         .fd-sidebar-scroll { scrollbar-width: none; }
-        .fd-sidebar-scroll:hover { scrollbar-width: thin; scrollbar-color: rgba(161,161,170,0.4) transparent; }
-        .fd-sidebar-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
-        .fd-sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
-        .fd-sidebar-scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 999px; transition: background 0.3s; }
-        .fd-sidebar-scroll:hover::-webkit-scrollbar-thumb { background: rgba(161, 161, 170, 0.45); }
-        .fd-sidebar-scroll:hover::-webkit-scrollbar-thumb:hover { background: rgba(113, 113, 122, 0.65); }
+        .fd-sidebar-scroll::-webkit-scrollbar { display: none; }
 
         .fd-app-bg {
           background: #F8F1E3 !important;
@@ -2689,8 +2684,8 @@ export default function AdminDashboard() {
                               type="button"
                               onClick={() => setNotifSendMode('group')}
                               className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${notifSendMode === 'group'
-                                  ? 'bg-white text-zinc-900 shadow-sm'
-                                  : 'text-zinc-400 hover:text-zinc-600'
+                                ? 'bg-white text-zinc-900 shadow-sm'
+                                : 'text-zinc-400 hover:text-zinc-600'
                                 }`}
                             >
                               📢 Broadcast to Group
@@ -2699,8 +2694,8 @@ export default function AdminDashboard() {
                               type="button"
                               onClick={() => setNotifSendMode('individual')}
                               className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${notifSendMode === 'individual'
-                                  ? 'bg-white text-violet-700 shadow-sm'
-                                  : 'text-zinc-400 hover:text-zinc-600'
+                                ? 'bg-white text-violet-700 shadow-sm'
+                                : 'text-zinc-400 hover:text-zinc-600'
                                 }`}
                             >
                               @ Send to Individual

@@ -189,48 +189,6 @@ function CountUp({ value, className, suffix = '' }) {
 }
 
 // ─── Small helper: pointer-tilt wrapper for KPI cards ───────
-function TiltCard({ children, className, onClick, glowHex = '#14b8a6', style }) {
-  const rx = useMotionValue(0);
-  const ry = useMotionValue(0);
-  const springRx = useSpring(rx, { stiffness: 220, damping: 18 });
-  const springRy = useSpring(ry, { stiffness: 220, damping: 18 });
-  const mx = useMotionValue(50);
-  const my = useMotionValue(50);
-
-  const handleMove = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const px = (e.clientX - rect.left) / rect.width;
-    const py = (e.clientY - rect.top) / rect.height;
-    ry.set((px - 0.5) * 12);
-    rx.set((0.5 - py) * 12);
-    mx.set(px * 100);
-    my.set(py * 100);
-  };
-  const handleLeave = () => { rx.set(0); ry.set(0); };
-
-  return (
-    <motion.div
-      onMouseMove={handleMove}
-      onMouseLeave={handleLeave}
-      onClick={onClick}
-      whileHover={{ y: -6, scale: 1.02 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-      style={{ rotateX: springRx, rotateY: springRy, transformPerspective: 900, ...style }}
-      className={className}
-    >
-      <motion.div
-        className="fd-tilt-sheen"
-        style={{
-          background: useTransform(
-            [mx, my],
-            ([x, y]) => `radial-gradient(220px circle at ${x}% ${y}%, ${glowHex}2b, transparent 65%)`
-          )
-        }}
-      />
-      {children}
-    </motion.div>
-  );
-}
 
 // ─── Small helper: ripple button (motion-enabled, matches Front Desk) ──
 function RippleButton({ onClick, className, children, disabled, type = 'button', ...rest }) {
@@ -904,112 +862,125 @@ export default function HousekeepingDashboard() {
         {viewMode === 'kanban' && (
           <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {/* Card 1: Needs Cleaning */}
-          <TiltCard
-            onClick={() => setActiveFilter('dirty')}
-            glowHex="#f43f5e"
-            className={`fd-kpi-tilt rounded-[2rem] p-6 flex flex-col justify-between relative overflow-hidden h-36 select-none cursor-pointer ${activeFilter === 'dirty'
-              ? 'fd-dealdeck-focus-card text-white bg-gradient-to-br from-[#D4A373] to-[#B3835B]'
-              : 'fd-dealdeck-card text-zinc-900 bg-white'
-              }`}
-          >
-            <div className={`fd-kpi-blob ${activeFilter === 'dirty' ? 'bg-white/30' : 'bg-rose-500/10'}`} />
-            <div className="flex items-start justify-between relative z-10">
-              <div>
-                <p className={`text-[10px] font-bold uppercase tracking-wider ${activeFilter === 'dirty' ? 'text-white/80' : 'text-zinc-400'
-                  }`}>Needs Cleaning</p>
-                <h3 className="text-3xl font-black mt-1 leading-none"><CountUp value={stats.dirty} /></h3>
-              </div>
-              <motion.span
-                animate={stats.dirty > 0 && activeFilter !== 'dirty' ? { scale: [1, 1.08, 1] } : {}}
-                transition={{ duration: 1.6, repeat: Infinity }}
-                className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'dirty' ? 'bg-white/20 text-white' : 'bg-amber-50 text-[#D4A373] border border-rose-100'
-                  }`}>
-                <Droplets size={10} /> Dirty
-              </motion.span>
-            </div>
-            <p className={`relative z-10 text-[10px] mt-auto ${activeFilter === 'dirty' ? 'text-white/60' : 'text-zinc-400'
-              }`}>Rooms requiring housekeeping attention</p>
-          </TiltCard>
+            {(() => {
+              const kpiGraphic = (i, color, pct = null) => {
+                return (
+                  <div className="relative flex items-center justify-center shrink-0 ml-2 sm:ml-4">
+                    <svg className="w-12 h-12 sm:w-14 sm:h-14 rotate-[-90deg]">
+                      <circle cx="50%" cy="50%" r="20" fill="none" stroke={`${color}22`} strokeWidth="4" />
+                      <motion.circle cx="50%" cy="50%" r="20" fill="none" strokeWidth="4.5" stroke={color}
+                        strokeDasharray={2 * Math.PI * 20}
+                        initial={{ strokeDashoffset: 2 * Math.PI * 20 }}
+                        animate={{ strokeDashoffset: pct !== null ? (2 * Math.PI * 20) * (1 - pct) : (2 * Math.PI * 20) * 0.28 }}
+                        transition={{ duration: 1.3, ease: 'easeOut' }}
+                        strokeLinecap="round" />
+                    </svg>
+                    {pct !== null && <span className="absolute text-[9px] font-black" style={{ color }}>{Math.round(pct * 100)}%</span>}
+                  </div>
+                );
+              };
 
-          {/* Card 2: In Progress */}
-          <TiltCard
-            onClick={() => setActiveFilter('cleaning')}
-            glowHex="#f59e0b"
-            className={`fd-kpi-tilt rounded-[2rem] p-6 flex flex-col justify-between relative overflow-hidden h-36 select-none cursor-pointer ${activeFilter === 'cleaning'
-              ? 'fd-dealdeck-focus-card text-white bg-gradient-to-br from-[#D4A373] to-[#B3835B]'
-              : 'fd-dealdeck-card text-zinc-900 bg-white'
-              }`}
-          >
-            <div className={`fd-kpi-blob ${activeFilter === 'cleaning' ? 'bg-white/30' : 'bg-amber-500/10'}`} />
-            <div className="flex items-start justify-between relative z-10">
-              <div>
-                <p className={`text-[10px] font-bold uppercase tracking-wider ${activeFilter === 'cleaning' ? 'text-white/80' : 'text-zinc-400'
-                  }`}>In Progress</p>
-                <h3 className="text-3xl font-black mt-1 leading-none"><CountUp value={stats.cleaning} /></h3>
-              </div>
-              <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'cleaning' ? 'bg-white/20 text-white' : 'bg-amber-50 text-[#D4A373] border border-amber-100'
-                }`}>
-                <motion.span animate={{ rotate: 360 }} transition={{ duration: 3, repeat: Infinity, ease: 'linear' }} className="inline-flex">
-                  <Sparkles size={10} />
-                </motion.span>
-                Cleaning
-              </span>
-            </div>
-            <p className={`relative z-10 text-[10px] mt-auto ${activeFilter === 'cleaning' ? 'text-white/60' : 'text-zinc-400'
-              }`}>Rooms currently being cleaned</p>
-          </TiltCard>
+              const hkKpis = [
+                {
+                  filter: 'dirty',
+                  label: 'Needs Cleaning',
+                  value: <CountUp value={stats.dirty} />,
+                  sub: 'Rooms requiring housekeeping',
+                  icon: <Droplets size={16} />,
+                  gradient: 'from-rose-50 via-white to-white',
+                  ring: 'ring-rose-500/10',
+                  activeRing: 'ring-rose-500',
+                  glow: 'rgba(244,63,94,0.35)',
+                  iconBg: 'bg-[#F43F5E] text-white shadow-lg shadow-[#F43F5E]/30',
+                  graphic: kpiGraphic(0, '#f43f5e', stats.total > 0 ? stats.dirty / stats.total : 0)
+                },
+                {
+                  filter: 'cleaning',
+                  label: 'In Progress',
+                  value: <CountUp value={stats.cleaning} />,
+                  sub: 'Rooms currently being cleaned',
+                  icon: <Sparkles size={16} />,
+                  gradient: 'from-amber-50 via-white to-white',
+                  ring: 'ring-amber-500/10',
+                  activeRing: 'ring-amber-500',
+                  glow: 'rgba(245,158,11,0.35)',
+                  iconBg: 'bg-[#F59E0B] text-white shadow-lg shadow-[#F59E0B]/30',
+                  graphic: kpiGraphic(1, '#f59e0b', stats.total > 0 ? stats.cleaning / stats.total : 0)
+                },
+                {
+                  filter: 'inspecting',
+                  label: 'Awaiting Inspection',
+                  value: <CountUp value={stats.inspecting} />,
+                  sub: 'Waiting for supervisor approval',
+                  icon: <Eye size={16} />,
+                  gradient: 'from-blue-50 via-white to-white',
+                  ring: 'ring-blue-500/10',
+                  activeRing: 'ring-blue-500',
+                  glow: 'rgba(59,130,246,0.35)',
+                  iconBg: 'bg-[#3B82F6] text-white shadow-lg shadow-[#3B82F6]/30',
+                  graphic: kpiGraphic(2, '#3b82f6', stats.total > 0 ? stats.inspecting / stats.total : 0)
+                },
+                {
+                  filter: 'all',
+                  label: 'Clean & Available',
+                  value: <CountUp value={stats.available} />,
+                  sub: 'Vacant and fully cleaned rooms',
+                  icon: <CheckCircle2 size={16} />,
+                  gradient: 'from-emerald-50 via-white to-white',
+                  ring: 'ring-emerald-500/10',
+                  activeRing: 'ring-emerald-500',
+                  glow: 'rgba(16,185,129,0.35)',
+                  iconBg: 'bg-[#10B981] text-white shadow-lg shadow-[#10B981]/30',
+                  graphic: kpiGraphic(3, '#10b981', stats.total > 0 ? stats.available / stats.total : 0)
+                }
+              ];
 
-          {/* Card 3: Awaiting Inspection */}
-          <TiltCard
-            onClick={() => setActiveFilter('inspecting')}
-            glowHex="#3b82f6"
-            className={`fd-kpi-tilt rounded-[2rem] p-6 flex flex-col justify-between relative overflow-hidden h-36 select-none cursor-pointer ${activeFilter === 'inspecting'
-              ? 'fd-dealdeck-focus-card text-white bg-gradient-to-br from-[#D4A373] to-[#B3835B]'
-              : 'fd-dealdeck-card text-zinc-900 bg-white'
-              }`}
-          >
-            <div className={`fd-kpi-blob ${activeFilter === 'inspecting' ? 'bg-white/30' : 'bg-blue-500/10'}`} />
-            <div className="flex items-start justify-between relative z-10">
-              <div>
-                <p className={`text-[10px] font-bold uppercase tracking-wider ${activeFilter === 'inspecting' ? 'text-white/80' : 'text-zinc-400'
-                  }`}>Awaiting Inspection</p>
-                <h3 className="text-3xl font-black mt-1 leading-none"><CountUp value={stats.inspecting} /></h3>
-              </div>
-              <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'inspecting' ? 'bg-white/20 text-white' : 'bg-amber-50 text-[#D4A373] border border-blue-100'
-                }`}>
-                <Eye size={10} /> Inspecting
-              </span>
-            </div>
-            <p className={`relative z-10 text-[10px] mt-auto ${activeFilter === 'inspecting' ? 'text-white/60' : 'text-zinc-400'
-              }`}>Rooms waiting for supervisor approval</p>
-          </TiltCard>
-
-          {/* Card 4: Clean & Available */}
-          <TiltCard
-            onClick={() => setActiveFilter('all')}
-            glowHex="#10b981"
-            className={`fd-kpi-tilt rounded-[2rem] p-6 flex flex-col justify-between relative overflow-hidden h-36 select-none cursor-pointer ${activeFilter === 'all'
-              ? 'fd-dealdeck-focus-card text-white bg-gradient-to-br from-[#D4A373] to-[#B3835B]'
-              : 'fd-dealdeck-card text-zinc-900 bg-white'
-              }`}
-          >
-            <div className={`fd-kpi-blob ${activeFilter === 'all' ? 'bg-white/30' : 'bg-emerald-500/10'}`} />
-            <div className="flex items-start justify-between relative z-10">
-              <div>
-                <p className={`text-[10px] font-bold uppercase tracking-wider ${activeFilter === 'all' ? 'text-white/80' : 'text-zinc-400'
-                  }`}>Clean & Available</p>
-                <h3 className="text-3xl font-black mt-1 leading-none"><CountUp value={stats.available} /></h3>
-              </div>
-              <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'all' ? 'bg-white/20 text-white' : 'bg-amber-50 text-[#D4A373] border border-emerald-100'
-                }`}>
-                <CheckCircle2 size={10} /> Ready
-              </span>
-            </div>
-            <p className={`relative z-10 text-[10px] mt-auto ${activeFilter === 'all' ? 'text-white/60' : 'text-zinc-400'
-              }`}>Vacant and fully cleaned rooms</p>
-          </TiltCard>
-        </div>
+              return hkKpis.map((kpi, i) => {
+                const isActive = activeFilter === kpi.filter;
+                return (
+                  <motion.div
+                    key={i}
+                    onClick={() => setActiveFilter(kpi.filter)}
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.08, type: 'spring', stiffness: 200, damping: 20 }}
+                    whileHover={{ y: -8, scale: 1.02 }}
+                    style={{ '--kpi-glow': kpi.glow }}
+                    className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between border border-zinc-200/70 bg-gradient-to-br ${kpi.gradient} shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_24px_-16px_rgba(0,0,0,0.15)] transition-shadow duration-500 hover:shadow-[0_20px_45px_-18px_var(--kpi-glow)] cursor-pointer ring-inset ${isActive ? `ring-2 ${kpi.activeRing}` : `ring-1 ${kpi.ring}`}`}
+                  >
+                    {/* decorative glow blob */}
+                    <div
+                      className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
+                      style={{ background: kpi.glow }}
+                    />
+                    
+                    <div className="relative flex-1 min-w-0">
+                      <div className="flex items-start justify-between mb-4">
+                        <motion.div
+                          whileHover={{ rotate: -8, scale: 1.1 }}
+                          transition={{ type: 'spring', stiffness: 400, damping: 14 }}
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${kpi.iconBg}`}
+                        >
+                          {kpi.icon}
+                        </motion.div>
+                      </div>
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: i * 0.08 + 0.2 }}
+                        className="text-3xl font-black text-zinc-900 tracking-tight leading-none mb-1.5"
+                      >
+                        {kpi.value}
+                      </motion.div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 leading-none">{kpi.label}</p>
+                      <p className="text-[10px] text-zinc-400 mt-1">{kpi.sub}</p>
+                    </div>
+                    {kpi.graphic && <div className="relative shrink-0">{kpi.graphic}</div>}
+                  </motion.div>
+                );
+              });
+            })()}
+          </div>
 
         {/* DIRECT MAINTENANCE QUICK PANEL — shimmering gradient border, matches Front Desk's Walk-In panel */}
         <motion.div

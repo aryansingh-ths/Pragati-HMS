@@ -195,6 +195,68 @@ const FD_STYLES = `
   .fd-spin-slow { animation: fd-spin-slow 3s linear infinite; display: inline-block; }
 `;
 
+// =============================================
+// KPI GRAPHIC RENDERER
+// =============================================
+const kpiGraphic = (i, color, pct = null) => {
+  const kind = i % 4;
+  if (kind === 0) {
+    return (
+      <div className="relative flex items-center justify-center shrink-0 ml-2 sm:ml-4">
+        <svg className="w-12 h-12 sm:w-14 sm:h-14 rotate-[-90deg]">
+          <circle cx="50%" cy="50%" r="20" fill="none" stroke={`${color}22`} strokeWidth="4" />
+          <motion.circle cx="50%" cy="50%" r="20" fill="none" strokeWidth="4.5" stroke={color}
+            strokeDasharray={2 * Math.PI * 20}
+            initial={{ strokeDashoffset: 2 * Math.PI * 20 }}
+            animate={{ strokeDashoffset: pct !== null ? (2 * Math.PI * 20) * (1 - pct) : (2 * Math.PI * 20) * 0.28 }}
+            transition={{ duration: 1.3, ease: 'easeOut' }}
+            strokeLinecap="round" />
+        </svg>
+        {pct !== null && <span className="absolute text-[9px] font-black" style={{ color }}>{Math.round(pct * 100)}%</span>}
+      </div>
+    );
+  }
+  if (kind === 1) {
+    return (
+      <div className="shrink-0 ml-2 sm:ml-4 border rounded-xl bg-white p-1.5 shadow-sm" style={{ borderColor: `${color}33` }}>
+        <svg className="w-12 h-8 sm:w-16 sm:h-9 overflow-visible" viewBox="0 0 60 32">
+          <motion.path d="M0 22 Q8 6, 16 16 T32 3 T48 12 T60 8" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"
+            initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: 'easeOut' }} />
+          <motion.circle cx="60" cy="8" r="3" fill={color} initial={{ scale: 0 }} animate={{ scale: [0, 1.4, 1] }} transition={{ duration: 0.5, delay: 1.3 }} />
+        </svg>
+      </div>
+    );
+  }
+  if (kind === 2) {
+    return (
+      <div className="flex gap-1 sm:gap-1.5 h-6 sm:h-7 items-end shrink-0 ml-2 sm:ml-4 border rounded-xl bg-white px-2 py-1.5 shadow-sm" style={{ borderColor: `${color}33` }}>
+        {[...Array(5)].map((_, idx) => (
+          <motion.div key={idx} className="w-2 sm:w-2.5 rounded-t-md" style={{ background: idx < 3 ? color : '#e4e4e7' }}
+            initial={{ height: 0 }} animate={{ height: idx < 3 ? '16px' : '6px' }}
+            transition={{ duration: 0.6, delay: idx * 0.08, type: 'spring', stiffness: 200 }} />
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="shrink-0 ml-2 sm:ml-4 border rounded-xl bg-white p-1.5 shadow-sm" style={{ borderColor: `${color}33` }}>
+      <svg className="w-12 h-8 sm:w-16 sm:h-9 overflow-visible" viewBox="0 0 60 32">
+        <defs>
+          <linearGradient id={`kpiYieldFill-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <motion.path d="M0 25 L12 18 L24 22 L36 10 L48 14 L60 4 V32 H0 Z" fill={`url(#kpiYieldFill-${color.replace('#', '')})`}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1, delay: 0.2 }} />
+        <motion.path d="M0 25 L12 18 L24 22 L36 10 L48 14 L60 4" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"
+          initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: 'easeOut', delay: 0.2 }} />
+        <motion.circle cx="60" cy="4" r="3" fill={color} initial={{ scale: 0 }} animate={{ scale: [0, 1.4, 1] }} transition={{ duration: 0.5, delay: 1.5 }} />
+      </svg>
+    </div>
+  );
+};
+
 // ─── Animation Variants ────────────────────────────────────
 const gridContainerVariants = {
   hidden: { opacity: 0 },
@@ -1106,95 +1168,108 @@ export default function FrontDeskDashboard() {
         </motion.div>
 
         {viewMode !== 'hr_hub' && viewMode !== 'directory' && (<>
-        {/* 4 TOP KPI STATS CARD ROW — tilting glass cards */}
+        {/* 4 TOP KPI STATS CARD ROW */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {/* Card 1: Total Occupancy */}
-          <TiltCard
-            glowHex="#14b8a6"
-            onClick={() => { setViewMode('active'); setActiveFilter('all'); }}
-            className={`fd-kpi-tilt rounded-[2rem] p-6 flex flex-col justify-between relative overflow-hidden h-36 select-none ${activeFilter === 'all' && viewMode === 'active' ? 'fd-dealdeck-focus-card text-white' : 'fd-dealdeck-card text-zinc-900 bg-white'
-              }`}
-          >
-            <div className={`fd-kpi-blob ${activeFilter === 'all' && viewMode === 'active' ? 'bg-white/30' : 'bg-[#D4A373]/20'}`} />
-            <div className="relative flex items-start justify-between">
-              <div>
-                <p className={`text-[10px] font-bold uppercase tracking-wider ${activeFilter === 'all' && viewMode === 'active' ? 'text-white/80' : 'text-zinc-400'}`}>Total Occupancy</p>
-                <h3 className="text-3xl font-black mt-1 leading-none"><CountUp value={Math.round((inhouseCount / 20) * 100)} suffix="%" /></h3>
-              </div>
-              <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'all' && viewMode === 'active' ? 'bg-white/20 text-white' : 'bg-amber-50 text-[#D4A373]'
-                }`}>
-                <TrendingUp size={10} /> +2.08%
-              </span>
-            </div>
-            <p className={`relative text-[10px] mt-auto ${activeFilter === 'all' && viewMode === 'active' ? 'text-white/60' : 'text-zinc-400'}`}>Rooms occupied today ({inhouseCount} stays)</p>
-          </TiltCard>
+          {(() => {
+            const fdKpis = [
+              {
+                filter: 'all',
+                label: 'Total Occupancy',
+                value: <CountUp value={Math.round((inhouseCount / 20) * 100)} suffix="%" />,
+                sub: `Rooms occupied today (${inhouseCount} stays)`,
+                icon: <BedDouble size={16} />,
+                gradient: 'from-sky-50 via-white to-white',
+                ring: 'ring-sky-500/10',
+                activeRing: 'ring-sky-500',
+                glow: 'rgba(14,165,233,0.35)',
+                iconBg: 'bg-[#0EA5E9] text-white shadow-lg shadow-[#0EA5E9]/30',
+                graphic: kpiGraphic(0, '#0ea5e9')
+              },
+              {
+                filter: 'arrivals',
+                label: 'Arrivals Today',
+                value: <CountUp value={arrivalsCount} />,
+                sub: 'Scheduled check-ins',
+                icon: <LogIn size={16} />,
+                gradient: 'from-emerald-50 via-white to-white',
+                ring: 'ring-emerald-500/10',
+                activeRing: 'ring-emerald-500',
+                glow: 'rgba(16,185,129,0.35)',
+                iconBg: 'bg-[#10B981] text-white shadow-lg shadow-[#10B981]/30',
+                graphic: kpiGraphic(3, '#10b981')
+              },
+              {
+                filter: 'departures',
+                label: 'Departures Today',
+                value: <CountUp value={departuresCount} />,
+                sub: 'Scheduled check-outs',
+                icon: <LogOut size={16} />,
+                gradient: 'from-amber-50 via-white to-white',
+                ring: 'ring-amber-500/10',
+                activeRing: 'ring-amber-500',
+                glow: 'rgba(245,158,11,0.35)',
+                iconBg: 'bg-[#F59E0B] text-white shadow-lg shadow-[#F59E0B]/30',
+                graphic: kpiGraphic(3, '#f59e0b')
+              },
+              {
+                filter: 'pending_checkout',
+                label: 'Overstay Warnings',
+                value: <CountUp value={pendingCheckoutsCount} />,
+                sub: 'Past 11:00 AM limit',
+                icon: <AlertTriangle size={16} />,
+                gradient: 'from-rose-50 via-white to-white',
+                ring: 'ring-rose-500/10',
+                activeRing: 'ring-rose-500',
+                glow: 'rgba(244,63,94,0.35)',
+                iconBg: 'bg-[#F43F5E] text-white shadow-lg shadow-[#F43F5E]/30',
+                graphic: kpiGraphic(2, '#f43f5e')
+              }
+            ];
 
-          {/* Card 2: Arrivals Today */}
-          <TiltCard
-            glowHex="#10b981"
-            onClick={() => { setViewMode('active'); setActiveFilter('arrivals'); }}
-            className={`fd-kpi-tilt rounded-[2rem] p-6 flex flex-col justify-between relative overflow-hidden h-36 select-none ${activeFilter === 'arrivals' && viewMode === 'active' ? 'fd-dealdeck-focus-card text-white' : 'fd-dealdeck-card text-zinc-900 bg-white'
-              }`}
-          >
-            <div className={`fd-kpi-blob ${activeFilter === 'arrivals' && viewMode === 'active' ? 'bg-white/30' : 'bg-emerald-300/40'}`} />
-            <div className="relative flex items-start justify-between">
-              <div>
-                <p className={`text-[10px] font-bold uppercase tracking-wider ${activeFilter === 'arrivals' && viewMode === 'active' ? 'text-white/80' : 'text-zinc-400'}`}>Arrivals Today</p>
-                <h3 className="text-3xl font-black mt-1 leading-none"><CountUp value={arrivalsCount} /></h3>
-              </div>
-              <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'arrivals' && viewMode === 'active' ? 'bg-white/20 text-white' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                }`}>
-                <TrendingUp size={10} /> +12.4%
-              </span>
-            </div>
-            <p className={`relative text-[10px] mt-auto ${activeFilter === 'arrivals' && viewMode === 'active' ? 'text-white/60' : 'text-zinc-400'}`}>Scheduled check-ins for the day</p>
-          </TiltCard>
-
-          {/* Card 3: Departures Today */}
-          <TiltCard
-            glowHex="#f59e0b"
-            onClick={() => { setViewMode('active'); setActiveFilter('departures'); }}
-            className={`fd-kpi-tilt rounded-[2rem] p-6 flex flex-col justify-between relative overflow-hidden h-36 select-none ${activeFilter === 'departures' && viewMode === 'active' ? 'fd-dealdeck-focus-card text-white' : 'fd-dealdeck-card text-zinc-900 bg-white'
-              }`}
-          >
-            <div className={`fd-kpi-blob ${activeFilter === 'departures' && viewMode === 'active' ? 'bg-white/30' : 'bg-amber-300/40'}`} />
-            <div className="relative flex items-start justify-between">
-              <div>
-                <p className={`text-[10px] font-bold uppercase tracking-wider ${activeFilter === 'departures' && viewMode === 'active' ? 'text-white/80' : 'text-zinc-400'}`}>Departures Today</p>
-                <h3 className="text-3xl font-black mt-1 leading-none"><CountUp value={departuresCount} /></h3>
-              </div>
-              <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'departures' && viewMode === 'active' ? 'bg-white/20 text-white' : 'bg-amber-50 text-amber-700 border border-amber-100'
-                }`}>
-                Balanced
-              </span>
-            </div>
-            <p className={`relative text-[10px] mt-auto ${activeFilter === 'departures' && viewMode === 'active' ? 'text-white/60' : 'text-zinc-400'}`}>Scheduled room check-outs</p>
-          </TiltCard>
-
-          {/* Card 4: Overstay Warnings */}
-          <TiltCard
-            glowHex="#fb7185"
-            onClick={() => { setViewMode('active'); setActiveFilter('pending_checkout'); }}
-            className={`fd-kpi-tilt rounded-[2rem] p-6 flex flex-col justify-between relative overflow-hidden h-36 select-none ${activeFilter === 'pending_checkout' && viewMode === 'active' ? 'fd-dealdeck-focus-card text-white' : 'fd-dealdeck-card text-zinc-900 bg-white'
-              }`}
-          >
-            <div className={`fd-kpi-blob ${activeFilter === 'pending_checkout' && viewMode === 'active' ? 'bg-white/30' : 'bg-rose-300/40'}`} />
-            <div className="relative flex items-start justify-between">
-              <div>
-                <p className={`text-[10px] font-bold uppercase tracking-wider ${activeFilter === 'pending_checkout' && viewMode === 'active' ? 'text-white/80' : 'text-zinc-400'}`}>Overstay Warnings</p>
-                <h3 className="text-3xl font-black mt-1 leading-none"><CountUp value={pendingCheckoutsCount} /></h3>
-              </div>
-              <motion.span
-                animate={pendingCheckoutsCount > 0 && !(activeFilter === 'pending_checkout' && viewMode === 'active') ? { scale: [1, 1.08, 1] } : {}}
-                transition={{ duration: 1.4, repeat: Infinity }}
-                className={`px-2 py-0.5 rounded-md text-[9px] font-bold flex items-center gap-0.5 ${activeFilter === 'pending_checkout' && viewMode === 'active' ? 'bg-white/20 text-white' : (pendingCheckoutsCount > 0 ? 'bg-rose-50 text-rose-700 border border-rose-100' : 'bg-zinc-100 text-zinc-500')
-                  }`}
-              >
-                {pendingCheckoutsCount > 0 ? 'Action Needed' : 'All Clear'}
-              </motion.span>
-            </div>
-            <p className={`relative text-[10px] mt-auto ${activeFilter === 'pending_checkout' && viewMode === 'active' ? 'text-white/60' : 'text-zinc-400'}`}>Guests past 11:00 AM limit</p>
-          </TiltCard>
+            return fdKpis.map((kpi, i) => {
+              const isActive = activeFilter === kpi.filter && viewMode === 'active';
+              return (
+                <motion.div
+                  key={i}
+                  onClick={() => { setViewMode('active'); setActiveFilter(kpi.filter); }}
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.08, type: 'spring', stiffness: 200, damping: 20 }}
+                  whileHover={{ y: -8, scale: 1.02 }}
+                  style={{ '--kpi-glow': kpi.glow }}
+                  className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between border border-zinc-200/70 bg-gradient-to-br ${kpi.gradient} shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_24px_-16px_rgba(0,0,0,0.15)] transition-shadow duration-500 hover:shadow-[0_20px_45px_-18px_var(--kpi-glow)] cursor-pointer ${isActive ? `ring-2 ring-inset ${kpi.activeRing}` : `ring-1 ring-inset ${kpi.ring}`}`}
+                >
+                  {/* decorative glow blob */}
+                  <div
+                    className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
+                    style={{ background: kpi.glow }}
+                  />
+                  <div className="relative flex-1 min-w-0">
+                    <div className="flex items-start justify-between mb-4">
+                      <motion.div
+                        whileHover={{ rotate: -8, scale: 1.1 }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 14 }}
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${kpi.iconBg}`}
+                      >
+                        {kpi.icon}
+                      </motion.div>
+                    </div>
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: i * 0.08 + 0.2 }}
+                      className="text-3xl font-black text-zinc-900 tracking-tight leading-none mb-1.5"
+                    >
+                      {kpi.value}
+                    </motion.div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 leading-none">{kpi.label}</p>
+                    <p className="text-[10px] text-zinc-400 mt-1">{kpi.sub}</p>
+                  </div>
+                  <div className="relative shrink-0 ml-4">{kpi.graphic}</div>
+                </motion.div>
+              );
+            });
+          })()}
         </div>
 
         {/* WALK-IN BOOKING QUICK PANEL — light gradient, no black/purple */}
@@ -1596,6 +1671,73 @@ export default function FrontDeskDashboard() {
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {/* Inventory available rooms list (MOVED TO LEFT COLUMN) */}
+            <motion.div
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.28, duration: 0.4 }}
+              className="bg-white rounded-[2rem] p-6 shadow-[0px_18px_40px_rgba(56,189,248,0.08)] border border-zinc-100 flex flex-col gap-4"
+            >
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider flex items-center gap-2">
+                    <CheckCircle2 size={16} className="text-emerald-500" /> Room Inventory
+                  </h3>
+                  <p className="text-[10px] text-zinc-400 mt-0.5">Vacant rooms available for immediate check-in</p>
+                </div>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={async () => { await loadAvailableRooms(); setModalType('available_rooms'); }}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 text-xs font-bold transition-colors shadow-sm"
+                >
+                  View Details
+                </motion.button>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2.5 mt-3">
+                {roomTypeStats.length === 0 ? (
+                  <div className="col-span-full flex flex-col items-center justify-center p-6 bg-zinc-50/50 rounded-xl border-2 border-dashed border-zinc-200">
+                    <motion.div animate={{ rotate: [0, -10, 10, -10, 10, 0] }} transition={{ duration: 0.5, delay: 2, repeat: Infinity, repeatDelay: 5 }}>
+                      <BedDouble size={20} className="text-zinc-300 mb-1.5" />
+                    </motion.div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Inventory Exhausted</p>
+                    <p className="text-[9px] text-zinc-400 mt-0.5">No vacant rooms available for immediate check-in</p>
+                  </div>
+                ) : (
+                  roomTypeStats.map((stat, idx) => (
+                    <motion.div
+                      key={idx}
+                      onClick={async () => { await loadAvailableRooms(); setModalType('available_rooms'); }}
+                      whileHover={{ y: -2, scale: 1.03 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="relative overflow-hidden rounded-xl p-2.5 group cursor-pointer border bg-white shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between"
+                      style={{ borderColor: `${stat.color}30` }}
+                    >
+                      {/* Decorative colored glow blob */}
+                      <div className="absolute -top-6 -right-6 w-16 h-16 rounded-full blur-lg opacity-20 group-hover:opacity-40 transition-opacity duration-500 pointer-events-none" style={{ backgroundColor: stat.color }} />
+                      
+                      <div className="relative z-10 flex items-center justify-between gap-1 mb-1.5">
+                        <span className="text-[9px] font-black uppercase tracking-widest truncate" style={{ color: stat.color }}>
+                          {stat.name}
+                        </span>
+                        <BedDouble size={10} style={{ color: stat.color }} className="shrink-0 opacity-70" />
+                      </div>
+
+                      <div className="relative z-10 flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-zinc-500">Vacant</span>
+                        <div className="flex items-center gap-1.5 bg-white px-1.5 py-0.5 rounded shadow-xs" style={{ border: `1px solid ${stat.color}30` }}>
+                           <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: stat.color }} />
+                           <span className="text-sm font-black leading-none text-zinc-900">{stat.vacant}</span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+
           </div>
 
           {/* RIGHT SIDEBAR PANEL: CONCENTRIC ROOM CHART & DETAILS */}
@@ -1631,43 +1773,6 @@ export default function FrontDeskDashboard() {
                     <span className="font-bold text-zinc-900">{stat.occupied} / {stat.total}</span>
                   </div>
                 ))}
-              </div>
-            </motion.div>
-
-            {/* Inventory available rooms list */}
-            <motion.div
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.28, duration: 0.4 }}
-              className="bg-white rounded-[2rem] p-6 shadow-[0px_18px_40px_rgba(56,189,248,0.08)] border border-zinc-100 flex flex-col gap-4"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider flex items-center gap-2">
-                    <CheckCircle2 size={16} className="text-emerald-500" /> Room Inventory
-                  </h3>
-                  <p className="text-[10px] text-zinc-400 mt-0.5">Vacant rooms ready for walk-ins</p>
-                </div>
-                <motion.button
-                  whileHover={{ x: 2 }}
-                  onClick={async () => { await loadAvailableRooms(); setModalType('available_rooms'); }}
-                  className="text-[10px] font-bold text-[#D4A373] hover:text-[#B3835B]"
-                >
-                  View Details
-                </motion.button>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                {roomTypeStats.length === 0 ? (
-                  <span className="text-xs text-zinc-400 italic">No rooms available</span>
-                ) : (
-                  roomTypeStats.map((stat, idx) => (
-                    <div key={idx} className={`flex justify-between items-center py-2 px-3 rounded-xl border`} style={{ backgroundColor: `${stat.color}15`, borderColor: `${stat.color}30` }}>
-                      <span className="text-xs font-bold text-zinc-800">{stat.name} (Vacant)</span>
-                      <span className="text-xs font-bold text-zinc-500">{stat.vacant} Available</span>
-                    </div>
-                  ))
-                )}
               </div>
             </motion.div>
 
