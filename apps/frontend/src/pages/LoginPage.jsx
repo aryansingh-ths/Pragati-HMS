@@ -36,22 +36,22 @@ export default function LoginPage({ setUserRole, setAuthToken }) {
         sessionStorage.setItem('hms_access_level', user.access_level);
         const role = user.role ? user.role.toUpperCase() : 'EXECUTIVE';
         const accessLevel = user.access_level || role;
-        
+
         let department = user.department;
-        if (!department) department = [role];
+        if (!department || (Array.isArray(department) && department.length === 0)) department = [role];
         if (!Array.isArray(department)) department = [department];
 
         sessionStorage.setItem('hms_department', JSON.stringify(department));
         sessionStorage.setItem('hms_user', JSON.stringify(user));
-        
+
         let redirectPath = '/';
-        
+
         if (accessLevel === 'SUPER_ADMIN') {
           redirectPath = '/dashboard/super-admin';
         } else if (department.length > 1) {
           redirectPath = '/workspace-selector';
         } else {
-          const primaryDept = department[0];
+          const primaryDept = department[0] || '';
           if (accessLevel.includes('ADMIN') && primaryDept.includes('GLOBAL')) redirectPath = '/dashboard/Admin';
           else if (primaryDept.includes('FRONTDESK') || role.includes('FRONTDESK') || primaryDept.includes('FRONT_DESK') || role.includes('FRONT_DESK') || primaryDept.includes('RECEPTION') || role.includes('RECEPTION')) redirectPath = '/dashboard/front-desk';
           else if (primaryDept.includes('HOUSEKEEPING') || role.includes('HOUSEKEEPING')) redirectPath = '/dashboard/housekeeping';

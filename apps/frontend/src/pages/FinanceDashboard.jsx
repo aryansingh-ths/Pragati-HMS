@@ -937,7 +937,7 @@ export default function FinanceDashboard() {
     ...(accessLevel === 'MANAGER' ? [{
       heading: 'Managerial',
       items: [
-        { key: 'overview', label: 'Operations', icon: <Building2 size={15} /> },
+
         { key: 'hr_hub', label: 'HR Hub', icon: <Users size={15} /> }
       ]
     }] : []),
@@ -1043,16 +1043,6 @@ export default function FinanceDashboard() {
             </div>
           ))}
 
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Command Center</p>
-            <button
-              onClick={() => navigate('/dashboard/admin')}
-              className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-500 hover:bg-zinc-50 hover:text-[#D4A373] transition-all text-left"
-            >
-              <span className="flex items-center gap-3"><Building2 size={15} /> Back to Admin</span>
-              <ArrowUpRight size={14} className="opacity-50" />
-            </button>
-          </div>
         </div>
 
         <div className="rounded-2xl bg-gradient-to-br from-zinc-50 to-white border border-zinc-100 p-4 flex items-start gap-3">
