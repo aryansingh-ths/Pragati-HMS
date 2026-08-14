@@ -604,3 +604,25 @@ CREATE TABLE IF NOT EXISTS dining_billing_records (
 
 CREATE INDEX IF NOT EXISTS idx_dining_inventory_items_hotel_id ON dining_inventory_items(hotel_id);
 CREATE INDEX IF NOT EXISTS idx_dining_billing_records_hotel_id ON dining_billing_records(hotel_id);
+
+-- ==========================================
+-- SETUP & LICENSING (LOCAL HMS ONBOARDING)
+-- ==========================================
+
+-- 1. Hotel Global Settings (Phase 1 Setup)
+CREATE TABLE IF NOT EXISTS hotel_settings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_name VARCHAR(255) NOT NULL,
+    contact_number VARCHAR(100),
+    address TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. License Storage (Phase 4 Validation)
+CREATE TABLE IF NOT EXISTS licenses (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    jwt_token TEXT NOT NULL,
+    hardware_id VARCHAR(255) NOT NULL,
+    status VARCHAR(50) DEFAULT 'ACTIVE',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);

@@ -15,6 +15,10 @@ import Footer from './components/Footer';
 import RoomCard from './components/RoomCard';
 import BookingModal from './components/BookingModal';
 
+// Onboarding & Licensing
+import SetupWizard from './pages/SetupWizard';
+import SystemLocked from './pages/SystemLocked';
+
 // Authentication & Page Routes
 import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
@@ -29,6 +33,7 @@ import WorkspaceSelector from './pages/WorkspaceSelector';
 
 
 export default function App() {
+  const [systemStatus, setSystemStatus] = useState('loading'); // 'loading', 'setup_required', 'locked', 'active'
   const [viewMode, setViewMode] = useState('guest');
   const [roomClasses, setRoomClasses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -70,6 +75,20 @@ export default function App() {
     return false;
   };
 
+  useEffect(() => {
+    const initSystem = async () => {
+      try {
+        const res = await fetch('http://localhost:3000/api/setup/init');
+        const data = await res.json();
+        setSystemStatus(data.status);
+      } catch (err) {
+        console.error("System init error", err);
+        setSystemStatus('active'); // fallback
+      }
+    };
+    initSystem();
+  }, []);
+
   const fetchRoomClasses = async () => {
     setLoading(true);
     try {
@@ -86,6 +105,31 @@ export default function App() {
   useEffect(() => {
     fetchRoomClasses();
   }, []);
+
+  if (systemStatus === 'loading') {
+    return (
+       <div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center">
+         <div className="flex flex-col items-center">
+           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900 mb-4"></div>
+           <p className="text-slate-600 uppercase tracking-widest text-xs font-bold">Booting HMS...</p>
+         </div>
+       </div>
+    );
+  }
+
+  if (systemStatus === 'setup_required') {
+    return <SetupWizard onComplete={() => setSystemStatus('locked')} />;
+  }
+
+  if (systemStatus === 'locked') {
+    return <SystemLocked onUnlock={(token, user) => {
+       sessionStorage.setItem('hms_token', token);
+       sessionStorage.setItem('hms_role', user.role);
+       setAuthToken(token);
+       setUserRole(user.role);
+       setSystemStatus('active');
+    }} />;
+  }
 
   const scrollToSection = (id) => {
     setViewMode('guest');
