@@ -195,6 +195,7 @@ export default function DiningDashboard() {
 
   const [activeTab, setActiveTab] = useState(accessLevel === 'EXECUTIVE' ? 'kots' : 'overview');
   const [isLoading, setIsLoading] = useState(true);
+  const [expandedColumn, setExpandedColumn] = useState(null);
 
   // Filters & State connected to the DB
   const [orderSearch, setOrderSearch] = useState('');
@@ -705,7 +706,7 @@ export default function DiningDashboard() {
                           transition={{ delay: i * 0.08, type: 'spring', stiffness: 200, damping: 20 }}
                           whileHover={{ y: -8, scale: 1.02 }}
                           style={{ '--kpi-glow': t.glow }}
-                          className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between border border-zinc-200/70 bg-gradient-to-br ${t.gradient} shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_24px_-16px_rgba(0,0,0,0.15)] transition-shadow duration-500 hover:shadow-[0_20px_45px_-18px_var(--kpi-glow)] ring-1 ${t.ring}`}
+                          className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between gap-2 border border-zinc-200/70 bg-gradient-to-br ${t.gradient} shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_24px_-16px_rgba(0,0,0,0.15)] transition-shadow duration-500 hover:shadow-[0_20px_45px_-18px_var(--kpi-glow)] ring-1 ${t.ring}`}
                         >
                           {/* decorative glow blob */}
                           <div
@@ -726,7 +727,7 @@ export default function DiningDashboard() {
                               initial={{ opacity: 0 }}
                               animate={{ opacity: 1 }}
                               transition={{ delay: i * 0.08 + 0.2 }}
-                              className="text-3xl font-black text-zinc-900 tracking-tight leading-none mb-1.5"
+                              className="text-2xl 2xl:text-3xl font-black text-zinc-900 tracking-tight leading-none mb-1.5 break-words"
                             >
                               {kpi.value}
                             </motion.p>
@@ -821,7 +822,7 @@ export default function DiningDashboard() {
                   </div>
 
                   {/* Kanban Board */}
-                  <div className="flex-1 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 overflow-hidden pb-2">
+                  <div className="flex-1 flex flex-col xl:flex-row gap-4 overflow-x-hidden pb-2">
                     {['New', 'Preparing', 'Ready', 'Served'].map(status => {
                       const columnKOTs = activeKOTs.filter(k => k.status === status);
                       const colConfig = {
@@ -830,8 +831,18 @@ export default function DiningDashboard() {
                         'Ready': { color: '#10b981', gradient: 'from-emerald-500 to-teal-600', lightBg: 'bg-emerald-50/70', borderColor: 'border-emerald-200/60', icon: <CheckCircle2 size={14} />, nextLabel: 'Mark Served' },
                         'Served': { color: '#6b7280', gradient: 'from-zinc-400 to-zinc-500', lightBg: 'bg-zinc-50/70', borderColor: 'border-zinc-200/60', icon: <CheckCircle2 size={14} />, nextLabel: null },
                       }[status];
+                      
+                      let widthClass = 'w-full xl:w-1/4 xl:flex-1';
+                      if (expandedColumn) {
+                         if (expandedColumn === status) {
+                            widthClass = 'w-full xl:flex-[3] xl:min-w-[55%]';
+                         } else {
+                            widthClass = 'w-full xl:flex-1 xl:min-w-[12%] opacity-60 hover:opacity-100';
+                         }
+                      }
+                      
                       return (
-                        <div key={status} onClick={() => setExpandedColumn(status)} className={`flex flex-col rounded-[1.5rem] border ${colConfig.borderColor} ${colConfig.lightBg} overflow-hidden cursor-pointer hover:shadow-xl transition-all`}>
+                        <div key={status} onClick={() => setExpandedColumn(expandedColumn === status ? null : status)} className={`flex flex-col rounded-[1.5rem] border ${colConfig.borderColor} ${colConfig.lightBg} overflow-hidden cursor-pointer hover:shadow-xl transition-all duration-500 shrink-0 ${widthClass}`}>
                           {/* Column Header */}
                           <div className={`p-3.5 bg-gradient-to-r ${colConfig.gradient} flex items-center justify-between shrink-0`}>
                             <div className="flex items-center gap-2">
