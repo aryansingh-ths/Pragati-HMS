@@ -12,7 +12,10 @@ CREATE TYPE booking_status AS ENUM ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'CHECK
 CREATE TABLE hotels (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
-    address TEXT NOT NULL
+    address TEXT NOT NULL,
+    logo_url TEXT,
+    gst_no VARCHAR(100),
+    contact_no VARCHAR(100)
 );
 
 CREATE TABLE users (

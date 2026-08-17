@@ -22,7 +22,8 @@ const PORT = 3000;
 const JWT_SECRET = 'techkriti_grand_super_secret_key_2026';
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Logging middleware to track incoming requests
 app.use((req, res, next) => {
@@ -339,6 +340,28 @@ app.delete('/api/super-admin/hotels/:id', verifyToken, requireRole(['SUPER_ADMIN
   }
 });
 
+app.patch('/api/super-admin/hotels/:id/settings', verifyToken, requireRole(['SUPER_ADMIN']), async (req, res) => {
+  const { name, address, logo_url, gst_no, contact_no } = req.body;
+  try {
+    const result = await pool.query(
+      `UPDATE hotels 
+       SET name = COALESCE($1, name), 
+           address = COALESCE($2, address), 
+           logo_url = COALESCE($3, logo_url), 
+           gst_no = COALESCE($4, gst_no), 
+           contact_no = COALESCE($5, contact_no) 
+       WHERE id = $6 RETURNING *`,
+      [name, address, logo_url, gst_no, contact_no, req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Hotel not found' });
+    }
+    res.json({ status: 'success', data: { hotel: result.rows[0] } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update hotel settings' });
+  }
+});
 // Global Staff Directory (Accessible by any logged-in staff)
 app.get('/api/directory', verifyToken, async (req, res) => {
   try {
@@ -503,17 +526,17 @@ app.get('/api/room-classes', async (req, res) => {
   try {
     const query = `
       SELECT 
-        rt.id AS room_type_id,
+        MIN(rt.id::text) AS room_type_id,
         rt.name,
-        rt.base_price,
-        rt.capacity_adult,
-        rt.capacity_child,
+        MIN(rt.base_price) AS base_price,
+        MAX(rt.capacity_adult) AS capacity_adult,
+        MAX(rt.capacity_child) AS capacity_child,
         COUNT(r.id) AS total_rooms,
         COUNT(r.id) FILTER (WHERE r.status = 'AVAILABLE') AS available_rooms
       FROM room_types rt
       LEFT JOIN rooms r ON r.room_type_id = rt.id
-      GROUP BY rt.id, rt.name, rt.base_price, rt.capacity_adult, rt.capacity_child
-      ORDER BY rt.base_price ASC;
+      GROUP BY rt.name
+      ORDER BY MIN(rt.base_price) ASC;
     `;
     const result = await pool.query(query);
     res.json({ status: 'success', results: result.rows.length, data: { roomClasses: result.rows } });
@@ -628,14 +651,18 @@ app.get('/api/front-desk/stays', verifyToken, requireRole(['FRONT_DESK', 'ADMIN'
 app.post('/api/front-desk/bookings/:id/checkout', verifyToken, requireRole(['FRONT_DESK', 'ADMIN', 'RECEPTION']), async (req, res) => {
   try {
     const { id } = req.params;
-    const bookingRes = await pool.query(`SELECT room_id FROM bookings WHERE id = $1 AND ${getHotelFilter(req)}`, [id]);
+    const { final_total } = req.body;
+    
+    const bookingRes = await pool.query(`SELECT room_id, total_price FROM bookings WHERE id = $1 AND ${getHotelFilter(req)}`, [id]);
 
     if (bookingRes.rows.length === 0) {
       return res.status(404).json({ error: 'Reservation record missing' });
     }
 
     const roomId = bookingRes.rows[0].room_id;
-    await pool.query("UPDATE bookings SET status = 'CHECKED_OUT' WHERE id = $1", [id]);
+    const newPrice = final_total !== undefined ? final_total : bookingRes.rows[0].total_price;
+    
+    await pool.query("UPDATE bookings SET status = 'CHECKED_OUT', total_price = $2 WHERE id = $1", [id, newPrice]);
     await pool.query("UPDATE rooms SET status = 'DIRTY' WHERE id = $1", [roomId]);
     await logAuditAction(req.user.userId, 'Process Check-Out', `Successfully checked out booking ID: ${id}`);
     res.json({ status: 'success', message: 'Guest successfully checked out.' });
@@ -2259,6 +2286,11 @@ app.post('/api/dining/kots', verifyToken, requireDining, async (req, res) => {
       `INSERT INTO dining_kots (table_number, items, type, hotel_id) VALUES ($1, $2, $3, $4) RETURNING *`,
       [table, items, type || 'Dine-in', req.user.hotelId]
     );
+    // Automatically mark the table as Occupied (ignores if table doesn't exist in dining_tables)
+    await pool.query(
+      `UPDATE dining_tables SET status='Occupied' WHERE table_number=$1 AND hotel_id=$2`,
+      [table, req.user.hotelId]
+    );
     res.json({ status: 'success', data: result.rows[0] });
   } catch (err) { res.status(500).json({ error: 'Failed to create KOT' }); }
 });
@@ -2418,11 +2450,40 @@ app.post('/api/dining/settle-bill', verifyToken, requireDining, async (req, res)
       );
     }
 
+    // Automatically free the table
+    await pool.query(
+      `UPDATE dining_tables SET status='Available' WHERE table_number=$1 AND hotel_id=$2`,
+      [table_number, req.user.hotelId]
+    );
+
+    // Automatically mark all un-settled KOTs for this table as Settled so they disappear from the board
+    await pool.query(
+      `UPDATE dining_kots SET status='Settled', billing_id=$3 WHERE table_number=$1 AND hotel_id=$2 AND status != 'Settled'`,
+      [table_number, req.user.hotelId, billRes.rows[0].id]
+    );
+
     await pool.query('COMMIT');
     res.json({ status: 'success', data: billRes.rows[0] });
   } catch (err) {
     await pool.query('ROLLBACK');
     res.status(500).json({ error: 'Failed to settle bill' });
+  }
+});
+
+app.get('/api/dining/bills', verifyToken, requireDining, async (req, res) => {
+  try {
+    const billsRes = await pool.query(
+      `SELECT b.*, 
+        COALESCE((SELECT json_agg(k.*) FROM dining_kots k WHERE k.billing_id = b.id), '[]'::json) as kots
+       FROM dining_billing_records b 
+       WHERE b.hotel_id = $1 
+       ORDER BY b.created_at DESC 
+       LIMIT 100`,
+      [req.user.hotelId]
+    );
+    res.json({ status: 'success', data: billsRes.rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch billing history' });
   }
 });
 
@@ -2626,7 +2687,8 @@ async function runMigrations() {
       "ALTER TABLE hotels ADD COLUMN location TEXT",
       "ALTER TABLE users ADD COLUMN email VARCHAR(255) UNIQUE",
       "ALTER TABLE users ADD COLUMN designation VARCHAR(255) DEFAULT 'Administrator'",
-      "ALTER TABLE users ADD COLUMN can_grant_discount BOOLEAN DEFAULT false"
+      "ALTER TABLE users ADD COLUMN can_grant_discount BOOLEAN DEFAULT false",
+      "ALTER TABLE dining_kots ADD COLUMN billing_id UUID REFERENCES dining_billing_records(id)"
     ];
 
     for (const query of columnsToAdd) {

@@ -9,8 +9,9 @@ import {
   TrendingUp, PieChart, LayoutGrid, X, Loader2, Plus, Flame, MapPin,
   RefreshCw, LogOut, Zap, Edit2, Trash2, Minus, PenLine,
   Package, ClipboardList, DollarSign, Activity, Truck, RefreshCcw,
-  AlertCircle, Timer, ArrowRight
+  AlertCircle, Timer, ArrowRight, Printer
 } from 'lucide-react';
+import DiningReceipt from '../components/DiningReceipt';
 
 // =============================================
 // Helper Components
@@ -118,6 +119,45 @@ export default function DiningDashboard() {
     try { return JSON.parse(localStorage.getItem('hms_dismissed_broadcasts')) || []; } catch { return []; }
   });
 
+  // ─── Print & Settings States ───────────────────────────────
+  const [hotelSettings, setHotelSettings] = React.useState(null);
+  const [printReceiptData, setPrintReceiptData] = React.useState(null);
+
+  React.useEffect(() => {
+    fetch(`http://localhost:3000/api/hotels`)
+      .then(res => res.json())
+      .then(data => {
+        const hotelsList = data.data || [];
+        
+        let selectedId = sessionStorage.getItem('hms_selected_hotel_id');
+        if (!selectedId) {
+          const userStr = sessionStorage.getItem('hms_user');
+          if (userStr) {
+            try { selectedId = JSON.parse(userStr).hotelId; } catch (e) {}
+          }
+        }
+
+        const currentHotel = hotelsList.find(h => String(h.id) === String(selectedId)) || hotelsList[0] || {};
+        setHotelSettings({ 
+          name: currentHotel.name || 'Grand Plaza Hotel', 
+          address: currentHotel.address || '123 Elite Avenue, City Center', 
+          gst_no: currentHotel.gst_no || '27XXXXX1234X1Z5', 
+          contact_no: currentHotel.contact_no || currentHotel.phone || '+91 98765 43210' 
+        });
+      })
+      .catch(err => {
+        setHotelSettings({ name: 'Grand Plaza Hotel', address: '123 Elite Avenue, City Center', gst_no: '27XXXXX1234X1Z5', contact_no: '+91 98765 43210' });
+      });
+  }, []);
+
+  const handlePrintReceipt = (e, receiptData) => {
+    e.preventDefault();
+    setPrintReceiptData(receiptData);
+    setTimeout(() => {
+      window.print();
+    }, 200);
+  };
+
   React.useEffect(() => {
     localStorage.setItem('hms_dismissed_broadcasts', JSON.stringify(dismissedBroadcasts));
   }, [dismissedBroadcasts]);
@@ -145,15 +185,23 @@ export default function DiningDashboard() {
     try {
       const token = sessionStorage.getItem('hms_token');
       const headers = { 'Authorization': `Bearer ${token}` };
-      const [kotsRes, tablesRes, menuRes, overviewRes, invRes, guestsRes] = await Promise.all([
+      const [kotsRes, tablesRes, menuRes, overviewRes, invRes, guestsRes, billsRes] = await Promise.all([
         fetch('http://localhost:3000/api/dining/kots', { headers }),
         fetch('http://localhost:3000/api/dining/tables', { headers }),
         fetch('http://localhost:3000/api/dining/menu', { headers }),
         fetch('http://localhost:3000/api/dining/overview', { headers }),
         fetch('http://localhost:3000/api/dining/inventory', { headers }),
-        fetch('http://localhost:3000/api/dining/in-house-guests', { headers })
+        fetch('http://localhost:3000/api/dining/in-house-guests', { headers }),
+        fetch('http://localhost:3000/api/dining/bills', { headers })
       ]);
-      if (kotsRes.ok) { const d = await kotsRes.json(); setActiveKOTs(d.data || []); }
+      if (kotsRes.ok) { 
+        const d = await kotsRes.json(); 
+        setActiveKOTs((d.data || []).map(k => ({
+          ...k,
+          table: k.table_number,
+          time: new Date(k.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }))); 
+      }
       if (tablesRes.ok) { const d = await tablesRes.json(); setTables(d.data || []); }
       if (menuRes.ok) { const d = await menuRes.json(); setPosMenu(d.data || []); }
       if (overviewRes.ok) { const d = await overviewRes.json(); setOverview(d.data || { metrics: [], orderTrend: [], salesSplit: [] }); }
@@ -167,6 +215,9 @@ export default function DiningDashboard() {
         }
       }
       if (guestsRes.ok) { const d = await guestsRes.json(); setInHouseGuests(d.data || []); }
+      if (billsRes) {
+        if (billsRes.ok) { const d = await billsRes.json(); setBillingHistory(d.data || []); }
+      }
     } catch (e) {
       console.error('Failed to fetch dining data:', e);
     } finally {
@@ -194,6 +245,8 @@ export default function DiningDashboard() {
   const accessLevel = getAccessLevel();
 
   const [activeTab, setActiveTab] = useState(accessLevel === 'EXECUTIVE' ? 'kots' : 'overview');
+  const [billingViewTab, setBillingViewTab] = useState('active'); // 'active' or 'history'
+  const [selectedHistoryBill, setSelectedHistoryBill] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedColumn, setExpandedColumn] = useState(null);
 
@@ -203,6 +256,7 @@ export default function DiningDashboard() {
   const [kotForm, setKotForm] = useState({ table: '', items: '', notes: '' });
 
   const [activeKOTs, setActiveKOTs] = useState([]);
+  const [billingHistory, setBillingHistory] = useState([]);
   const [tables, setTables] = useState([]);
   const [menuPerformance, setMenuPerformance] = useState([]);
   const [overview, setOverview] = useState({ metrics: [], orderTrend: [], salesSplit: [] });
@@ -462,58 +516,9 @@ export default function DiningDashboard() {
     );
   };
 
-  const fetchData = async () => {
-    try {
-      const token = sessionStorage.getItem('hms_token');
-      const headers = { 'Authorization': `Bearer ${token}` };
-
-      const [kotsRes, tablesRes, menuRes, overviewRes] = await Promise.all([
-        fetch('http://localhost:3000/api/dining/kots', { headers }),
-        fetch('http://localhost:3000/api/dining/tables', { headers }),
-        fetch('http://localhost:3000/api/dining/menu', { headers }),
-        fetch('http://localhost:3000/api/dining/overview', { headers })
-      ]);
-
-      if (kotsRes.ok) {
-        const data = await kotsRes.json();
-        setActiveKOTs(data.data.map(k => ({
-          id: k.id.slice(0, 8),
-          table: k.table_number,
-          items: k.items,
-          time: new Date(k.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          status: k.status,
-          type: k.type
-        })));
-      }
-
-      if (tablesRes.ok) {
-        const data = await tablesRes.json();
-        setTables(data.data);
-      }
-
-      if (menuRes.ok) {
-        const data = await menuRes.json();
-        setMenuPerformance(data.data);
-      }
-
-      if (overviewRes.ok) {
-        const data = await overviewRes.json();
-        setOverview(data.data);
-      }
-    } catch (err) {
-      console.error('Failed to sync dining data:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
   const refresh = () => {
     setIsLoading(true);
-    fetchData();
+    fetchDiningData();
   };
 
   const handleAddKOT = async (e) => {
@@ -572,7 +577,8 @@ export default function DiningDashboard() {
   ];
 
   return (
-    <div className="min-h-[calc(100vh-6rem)] relative dd-app-bg dd-scrollbar p-6 flex flex-col lg:flex-row gap-6">
+    <>
+    <div className="min-h-[calc(100vh-6rem)] relative dd-app-bg dd-scrollbar p-6 flex flex-col lg:flex-row gap-6 print:hidden">
       <style>{`
         .dd-scrollbar { scrollbar-width: thin; scrollbar-color: rgba(161,161,170,0.4) transparent; }
         .dd-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -592,6 +598,21 @@ export default function DiningDashboard() {
         .dd-glass-modal { background: rgba(255, 255, 255, 0.98); border: 1px solid rgba(226, 232, 240, 0.8); box-shadow: 0 30px 70px -12px rgba(245,158,11, 0.25); backdrop-filter: blur(24px); }
         .dd-input { width: 100%; padding: 0.75rem 1.1rem; background: #F4F7FE; border: 1px solid #E2E8F0; border-radius: 1rem; font-size: 0.875rem; font-weight: 500; outline: none; transition: border 0.3s; }
         .dd-input:focus { border-color: #D4A373; }
+
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          .print-receipt, .print-receipt * {
+            visibility: visible;
+          }
+          .print-receipt {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+          }
+        }
       `}</style>
 
       {/* FIXED SIDEBAR */}
@@ -930,7 +951,7 @@ export default function DiningDashboard() {
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           const nextStatus = status === 'New' ? 'Preparing' : status === 'Preparing' ? 'Ready' : 'Served';
-                                          updateKOTStatus(kot.full_id, nextStatus);
+                                          updateKOTStatus(kot.id, nextStatus);
                                         }}
                                         className={`flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md`}
                                         style={{ background: `${colConfig.color}12`, color: colConfig.color }}
@@ -1615,27 +1636,51 @@ export default function DiningDashboard() {
                   {/* Left Pane: Active Checks (30%) */}
                   <div className="w-[30%] bg-white rounded-3xl p-5 border border-zinc-200/80 shadow-sm flex flex-col h-full relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#D4A373]/10 to-transparent rounded-full -translate-y-16 translate-x-16 pointer-events-none" />
-                    <h3 className="font-black text-sm text-zinc-900 mb-5 flex items-center gap-2 relative z-10"><MapPin size={18} className="text-[#D4A373]" /> Active Checks</h3>
+                    <div className="flex items-center p-1 bg-zinc-100 rounded-xl mb-5 relative z-10">
+                      <button onClick={() => setBillingViewTab('active')} className={`flex-1 text-[11px] uppercase tracking-wider font-bold py-2 rounded-lg transition-all ${billingViewTab === 'active' ? 'bg-white shadow-sm text-[#D4A373]' : 'text-zinc-500 hover:text-zinc-700'}`}>Active Checks</button>
+                      <button onClick={() => setBillingViewTab('history')} className={`flex-1 text-[11px] uppercase tracking-wider font-bold py-2 rounded-lg transition-all ${billingViewTab === 'history' ? 'bg-white shadow-sm text-blue-500' : 'text-zinc-500 hover:text-zinc-700'}`}>History</button>
+                    </div>
                     <div className="flex flex-col gap-3 overflow-y-auto dd-scrollbar flex-1 pr-2 relative z-10">
-                      {tables.filter(t => t.status === 'Occupied').length === 0 && (
-                        <div className="text-center py-10 opacity-60">
-                          <div className="w-16 h-16 rounded-full bg-zinc-100 flex items-center justify-center mx-auto mb-3">
-                            <Receipt size={24} className="text-zinc-400" />
-                          </div>
-                          <p className="text-zinc-500 font-bold text-[11px] uppercase tracking-wider">No active tables</p>
-                        </div>
-                      )}
-                      {tables.filter(t => t.status === 'Occupied').map(t => {
-                        const tUnbilled = activeKOTs.filter(k => k.table === t.table_number && k.status !== 'Served');
+                      {billingViewTab === 'active' ? (() => {
+                        const checksMap = new Map();
+                        tables.filter(t => t.status === 'Occupied').forEach(t => checksMap.set(t.table_number, { table_number: t.table_number, time: t.time }));
+                        activeKOTs.forEach(k => {
+                          if (k.status !== 'Settled') {
+                            if (!checksMap.has(k.table)) checksMap.set(k.table, { table_number: k.table, time: k.time });
+                          }
+                        });
+                        const activeChecks = Array.from(checksMap.values());
+                        
+                        if (activeChecks.length === 0) {
+                          return (
+                            <div className="text-center py-10 opacity-60">
+                              <div className="w-16 h-16 rounded-full bg-zinc-100 flex items-center justify-center mx-auto mb-3">
+                                <Receipt size={24} className="text-zinc-400" />
+                              </div>
+                              <p className="text-zinc-500 font-bold text-[11px] uppercase tracking-wider">No active tables</p>
+                            </div>
+                          );
+                        }
+                        
+                        return activeChecks.map(t => {
+                          const tUnbilled = activeKOTs.filter(k => k.table === t.table_number && k.status !== 'Settled');
                         let tTotal = 0;
                         tUnbilled.forEach(k => {
-                          try { const p = typeof k.items === 'string' ? JSON.parse(k.items) : k.items; if (Array.isArray(p)) p.forEach(i => tTotal += Number(i.price) * Number(i.qty)) } catch (e) { }
+                          try {
+                            const p = typeof k.items === 'string' ? JSON.parse(k.items) : k.items;
+                            if (Array.isArray(p)) {
+                              p.forEach(i => tTotal += Number(i.price || 0) * Number(i.qty || 1));
+                            } else { throw new Error('Not an array'); }
+                          } catch (e) {
+                            // If it's a manual text order, we can't determine the price easily
+                            tTotal += 0;
+                          }
                         });
                         const firstOrderTime = tUnbilled.length > 0 ? tUnbilled[tUnbilled.length - 1].time : (t.time || '');
                         const isSelected = billingForm.table_number === t.table_number;
 
                         return (
-                          <div key={t.id} onClick={() => handleSelectBillingTable(t.table_number)} className={`p-4 rounded-2xl cursor-pointer transition-all duration-300 relative overflow-hidden group ${isSelected ? 'border-transparent shadow-lg shadow-[#D4A373]/20 scale-[1.02]' : 'border border-zinc-200 hover:border-[#D4A373]/30 hover:shadow-md bg-white'}`}>
+                          <div key={t.table_number} onClick={() => handleSelectBillingTable(t.table_number)} className={`p-4 rounded-2xl cursor-pointer transition-all duration-300 relative overflow-hidden group ${isSelected ? 'border-transparent shadow-lg shadow-[#D4A373]/20 scale-[1.02]' : 'border border-zinc-200 hover:border-[#D4A373]/30 hover:shadow-md bg-white'}`}>
                             {isSelected && <div className="absolute inset-0 bg-gradient-to-br from-[#D4A373] to-[#b3855a] opacity-10" />}
                             {isSelected && <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#D4A373]" />}
                             <div className="flex justify-between items-center mb-1 relative z-10">
@@ -1648,13 +1693,107 @@ export default function DiningDashboard() {
                             </div>
                           </div>
                         );
-                      })}
-                    </div>
+                      });
+                      })() : (
+                        billingHistory.length === 0 ? (
+                           <div className="text-center py-10 opacity-60">
+                             <div className="w-16 h-16 rounded-full bg-zinc-100 flex items-center justify-center mx-auto mb-3">
+                               <Receipt size={24} className="text-zinc-400" />
+                             </div>
+                             <p className="text-zinc-500 font-bold text-[11px] uppercase tracking-wider">No history found</p>
+                           </div>
+                        ) : billingHistory.map(b => (
+                          <div key={b.id} onClick={() => setSelectedHistoryBill(b)} className={`p-4 rounded-2xl cursor-pointer transition-all duration-300 relative overflow-hidden group ${selectedHistoryBill?.id === b.id ? 'border-transparent shadow-lg shadow-blue-500/20 scale-[1.02]' : 'border border-zinc-200 hover:border-blue-500/30 hover:shadow-md bg-white'}`}>
+                            {selectedHistoryBill?.id === b.id && <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-indigo-600 opacity-5" />}
+                            {selectedHistoryBill?.id === b.id && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500" />}
+                            <div className="flex justify-between items-center mb-1 relative z-10">
+                              <span className={`font-black text-lg ${selectedHistoryBill?.id === b.id ? 'text-blue-600' : 'text-zinc-800'}`}>{b.table_number}</span>
+                              <span className={`text-[11px] font-black px-2.5 py-1 rounded-md ${selectedHistoryBill?.id === b.id ? 'bg-blue-500 text-white' : 'bg-zinc-100 text-zinc-600 group-hover:bg-blue-500/10 group-hover:text-blue-500'}`}>₹{Number(b.total_amount).toFixed(2)}</span>
+                            </div>
+                            <div className={`text-[11px] font-bold relative z-10 flex items-center justify-between ${selectedHistoryBill?.id === b.id ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                              <span className="flex items-center gap-1"><Clock size={12} /> {new Date(b.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              <span className="uppercase text-[9px] px-1.5 py-0.5 rounded bg-zinc-100">{b.payment_method}</span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                  </div>
                   </div>
 
                   {/* Right Canvas: Live Invoice (70%) */}
                   <div className="w-[70%] bg-white rounded-3xl border border-zinc-200/80 shadow-sm h-full flex flex-col overflow-hidden relative">
-                    {!billingForm.table_number ? (
+                    {billingViewTab === 'history' ? (
+                      !selectedHistoryBill ? (
+                        <div className="flex-1 flex flex-col items-center justify-center text-center bg-zinc-50/50">
+                          <div className="w-24 h-24 rounded-full bg-white shadow-sm border border-zinc-100 flex items-center justify-center mb-5">
+                            <Receipt size={40} strokeWidth={1.5} className="text-zinc-300" />
+                          </div>
+                          <p className="text-sm font-black text-zinc-400 tracking-[0.2em]">SELECT AN INVOICE TO VIEW</p>
+                        </div>
+                      ) : (
+                        (() => {
+                          const kots = selectedHistoryBill.kots || [];
+                          const itemMap = {};
+                          kots.forEach(kot => {
+                            try {
+                              const parsed = typeof kot.items === 'string' ? JSON.parse(kot.items) : kot.items;
+                              if (Array.isArray(parsed)) {
+                                parsed.forEach(item => {
+                                  if (itemMap[item.item]) {
+                                    itemMap[item.item].qty += Number(item.qty || 1);
+                                  } else {
+                                    itemMap[item.item] = { ...item, qty: Number(item.qty || 1), price: Number(item.price || 0) };
+                                  }
+                                });
+                              } else { throw new Error('Not an array'); }
+                            } catch (e) {
+                              const text = String(kot.items);
+                              if (itemMap[text]) {
+                                itemMap[text].qty += 1;
+                              } else {
+                                itemMap[text] = { item: `[Manual Entry] ${text}`, qty: 1, price: 0, isManual: true };
+                              }
+                            }
+                          });
+                          const aggregatedItems = Object.values(itemMap);
+                          const grandTotal = Number(selectedHistoryBill.total_amount);
+                          
+                          return (
+                            <div className="flex flex-col h-full relative w-full">
+                              <div className="px-8 py-5 border-b border-zinc-100 flex justify-between items-center bg-white shrink-0 z-10">
+                                <div className="flex items-center gap-4">
+                                  <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500">
+                                    <Receipt size={24} strokeWidth={2.5} />
+                                  </div>
+                                  <div>
+                                    <h2 className="text-2xl font-black text-zinc-900 tracking-tight leading-none mb-1">{selectedHistoryBill.table_number}</h2>
+                                    <div className="inline-flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider bg-zinc-100 border border-zinc-200/50 text-zinc-500 px-2 py-0.5 rounded shadow-sm">
+                                      <CheckCircle2 size={10} strokeWidth={2.5} /> Settled
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="text-right flex items-center gap-3">
+                                  <button onClick={(e) => handlePrintReceipt(e, { ...selectedHistoryBill, items: aggregatedItems })} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition-colors shadow-sm">
+                                    <Printer size={16} /> Print Receipt
+                                  </button>
+                                  <div>
+                                    <h3 className="text-lg font-black text-zinc-800 tracking-wider bg-zinc-100 px-3 py-1 rounded-lg inline-block mb-1">
+                                      {selectedHistoryBill.id.split('-')[0].toUpperCase()}
+                                    </h3>
+                                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{new Date(selectedHistoryBill.created_at).toLocaleDateString()} &bull; {new Date(selectedHistoryBill.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex flex-1 overflow-hidden bg-zinc-100/50 justify-center items-start pt-8 pb-8 dd-scrollbar overflow-y-auto">
+                                <div className="shadow-2xl border border-zinc-200">
+                                  <DiningReceipt receiptData={{...selectedHistoryBill, items: aggregatedItems, subtotal: grandTotal}} hotelSettings={hotelSettings} />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()
+                      )
+                    ) : !billingForm.table_number ? (
                       <div className="flex-1 flex flex-col items-center justify-center text-center bg-zinc-50/50">
                         <div className="w-24 h-24 rounded-full bg-white shadow-sm border border-zinc-100 flex items-center justify-center mb-5">
                           <Receipt size={40} strokeWidth={1.5} className="text-zinc-300" />
@@ -1663,7 +1802,7 @@ export default function DiningDashboard() {
                       </div>
                     ) : (
                       (() => {
-                        const unbilled = activeKOTs.filter(k => k.table === billingForm.table_number && k.status !== 'Served');
+                        const unbilled = activeKOTs.filter(k => k.table === billingForm.table_number && k.status !== 'Settled');
                         const itemMap = {};
                         unbilled.forEach(kot => {
                           try {
@@ -1671,13 +1810,20 @@ export default function DiningDashboard() {
                             if (Array.isArray(parsed)) {
                               parsed.forEach(item => {
                                 if (itemMap[item.item]) {
-                                  itemMap[item.item].qty += Number(item.qty);
+                                  itemMap[item.item].qty += Number(item.qty || 1);
                                 } else {
-                                  itemMap[item.item] = { ...item, qty: Number(item.qty), price: Number(item.price) };
+                                  itemMap[item.item] = { ...item, qty: Number(item.qty || 1), price: Number(item.price || 0) };
                                 }
                               });
+                            } else { throw new Error('Not an array'); }
+                          } catch (e) {
+                            const text = String(kot.items);
+                            if (itemMap[text]) {
+                              itemMap[text].qty += 1;
+                            } else {
+                              itemMap[text] = { item: `[Manual Entry] ${text}`, qty: 1, price: 0, isManual: true };
                             }
-                          } catch (e) { }
+                          }
                         });
                         const aggregatedItems = Object.values(itemMap).map(item => {
                           const removed = removedItemsCount[item.item] || 0;
@@ -1840,9 +1986,14 @@ export default function DiningDashboard() {
                                 )}
                               </AnimatePresence>
 
-                              <button onClick={(e) => handleSettleBill(e, grandTotal.toFixed(2))} disabled={(billingForm.is_room_charge && !billingForm.booking_id) || grandTotal === 0} className="w-full bg-zinc-900 group text-white font-black text-[13px] py-4 rounded-xl hover:bg-[#D4A373] hover:scale-[1.01] transition-all duration-300 flex justify-center items-center gap-2 disabled:opacity-50 disabled:scale-100 disabled:bg-zinc-300 disabled:cursor-not-allowed shadow-xl shadow-zinc-900/20 uppercase tracking-widest">
-                                <CheckCircle2 size={18} strokeWidth={3} className={grandTotal > 0 && (!billingForm.is_room_charge || billingForm.booking_id) ? "text-[#D4A373] group-hover:text-white transition-colors" : "text-white"} /> SETTLE BILL & FREE TABLE
-                              </button>
+                              <div className="flex gap-3 mt-4">
+                                <button onClick={(e) => handlePrintReceipt(e, { ...billingForm, items: aggregatedItems, subtotal, discount: discountAmount, tax: cgst + sgst, total_amount: grandTotal, invoiceNo, table: billingForm.table_number, id: invoiceNo })} className="flex-1 bg-zinc-100 group text-zinc-700 font-black text-[13px] py-4 rounded-xl hover:bg-zinc-200 transition-all duration-300 flex justify-center items-center gap-2 shadow-sm uppercase tracking-widest">
+                                  <Printer size={18} strokeWidth={3} /> PRINT BILL
+                                </button>
+                                <button onClick={(e) => handleSettleBill(e, grandTotal.toFixed(2))} disabled={(billingForm.is_room_charge && !billingForm.booking_id) || grandTotal === 0} className="flex-[2] bg-zinc-900 group text-white font-black text-[13px] py-4 rounded-xl hover:bg-[#D4A373] hover:scale-[1.01] transition-all duration-300 flex justify-center items-center gap-2 disabled:opacity-50 disabled:scale-100 disabled:bg-zinc-300 disabled:cursor-not-allowed shadow-xl shadow-zinc-900/20 uppercase tracking-widest">
+                                  <CheckCircle2 size={18} strokeWidth={3} className={grandTotal > 0 && (!billingForm.is_room_charge || billingForm.booking_id) ? "text-[#D4A373] group-hover:text-white transition-colors" : "text-white"} /> SETTLE BILL & FREE TABLE
+                                </button>
+                              </div>
                             </div>
                           </div>
                         );
@@ -1884,6 +2035,12 @@ export default function DiningDashboard() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+      
+      </div>
+      {/* Hidden Print Components */}
+      <div className="hidden print:block">
+        <DiningReceipt receiptData={printReceiptData} hotelSettings={hotelSettings} />
+      </div>
+    </>
   );
 }

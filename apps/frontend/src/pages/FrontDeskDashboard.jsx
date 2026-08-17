@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import DepartmentHRModule from '../components/DepartmentHRModule';
 import StaffDirectoryModule from '../components/StaffDirectoryModule';
+import GuestFolioInvoice from '../components/GuestFolioInvoice';
 
 const API_BASE = 'http://localhost:3000';
 
@@ -503,6 +504,37 @@ export default function FrontDeskDashboard() {
     try { return JSON.parse(localStorage.getItem('hms_dismissed_broadcasts')) || []; } catch { return []; }
   });
 
+  // ─── Print & Settings States ───────────────────────────────
+  const [hotelSettings, setHotelSettings] = useState(null);
+  const [printInvoiceData, setPrintInvoiceData] = useState(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/hotels`)
+      .then(res => res.json())
+      .then(data => {
+        const hotelsList = data.data || [];
+        let selectedId = sessionStorage.getItem('hms_selected_hotel_id');
+        if (!selectedId) {
+          const userStr = sessionStorage.getItem('hms_user');
+          if (userStr) {
+            try { selectedId = JSON.parse(userStr).hotelId; } catch (e) {}
+          }
+        }
+        const currentHotel = hotelsList.find(h => String(h.id) === String(selectedId)) || hotelsList[0] || {};
+        setHotelSettings(currentHotel);
+      })
+      .catch(err => {
+        setHotelSettings({ name: 'Grand Plaza Hotel', address: '123 Elite Avenue, City Center', gst_no: '27XXXXX1234X1Z5', contact_no: '+91 98765 43210' });
+      });
+  }, []);
+
+  const handlePrintInvoice = (stay) => {
+    setPrintInvoiceData(stay);
+    setTimeout(() => {
+      window.print();
+    }, 200);
+  };
+
   useEffect(() => {
     localStorage.setItem('hms_dismissed_broadcasts', JSON.stringify(dismissedBroadcasts));
   }, [dismissedBroadcasts]);
@@ -747,9 +779,42 @@ export default function FrontDeskDashboard() {
     setIsSubmitting(false);
   };
 
-  const handleCheckout = async (bookingId) => {
+  const calculateCheckoutDetails = (stay) => {
+    if (!stay) return null;
+    const checkIn = new Date(stay.check_in_date);
+    checkIn.setHours(0, 0, 0, 0);
+    const expectedOut = new Date(stay.check_out_date);
+    expectedOut.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const expectedDays = Math.max(1, Math.round((expectedOut - checkIn) / (1000 * 60 * 60 * 24)));
+    const pricePerDay = Number(stay.total_price) / expectedDays;
+    const actualDays = Math.max(1, Math.round((today - checkIn) / (1000 * 60 * 60 * 24)));
+    
+    const baseTotal = actualDays * pricePerDay;
+    const gstAmount = baseTotal * 0.18;
+    const serviceCharge = baseTotal * 0.10;
+    const finalTotal = baseTotal + gstAmount + serviceCharge;
+
+    return {
+      ...stay,
+      actual_days: actualDays,
+      expected_days: expectedDays,
+      price_per_day: pricePerDay,
+      base_total: baseTotal,
+      gst_amount: gstAmount,
+      service_charge: serviceCharge,
+      final_total: finalTotal
+    };
+  };
+
+  const handleCheckout = async (bookingId, finalTotal) => {
     setIsSubmitting(true);
-    const res = await fetchWithAuth(`${API_BASE}/api/front-desk/bookings/${bookingId}/checkout`, { method: 'POST' });
+    const res = await fetchWithAuth(`${API_BASE}/api/front-desk/bookings/${bookingId}/checkout`, { 
+      method: 'POST',
+      body: JSON.stringify({ final_total: finalTotal })
+    });
     if (res?.ok) {
       setModalType('none');
       setSelectedStay(null);
@@ -1891,22 +1956,30 @@ export default function FrontDeskDashboard() {
               )}
 
               {/* ── CHECK-OUT MODAL ── */}
-              {modalType === 'checkout' && selectedStay && (
+              {modalType === 'checkout' && selectedStay && (() => {
+                const checkoutDetails = calculateCheckoutDetails(selectedStay);
+                return (
                 <div className="space-y-5">
                   <div className="bg-rose-50/80 border border-rose-200 rounded-2xl p-5 space-y-3">
                     <div className="flex items-center gap-2 text-sm font-bold text-rose-700">
                       <AlertTriangle size={16} /> Guest Departure Confirmation
                     </div>
                     <div className="grid grid-cols-2 gap-3 text-xs">
-                      <div><p className="text-zinc-500 font-medium">Guest</p><p className="font-bold text-zinc-800 mt-0.5">{selectedStay.guest_name}</p></div>
-                      <div><p className="text-zinc-500 font-medium">Room</p><p className="font-bold text-zinc-800 mt-0.5">{selectedStay.room_number} ({selectedStay.room_type})</p></div>
-                      <div><p className="text-zinc-500 font-medium">Total Billed</p><p className="font-bold text-zinc-800 mt-0.5">₹{parseInt(selectedStay.total_price).toLocaleString('en-IN')}</p></div>
-                      <div><p className="text-zinc-500 font-medium">Expected Out</p><p className="font-bold text-zinc-800 mt-0.5">{new Date(selectedStay.check_out_date).toLocaleDateString()}</p></div>
+                      <div><p className="text-zinc-500 font-medium">Guest</p><p className="font-bold text-zinc-800 mt-0.5">{checkoutDetails.guest_name}</p></div>
+                      <div><p className="text-zinc-500 font-medium">Room</p><p className="font-bold text-zinc-800 mt-0.5">{checkoutDetails.room_number} ({checkoutDetails.room_type})</p></div>
+                      <div>
+                        <p className="text-zinc-500 font-medium">Total Billed</p>
+                        <p className="font-bold text-zinc-800 mt-0.5">₹{checkoutDetails.final_total.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</p>
+                      </div>
+                      <div>
+                        <p className="text-zinc-500 font-medium">Stay Duration</p>
+                        <p className="font-bold text-zinc-800 mt-0.5">{checkoutDetails.actual_days} Day(s) (Expected: {checkoutDetails.expected_days})</p>
+                      </div>
                     </div>
                   </div>
-                  <p className="text-xs text-zinc-500">This will mark the booking as <strong>CHECKED OUT</strong> and set Room {selectedStay.room_number} to <strong>DIRTY</strong> for housekeeping.</p>
+                  <p className="text-xs text-zinc-500">This will mark the booking as <strong>CHECKED OUT</strong> and set Room {checkoutDetails.room_number} to <strong>DIRTY</strong> for housekeeping.</p>
                   <RippleButton
-                    onClick={() => handleCheckout(selectedStay.booking_id)}
+                    onClick={() => handleCheckout(checkoutDetails.booking_id, checkoutDetails.final_total)}
                     disabled={isSubmitting}
                     whileHover={{ scale: 1.015, y: -1 }}
                     whileTap={{ scale: 0.98 }}
@@ -1915,8 +1988,17 @@ export default function FrontDeskDashboard() {
                     {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <DoorOpen size={16} />}
                     {isSubmitting ? 'Processing…' : 'Confirm Check-Out'}
                   </RippleButton>
+                  <RippleButton
+                    onClick={() => handlePrintInvoice(checkoutDetails)}
+                    whileHover={{ scale: 1.015, y: -1 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="w-full bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-sm py-3.5 rounded-xl transition-all flex items-center justify-center gap-2"
+                  >
+                    <FileText size={16} /> Print Guest Invoice
+                  </RippleButton>
                 </div>
-              )}
+                );
+              })()}
 
               {/* ── EXTEND STAY MODAL ── */}
               {modalType === 'extend' && selectedStay && (
@@ -2190,6 +2272,8 @@ export default function FrontDeskDashboard() {
           </motion.div>
         )}
       </AnimatePresence>
+      {/* Hidden Print Components */}
+      <GuestFolioInvoice invoiceData={printInvoiceData} hotelSettings={hotelSettings} />
     </div>
   );
 }

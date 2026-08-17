@@ -514,6 +514,9 @@ export default function AdminDashboard() {
 
   // Property & Admin Management state (Super Admin)
   const [showAddPropertyModal, setShowAddPropertyModal] = useState(false);
+  const [showInvoiceSettingsModal, setShowInvoiceSettingsModal] = useState(false);
+  const [selectedHotelForInvoice, setSelectedHotelForInvoice] = useState(null);
+  const [invoiceSettingsForm, setInvoiceSettingsForm] = useState({ name: '', address: '', logo_url: '', gst_no: '', contact_no: '' });
   const [showAddAdminModal, setShowAddAdminModal] = useState(false);
   const [addPropertyForm, setAddPropertyForm] = useState({ name: '', location: '' });
   const [addAdminForm, setAddAdminForm] = useState({ name: '', email: '', password: '', role: 'ADMIN', hotel_id: '' });
@@ -1047,6 +1050,32 @@ export default function AdminDashboard() {
     } catch (err) {
       console.error(err);
       alert('Network error creating property.');
+    }
+  };
+
+  const handleSaveInvoiceSettings = async (e) => {
+    e.preventDefault();
+    if (!selectedHotelForInvoice) return;
+    try {
+      const res = await fetch(`http://localhost:3000/api/super-admin/hotels/${selectedHotelForInvoice}/settings`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` 
+        },
+        body: JSON.stringify(invoiceSettingsForm),
+      });
+      if (res.ok) {
+        setShowInvoiceSettingsModal(false);
+        setSelectedHotelForInvoice(null);
+        await refreshManagementData();
+      } else {
+        const json = await res.json();
+        alert(json.error || 'Failed to save settings');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error saving settings.');
     }
   };
 
@@ -5191,7 +5220,23 @@ export default function AdminDashboard() {
                                     </div>
                                   </div>
 
-                                  <div className="mt-auto pt-4 border-t border-zinc-100 flex justify-end">
+                                  <div className="mt-auto pt-4 border-t border-zinc-100 flex justify-end gap-2">
+                                    <button
+                                      onClick={() => {
+                                        setSelectedHotelForInvoice(hotel.id);
+                                        setInvoiceSettingsForm({
+                                          name: hotel.name || '',
+                                          address: hotel.address || '',
+                                          logo_url: hotel.logo_url || '',
+                                          gst_no: hotel.gst_no || '',
+                                          contact_no: hotel.contact_no || ''
+                                        });
+                                        setShowInvoiceSettingsModal(true);
+                                      }}
+                                      className="text-[10px] font-bold text-indigo-500 hover:text-white hover:bg-indigo-500 px-3 py-1.5 rounded-lg transition-all border border-indigo-200 hover:border-indigo-500 hover:shadow-sm uppercase tracking-wider"
+                                    >
+                                      Invoice Settings
+                                    </button>
                                     <button
                                       onClick={() => handleDeleteProperty(hotel.id, hotel.name)}
                                       className="text-[10px] font-bold text-red-400 hover:text-white hover:bg-red-500 px-3 py-1.5 rounded-lg transition-all border border-red-200 hover:border-red-500 hover:shadow-sm uppercase tracking-wider"
@@ -5411,6 +5456,71 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                   )}
+
+                  {/* ═══ INVOICE SETTINGS MODAL ═══ */}
+                  <AnimatePresence>
+                    {showInvoiceSettingsModal && (
+                      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-zinc-900/40 backdrop-blur-sm" onClick={() => setShowInvoiceSettingsModal(false)} />
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                          className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden relative z-10 border border-zinc-200"
+                        >
+                          <div className="bg-gradient-to-r from-indigo-600 to-indigo-500 p-6 flex justify-between items-center text-white">
+                            <div>
+                              <h3 className="text-xl font-black tracking-tight">Invoice Settings</h3>
+                              <p className="text-indigo-100 text-xs mt-1">Configure property billing details</p>
+                            </div>
+                            <button onClick={() => setShowInvoiceSettingsModal(false)} className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors">
+                              <X size={16} />
+                            </button>
+                          </div>
+                          <form onSubmit={handleSaveInvoiceSettings} className="p-6 space-y-4">
+                            <div>
+                              <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5">Property Name</label>
+                              <input required type="text" value={invoiceSettingsForm.name} onChange={e => setInvoiceSettingsForm({ ...invoiceSettingsForm, name: e.target.value })} className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-2.5 text-sm font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5">GST Number</label>
+                              <input type="text" value={invoiceSettingsForm.gst_no} onChange={e => setInvoiceSettingsForm({ ...invoiceSettingsForm, gst_no: e.target.value })} className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-2.5 text-sm font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="e.g. 27AADCB2230M1Z2" />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5">Contact Number</label>
+                              <input type="text" value={invoiceSettingsForm.contact_no} onChange={e => setInvoiceSettingsForm({ ...invoiceSettingsForm, contact_no: e.target.value })} className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-2.5 text-sm font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5">Address</label>
+                              <textarea rows="2" value={invoiceSettingsForm.address} onChange={e => setInvoiceSettingsForm({ ...invoiceSettingsForm, address: e.target.value })} className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-2.5 text-sm font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all resize-none" />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5">Upload Logo</label>
+                              {invoiceSettingsForm.logo_url && (
+                                <div className="mb-2 w-16 h-16 rounded-xl border border-zinc-200 overflow-hidden">
+                                  <img src={invoiceSettingsForm.logo_url} alt="Logo" className="w-full h-full object-cover" />
+                                </div>
+                              )}
+                              <input type="file" accept="image/*" onChange={(e) => {
+                                const file = e.target.files[0];
+                                if (file) {
+                                  const reader = new FileReader();
+                                  reader.onloadend = () => {
+                                    setInvoiceSettingsForm({ ...invoiceSettingsForm, logo_url: reader.result });
+                                  };
+                                  reader.readAsDataURL(file);
+                                }
+                              }} className="w-full text-xs text-zinc-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition-all cursor-pointer" />
+                            </div>
+                            <div className="flex gap-3 pt-4">
+                              <button type="button" onClick={() => setShowInvoiceSettingsModal(false)} className="flex-1 py-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-500 hover:bg-zinc-50 transition-colors">Cancel</button>
+                              <button type="submit" className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 transition-colors">Save Settings</button>
+                            </div>
+                          </form>
+                        </motion.div>
+                      </div>
+                    )}
+                  </AnimatePresence>
 
                   {/* ═══ ADD PROPERTY MODAL ═══ */}
                   <AnimatePresence>
