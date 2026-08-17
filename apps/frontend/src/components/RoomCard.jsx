@@ -15,6 +15,7 @@ export default function RoomCard({ roomClass, onBookClick }) {
     if (t.includes('maharaja')) return "/images/room-maharaja.png";
     if (t.includes('deluxe')) return "/images/room-delux.png";
     if (t.includes('standard')) return "/images/room-standard.png";
+    if (t.includes('event')) return "/images/event-space.png";
     
     // 2. Generic fallbacks LAST
     if (t.includes('suite')) return "/images/room-maharaja.png"; // Fallback for any other type of suite
