@@ -161,7 +161,7 @@ export default function Header({
       initial={{ y: -100 }}
       animate={{ y: 0 }}
       transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-      className={`fixed top-0 left-0 w-full z-50 h-28 transition-all duration-300 print:hidden ${isScrolled || isDashboard
+      className={`relative w-full z-50 h-28 transition-all duration-300 print:hidden ${isScrolled || isDashboard
         ? 'bg-white/85 backdrop-blur-lg shadow-[0_1px_0_0_rgba(0,0,0,0.06)]'
         : 'bg-white'
         }`}

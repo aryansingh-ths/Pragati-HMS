@@ -2,23 +2,24 @@
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
 -- 2. Define our ENUMs (Fixed sets of statuses)
-CREATE TYPE access_level AS ENUM ('SUPER_ADMIN', 'ADMIN', 'MANAGER', 'EXECUTIVE');
-CREATE TYPE department_type AS ENUM ('GLOBAL', 'FRONT_DESK', 'DINING', 'HOUSEKEEPING', 'FINANCE', 'SALES', 'TRAVEL');
-CREATE TYPE user_role AS ENUM ('SUPER_ADMIN', 'ADMIN', 'RECEPTION', 'HOUSEKEEPING', 'FINANCE', 'RESTAURANT');
-CREATE TYPE room_status AS ENUM ('AVAILABLE', 'OCCUPIED', 'CLEANING', 'DIRTY', 'INSPECTING', 'MAINTENANCE');
-CREATE TYPE booking_status AS ENUM ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT', 'CANCELLED');
+DO $$ BEGIN CREATE TYPE access_level AS ENUM ('SUPER_ADMIN', 'ADMIN', 'MANAGER', 'EXECUTIVE'); EXCEPTION WHEN duplicate_object THEN null; END $$;
+DO $$ BEGIN CREATE TYPE department_type AS ENUM ('GLOBAL', 'FRONT_DESK', 'DINING', 'HOUSEKEEPING', 'FINANCE', 'SALES', 'TRAVEL'); EXCEPTION WHEN duplicate_object THEN null; END $$;
+DO $$ BEGIN CREATE TYPE user_role AS ENUM ('SUPER_ADMIN', 'ADMIN', 'RECEPTION', 'HOUSEKEEPING', 'FINANCE', 'RESTAURANT', 'FRONT_DESK', 'TRAVEL', 'SALES'); EXCEPTION WHEN duplicate_object THEN null; END $$;
+DO $$ BEGIN CREATE TYPE room_status AS ENUM ('AVAILABLE', 'OCCUPIED', 'CLEANING', 'DIRTY', 'INSPECTING', 'MAINTENANCE'); EXCEPTION WHEN duplicate_object THEN null; END $$;
+DO $$ BEGIN CREATE TYPE booking_status AS ENUM ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT', 'CANCELLED'); EXCEPTION WHEN duplicate_object THEN null; END $$;
 
 -- 3. Core Tables
-CREATE TABLE hotels (
+CREATE TABLE IF NOT EXISTS hotels (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
     address TEXT NOT NULL,
     logo_url TEXT,
     gst_no VARCHAR(100),
-    contact_no VARCHAR(100)
+    contact_no VARCHAR(100),
+    location TEXT
 );
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
     email VARCHAR(255) UNIQUE,
@@ -28,10 +29,12 @@ CREATE TABLE users (
     access_level access_level NOT NULL DEFAULT 'EXECUTIVE',
     department department_type[] NOT NULL DEFAULT ARRAY['FRONT_DESK'::department_type],
     designation VARCHAR(255) DEFAULT 'Administrator',
+    contact_number VARCHAR(100),
+    can_grant_discount BOOLEAN DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE guests (
+CREATE TABLE IF NOT EXISTS guests (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(id) ON DELETE SET NULL, -- Optional, if they created an account online
     name VARCHAR(255) NOT NULL,
@@ -42,7 +45,7 @@ CREATE TABLE guests (
     is_blacklisted BOOLEAN DEFAULT false
 );
 
-CREATE TABLE room_types (
+CREATE TABLE IF NOT EXISTS room_types (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL, -- e.g., 'Deluxe', 'Suite'
@@ -51,7 +54,7 @@ CREATE TABLE room_types (
     capacity_child INT NOT NULL
 );
 
-CREATE TABLE rooms (
+CREATE TABLE IF NOT EXISTS rooms (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
     room_type_id UUID REFERENCES room_types(id) ON DELETE CASCADE,
@@ -61,7 +64,7 @@ CREATE TABLE rooms (
 );
 
 -- 4. Maintenance Tables
-CREATE TABLE maintenance_tickets (
+CREATE TABLE IF NOT EXISTS maintenance_tickets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
     room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
@@ -73,7 +76,7 @@ CREATE TABLE maintenance_tickets (
 );
 
 -- 5. The Core Booking Engine Table
-CREATE TABLE bookings (
+CREATE TABLE IF NOT EXISTS bookings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
     guest_id UUID REFERENCES guests(id) ON DELETE CASCADE,
@@ -97,7 +100,7 @@ CREATE TABLE bookings (
 );
 
 -- 6. Amenity Restocking Expenses (Housekeeping → Finance Integration)
-CREATE TABLE room_expenses (
+CREATE TABLE IF NOT EXISTS room_expenses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
     item_name VARCHAR(255) NOT NULL,
@@ -142,7 +145,7 @@ CREATE TABLE IF NOT EXISTS staff_shifts (
     login_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     logout_time TIMESTAMP WITH TIME ZONE
 );
-CREATE TABLE ledger_transactions (
+CREATE TABLE IF NOT EXISTS ledger_transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     booking_id UUID REFERENCES bookings(id) ON DELETE CASCADE,
     amount DECIMAL(10, 2) NOT NULL,
@@ -627,5 +630,230 @@ CREATE TABLE IF NOT EXISTS licenses (
     jwt_token TEXT NOT NULL,
     hardware_id VARCHAR(255) NOT NULL,
     status VARCHAR(50) DEFAULT 'ACTIVE',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+
+
+-- ==========================================
+-- SALES & MARKETING TABLES
+-- ==========================================
+
+CREATE TABLE IF NOT EXISTS sales_leads (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
+    company VARCHAR(255) NOT NULL,
+    deal_name VARCHAR(255) NOT NULL,
+    value DECIMAL(12, 2) NOT NULL DEFAULT 0,
+    stage VARCHAR(50) NOT NULL DEFAULT 'New',
+    source VARCHAR(100),
+    contact_name VARCHAR(255),
+    contact_email VARCHAR(255),
+    contact_phone VARCHAR(50),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS sales_accounts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    industry VARCHAR(100),
+    rate DECIMAL(10, 2) DEFAULT 0,
+    ytd_revenue DECIMAL(15, 2) DEFAULT 0,
+    status VARCHAR(50) DEFAULT 'Active',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS sales_tasks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    type VARCHAR(50),
+    deadline TIMESTAMP WITH TIME ZONE,
+    status VARCHAR(50) DEFAULT 'Pending',
+    priority VARCHAR(50) DEFAULT 'Medium',
+    client VARCHAR(255),
+    assigner VARCHAR(255),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS ota_performance (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    color VARCHAR(20),
+    bookings INT DEFAULT 0,
+    room_nights INT DEFAULT 0,
+    gross_revenue DECIMAL(15,2) DEFAULT 0,
+    commission_rate DECIMAL(5,2) DEFAULT 0,
+    cancel_rate DECIMAL(5,2) DEFAULT 0,
+    status VARCHAR(50) DEFAULT 'Active'
+);
+
+-- ==========================================
+-- STAFF & PAYROLL TABLES
+-- ==========================================
+
+CREATE TABLE IF NOT EXISTS staff_salaries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+    base_salary_monthly DECIMAL(10, 2) DEFAULT 0,
+    daily_deduction DECIMAL(10, 2) DEFAULT 0,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ==========================================
+-- LEDGER TABLES
+-- ==========================================
+
+CREATE TABLE IF NOT EXISTS ledger_transactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    booking_id UUID REFERENCES bookings(id) ON DELETE CASCADE,
+    amount DECIMAL(10, 2) NOT NULL,
+    transaction_type VARCHAR(50) NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    payment_method VARCHAR(50) DEFAULT 'Cash',
+    reference_number VARCHAR(255),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ==========================================
+-- NOTIFICATIONS TABLES
+-- ==========================================
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    message TEXT NOT NULL,
+    notification_type VARCHAR(20) NOT NULL DEFAULT 'GLOBAL',
+    priority VARCHAR(10) NOT NULL DEFAULT 'NORMAL',
+    target_dept VARCHAR(50),
+    target_user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    sender_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    sender_name VARCHAR(255) NOT NULL,
+    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE TABLE IF NOT EXISTS notification_reads (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    notification_id UUID REFERENCES notifications(id) ON DELETE CASCADE,
+    read_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, notification_id)
+);
+
+
+-- ==========================================
+-- ADDITIONAL SALES & TRAVEL TABLES
+-- ==========================================
+
+CREATE TABLE IF NOT EXISTS sales_competitor_intel (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
+    competitor_name VARCHAR(255) NOT NULL,
+    pricing_strategy VARCHAR(255),
+    occupancy_estimate DECIMAL(5,2),
+    notes TEXT,
+    logged_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS sales_lead_activities (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    lead_id UUID REFERENCES sales_leads(id) ON DELETE CASCADE,
+    activity_type VARCHAR(100) NOT NULL,
+    description TEXT,
+    performed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    activity_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS sales_ota_stats (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
+    ota_name VARCHAR(100) NOT NULL,
+    ranking_score DECIMAL(5,2),
+    conversion_rate DECIMAL(5,2),
+    revenue_generated DECIMAL(15,2) DEFAULT 0,
+    recorded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS sales_quotes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    lead_id UUID REFERENCES sales_leads(id) ON DELETE CASCADE,
+    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
+    quote_amount DECIMAL(12,2) NOT NULL,
+    valid_until DATE,
+    status VARCHAR(50) DEFAULT 'Draft',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS sales_rate_cards (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    season VARCHAR(100),
+    base_rate DECIMAL(10,2) NOT NULL,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS sales_templates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
+    template_name VARCHAR(255) NOT NULL,
+    subject VARCHAR(255),
+    body TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS travel_vehicles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
+    vehicle_type VARCHAR(100) NOT NULL,
+    registration_number VARCHAR(100) NOT NULL UNIQUE,
+    capacity INT DEFAULT 4,
+    status VARCHAR(50) DEFAULT 'Available'
+);
+
+CREATE TABLE IF NOT EXISTS vehicle_bookings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    vehicle_id UUID REFERENCES travel_vehicles(id) ON DELETE CASCADE,
+    guest_id UUID REFERENCES guests(id) ON DELETE CASCADE,
+    pickup_location VARCHAR(255),
+    dropoff_location VARCHAR(255),
+    booking_time TIMESTAMP WITH TIME ZONE NOT NULL,
+    status VARCHAR(50) DEFAULT 'Confirmed',
+    fare DECIMAL(10,2) DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+
+-- ==========================================
+-- HR MODULE TABLES
+-- ==========================================
+
+CREATE TABLE IF NOT EXISTS staff_attendance (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    date DATE NOT NULL,
+    check_in TIMESTAMP WITH TIME ZONE,
+    check_out TIMESTAMP WITH TIME ZONE,
+    status VARCHAR(50) DEFAULT 'Present',
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, date)
+);
+
+CREATE TABLE IF NOT EXISTS staff_leaves (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    leave_type VARCHAR(50) NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    reason TEXT,
+    status VARCHAR(50) DEFAULT 'Pending',
+    approved_by UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
