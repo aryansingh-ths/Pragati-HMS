@@ -14,7 +14,7 @@ export default function SystemLocked({ onUnlock }) {
         const data = await res.json();
         if (data.status === 'active' && data.token) {
           clearInterval(pollTimer);
-          onUnlock(data.token, data.user);
+          onUnlock(data.token, data.user, data.expiresAt);
         }
       } catch (err) {
         console.error("Polling error", err);
@@ -47,14 +47,6 @@ export default function SystemLocked({ onUnlock }) {
     }
   };
 
-  const handleMockInject = async () => {
-     try {
-        await fetch('http://localhost:3000/api/license/inject-mock', { method: 'POST' });
-     } catch (e) {
-        console.error(e);
-     }
-  };
-
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
       <div className="bg-slate-800 p-8 rounded-xl shadow-2xl max-w-lg w-full text-center border border-red-500/30">
@@ -72,7 +64,7 @@ export default function SystemLocked({ onUnlock }) {
 
         {requestStatus === 'idle' ? (
           <button 
-            onClick={() => setShowModal(true)}
+            onClick={handleRequestActivation}
             className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded transition-colors"
           >
             Request Activation
@@ -90,54 +82,7 @@ export default function SystemLocked({ onUnlock }) {
             {hardwareId && <p className="text-xs text-slate-500 mt-2 font-mono">HWID: {hardwareId}</p>}
           </div>
         )}
-        
-        {/* MOCK DEV BUTTON */}
-        <button onClick={handleMockInject} className="mt-8 text-xs text-slate-600 hover:text-slate-400 underline">
-           [DEV] Inject Mock License
-        </button>
       </div>
-
-      {showModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 bg-slate-900 bg-opacity-75 transition-opacity" aria-hidden="true" onClick={() => setShowModal(false)}></div>
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            <div className="inline-block align-bottom bg-slate-800 rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-sm sm:w-full sm:p-6 border border-slate-700">
-              <div>
-                <h3 className="text-lg leading-6 font-medium text-white" id="modal-title">
-                  Activation Request
-                </h3>
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-slate-300">Requested Expiry Date</label>
-                  <input 
-                    type="date" 
-                    className="mt-1 p-2 w-full bg-slate-700 text-white rounded border border-slate-600 focus:border-blue-500 focus:outline-none" 
-                    value={requestedDate}
-                    onChange={(e) => setRequestedDate(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="mt-6 sm:flex sm:flex-row-reverse">
-                <button 
-                  type="button" 
-                  disabled={!requestedDate}
-                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
-                  onClick={handleRequestActivation}
-                >
-                  Submit
-                </button>
-                <button 
-                  type="button" 
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-slate-600 shadow-sm px-4 py-2 bg-slate-700 text-base font-medium text-slate-300 hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                  onClick={() => setShowModal(false)}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

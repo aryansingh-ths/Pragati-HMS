@@ -18,6 +18,7 @@ import BookingModal from './components/BookingModal';
 // Onboarding & Licensing
 import SetupWizard from './pages/SetupWizard';
 import SystemLocked from './pages/SystemLocked';
+import LicenseWarningBanner from './components/LicenseWarningBanner';
 
 // Authentication & Page Routes
 import ProtectedRoute from './components/ProtectedRoute';
@@ -50,6 +51,10 @@ export default function App() {
       return [];
     }
   });
+  const [licenseExpiresAt, setLicenseExpiresAt] = useState(() => {
+    const val = sessionStorage.getItem('hms_expires_at');
+    return val ? parseInt(val, 10) : null;
+  });
 
   // Listen for storage changes to keep state in sync across components
   useEffect(() => {
@@ -81,6 +86,10 @@ export default function App() {
         const res = await fetch('http://localhost:3000/api/setup/init');
         const data = await res.json();
         setSystemStatus(data.status);
+        if (data.expiresAt) {
+          setLicenseExpiresAt(data.expiresAt);
+          sessionStorage.setItem('hms_expires_at', data.expiresAt);
+        }
       } catch (err) {
         console.error("System init error", err);
         setSystemStatus('active'); // fallback
@@ -108,12 +117,12 @@ export default function App() {
 
   if (systemStatus === 'loading') {
     return (
-       <div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center">
-         <div className="flex flex-col items-center">
-           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900 mb-4"></div>
-           <p className="text-slate-600 uppercase tracking-widest text-xs font-bold">Booting HMS...</p>
-         </div>
-       </div>
+      <div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center">
+        <div className="flex flex-col items-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900 mb-4"></div>
+          <p className="text-slate-600 uppercase tracking-widest text-xs font-bold">Booting HMS...</p>
+        </div>
+      </div>
     );
   }
 
@@ -122,12 +131,16 @@ export default function App() {
   }
 
   if (systemStatus === 'locked') {
-    return <SystemLocked onUnlock={(token, user) => {
-       sessionStorage.setItem('hms_token', token);
-       sessionStorage.setItem('hms_role', user.role);
-       setAuthToken(token);
-       setUserRole(user.role);
-       setSystemStatus('active');
+    return <SystemLocked onUnlock={(token, user, expiresAt) => {
+      sessionStorage.setItem('hms_token', token);
+      sessionStorage.setItem('hms_role', user.role);
+      if (expiresAt) {
+        sessionStorage.setItem('hms_expires_at', expiresAt);
+        setLicenseExpiresAt(expiresAt);
+      }
+      setAuthToken(token);
+      setUserRole(user.role);
+      setSystemStatus('active');
     }} />;
   }
 
@@ -141,16 +154,19 @@ export default function App() {
   return (
     <Router>
       <div className="min-h-screen bg-[#FDFBF7] text-slate-800 flex flex-col justify-between pt-24">
-
-        <Header
-          userRole={userRole}
-          setUserRole={setUserRole}
-          setAuthToken={setAuthToken}
-          viewMode={viewMode}
-          setViewMode={setViewMode}
-          setIsAuthOpen={setIsAuthOpen}
-          scrollToSection={scrollToSection}
-        />
+        
+        <div className="fixed top-0 left-0 w-full z-[100] flex flex-col">
+          <LicenseWarningBanner expiresAt={licenseExpiresAt} />
+          <Header
+            userRole={userRole}
+            setUserRole={setUserRole}
+            setAuthToken={setAuthToken}
+            viewMode={viewMode}
+            setViewMode={setViewMode}
+            setIsAuthOpen={setIsAuthOpen}
+            scrollToSection={scrollToSection}
+          />
+        </div>
 
         <div className="flex-1">
           <Routes>
