@@ -464,6 +464,8 @@ export default function AdminDashboard() {
   const [expandedClasses, setExpandedClasses] = useState({});
   const [isAddRoomModalOpen, setIsAddRoomModalOpen] = useState(false);
   const [newRoomForm, setNewRoomForm] = useState({ room_number: '', room_type_id: '' });
+  const [isAddRoomClassModalOpen, setIsAddRoomClassModalOpen] = useState(false);
+  const [newRoomClassForm, setNewRoomClassForm] = useState({ name: '', base_price: '', capacity_adult: '2', capacity_child: '0' });
 
   // Maintenance state
   const [isAddTicketModalOpen, setIsAddTicketModalOpen] = useState(false);
@@ -790,6 +792,24 @@ export default function AdminDashboard() {
     });
     if (res?.ok) loadAdminData();
     else alert("❌ Failed to manually override room status.");
+  };
+
+  const handleAddRoomClass = async (e) => {
+    e.preventDefault();
+    if (!newRoomClassForm.name.trim()) return alert("❌ Room class name cannot be empty.");
+    
+    const res = await fetchWithAuth('http://localhost:3000/api/Admin/room-types', {
+      method: 'POST', body: JSON.stringify(newRoomClassForm)
+    });
+
+    if (res?.ok) {
+      setIsAddRoomClassModalOpen(false);
+      setNewRoomClassForm({ name: '', base_price: '', capacity_adult: '2', capacity_child: '0' });
+      loadAdminData();
+    } else {
+      const err = await res.json();
+      alert(`❌ ${err?.error || "Failed to add room class."}`);
+    }
   };
 
   const handleAddRoom = async (e) => {
@@ -3138,7 +3158,27 @@ export default function AdminDashboard() {
                   </motion.div>
 
                   {/* Room Classes Accordion */}
-                  <div className="space-y-5">
+                  <div className="flex justify-between items-center mt-4">
+                    <h3 className="text-sm font-black text-zinc-800 uppercase tracking-wider">Configured Room Categories</h3>
+                    {(!isSuperAdmin || selectedHotelId) && (
+                      <button
+                        onClick={() => setIsAddRoomClassModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white rounded-xl text-xs font-bold hover:bg-zinc-800 transition-colors shadow-md"
+                      >
+                        <Plus size={14} /> Add Category
+                      </button>
+                    )}
+                  </div>
+                  {roomTypes.length === 0 && (
+                    <div className="text-center py-12 bg-white rounded-3xl border border-zinc-200 shadow-sm mt-4">
+                      <div className="w-16 h-16 rounded-2xl bg-zinc-100 flex items-center justify-center mx-auto mb-4">
+                        <BedDouble size={24} className="text-zinc-400" />
+                      </div>
+                      <h4 className="text-lg font-black text-zinc-900 mb-2">No Room Categories</h4>
+                      <p className="text-sm text-zinc-500 max-w-sm mx-auto">This property doesn't have any room categories yet. Create your first category to start adding inventory.</p>
+                    </div>
+                  )}
+                  <div className="space-y-5 mt-4">
                     {Array.from(new Set(roomTypes.map(t => t.name.trim()))).map((name, typeIdx) => {
                       const matchingTypes = roomTypes.filter(t => t.name.trim() === name);
                       const type = matchingTypes[0];
@@ -5896,6 +5936,91 @@ export default function AdminDashboard() {
                   className="w-full bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-lg shadow-rose-500/20 flex items-center justify-center gap-2 mt-4"
                 >
                   <Wrench size={16} /> Deploy Ticket & Lock Room
+                </button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Add Room Class Modal */}
+      <AnimatePresence>
+        {isAddRoomClassModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, transition: { duration: 0.25 } }}
+            exit={{ opacity: 0, transition: { duration: 0.2 } }}
+            className="fixed inset-0 z-55 flex items-center justify-center fd-glass-backdrop p-4"
+            onClick={() => setIsAddRoomClassModalOpen(false)}
+          >
+            <motion.div
+              variants={modalVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              onClick={e => e.stopPropagation()}
+              className="w-full max-w-sm fd-glass-modal rounded-3xl p-7"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
+                    <BedDouble size={20} />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-serif font-bold text-zinc-900">New Category</h2>
+                    <p className="text-xs text-zinc-500">Create a room class</p>
+                  </div>
+                </div>
+                <button onClick={() => setIsAddRoomClassModalOpen(false)} className="p-2 rounded-xl hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-all"><X size={20} /></button>
+              </div>
+
+              <form onSubmit={handleAddRoomClass} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Category Name</label>
+                  <input
+                    type="text" required
+                    placeholder="e.g. Deluxe Suite"
+                    value={newRoomClassForm.name}
+                    onChange={e => setNewRoomClassForm({ ...newRoomClassForm, name: e.target.value })}
+                    className="fd-input bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Base Price (₹)</label>
+                  <input
+                    type="number" min="0" required
+                    placeholder="e.g. 5000"
+                    value={newRoomClassForm.base_price}
+                    onChange={e => setNewRoomClassForm({ ...newRoomClassForm, base_price: e.target.value })}
+                    className="fd-input bg-white"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Adult Capacity</label>
+                    <input
+                      type="number" min="1" required
+                      value={newRoomClassForm.capacity_adult}
+                      onChange={e => setNewRoomClassForm({ ...newRoomClassForm, capacity_adult: e.target.value })}
+                      className="fd-input bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Child Capacity</label>
+                    <input
+                      type="number" min="0" required
+                      value={newRoomClassForm.capacity_child}
+                      onChange={e => setNewRoomClassForm({ ...newRoomClassForm, capacity_child: e.target.value })}
+                      className="fd-input bg-white"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2 mt-4"
+                >
+                  <Plus size={16} /> Create Category
                 </button>
               </form>
             </motion.div>

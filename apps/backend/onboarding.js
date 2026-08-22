@@ -135,6 +135,7 @@ module.exports = function (app, pool, JWT_SECRET) {
 
   // 3. License Request API (Phase 2)
   app.post('/api/license/request', async (req, res) => {
+    console.log("hget")
     const hardwareId = getHardwareId();
     const MISSION_CONTROL_URL = process.env.MISSION_CONTROL_URL || 'https://rmslicense.techhansatechnology.com';
     

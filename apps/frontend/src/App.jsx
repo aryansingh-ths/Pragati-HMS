@@ -155,7 +155,7 @@ export default function App() {
     <Router>
       <div className="min-h-screen bg-[#FDFBF7] text-slate-800 flex flex-col justify-between pt-24">
         
-        <div className="fixed top-0 left-0 w-full z-[100] flex flex-col">
+        <div className="fixed top-0 left-0 w-full z-50 flex flex-col">
           <LicenseWarningBanner expiresAt={licenseExpiresAt} />
           <Header
             userRole={userRole}

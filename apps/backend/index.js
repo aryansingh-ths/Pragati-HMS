@@ -21,7 +21,7 @@ const app = express();
 const PORT = 3000;
 const JWT_SECRET = 'techkriti_grand_super_secret_key_2026';
 
-app.use(cors());
+app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -428,10 +428,22 @@ app.post('/api/super-admin/users', verifyToken, requireRole(['SUPER_ADMIN']), as
   const { name, email, password, role, hotel_id } = req.body;
   if (!name || !email || !password || !role) return res.status(400).json({ error: 'Missing fields' });
   try {
+    const roleMapping = {
+      ADMIN: { access: 'ADMIN', dept: 'GLOBAL' },
+      RECEPTION: { access: 'EXECUTIVE', dept: 'FRONT_DESK' },
+      FRONT_DESK: { access: 'EXECUTIVE', dept: 'FRONT_DESK' },
+      HOUSEKEEPING: { access: 'EXECUTIVE', dept: 'HOUSEKEEPING' },
+      FINANCE: { access: 'EXECUTIVE', dept: 'FINANCE' },
+      RESTAURANT: { access: 'EXECUTIVE', dept: 'RESTAURANT' },
+      SALES: { access: 'EXECUTIVE', dept: 'SALES' },
+      TRAVEL: { access: 'EXECUTIVE', dept: 'TRAVEL' }
+    };
+    const defaultMapping = roleMapping[role] || { access: 'EXECUTIVE', dept: 'FRONT_DESK' };
+
     const hash = await bcrypt.hash(password, 10);
     const result = await pool.query(
-      'INSERT INTO users (name, email, password_hash, role, hotel_id) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, role',
-      [name, email.toLowerCase(), hash, role, hotel_id || null]
+      'INSERT INTO users (name, email, password_hash, role, hotel_id, access_level, department) VALUES ($1, $2, $3, $4, $5, $6, ARRAY[$7::department_type]) RETURNING id, name, email, role',
+      [name, email.toLowerCase(), hash, role, hotel_id || null, defaultMapping.access, defaultMapping.dept]
     );
     res.status(201).json({ status: 'success', data: { user: result.rows[0] } });
   } catch (err) {
@@ -542,7 +554,7 @@ app.get('/api/rooms', async (req, res) => {
   try {
     const query = `
       SELECT r.id AS room_id, r.room_number, r.status, rt.name AS room_type, 
-             rt.base_price, rt.capacity_adult, rt.capacity_child
+             COALESCE(rt.current_price, rt.base_price) AS base_price, rt.capacity_adult, rt.capacity_child
       FROM rooms r
       JOIN room_types rt ON r.room_type_id = rt.id
       ORDER BY r.room_number ASC;
@@ -561,7 +573,7 @@ app.get('/api/room-classes', async (req, res) => {
       SELECT 
         MIN(rt.id::text) AS room_type_id,
         rt.name,
-        MIN(rt.base_price) AS base_price,
+        MIN(COALESCE(rt.current_price, rt.base_price)) AS base_price,
         MAX(rt.capacity_adult) AS capacity_adult,
         MAX(rt.capacity_child) AS capacity_child,
         COUNT(r.id) AS total_rooms,
@@ -569,7 +581,7 @@ app.get('/api/room-classes', async (req, res) => {
       FROM room_types rt
       LEFT JOIN rooms r ON r.room_type_id = rt.id
       GROUP BY rt.name
-      ORDER BY MIN(rt.base_price) ASC;
+      ORDER BY MIN(COALESCE(rt.current_price, rt.base_price)) ASC;
     `;
     const result = await pool.query(query);
     res.json({ status: 'success', results: result.rows.length, data: { roomClasses: result.rows } });
@@ -729,7 +741,7 @@ app.patch('/api/front-desk/bookings/:id/change-room', verifyToken, requireRole([
 app.get('/api/front-desk/rooms/all', verifyToken, requireRole(['FRONT_DESK', 'ADMIN', 'RECEPTION']), async (req, res) => {
   try {
     const query = `
-      SELECT r.id, r.room_number, r.status, rt.name as room_type, rt.base_price 
+      SELECT r.id, r.room_number, r.status, rt.name as room_type, COALESCE(rt.current_price, rt.base_price) AS base_price 
       FROM rooms r
       JOIN room_types rt ON r.room_type_id = rt.id
       WHERE ${getHotelFilter(req, 'r')}
@@ -744,7 +756,7 @@ app.get('/api/front-desk/rooms/all', verifyToken, requireRole(['FRONT_DESK', 'AD
 app.get('/api/front-desk/rooms/available', verifyToken, requireRole(['FRONT_DESK', 'ADMIN', 'RECEPTION']), async (req, res) => {
   try {
     const query = `
-      SELECT r.id, r.room_number, rt.name as room_type, rt.base_price 
+      SELECT r.id, r.room_number, rt.name as room_type, COALESCE(rt.current_price, rt.base_price) AS base_price 
       FROM rooms r
       JOIN room_types rt ON r.room_type_id = rt.id
       WHERE r.status = 'AVAILABLE' AND ${getHotelFilter(req, 'r')}
@@ -832,7 +844,7 @@ app.patch('/api/front-desk/bookings/:id/extend', verifyToken, requireRole(['FRON
     const { check_in_date, room_id } = bookingRes.rows[0];
 
     const roomRes = await pool.query(
-      'SELECT rt.base_price FROM rooms r JOIN room_types rt ON r.room_type_id = rt.id WHERE r.id = $1',
+      'SELECT COALESCE(rt.current_price, rt.base_price) AS base_price FROM rooms r JOIN room_types rt ON r.room_type_id = rt.id WHERE r.id = $1',
       [room_id]
     );
     const basePrice = roomRes.rows[0].base_price;
@@ -919,7 +931,7 @@ app.get('/api/front-desk/bookings/all', verifyToken, requireRole(['FRONT_DESK', 
 app.get('/api/housekeeping/board', verifyToken, requireRole(['HOUSEKEEPING', 'ADMIN']), async (req, res) => {
   try {
     const query = `
-      SELECT r.id, r.room_number, r.status, rt.name as room_type, rt.base_price
+      SELECT r.id, r.room_number, r.status, rt.name as room_type, COALESCE(rt.current_price, rt.base_price) AS base_price
       FROM rooms r
       JOIN room_types rt ON r.room_type_id = rt.id
       WHERE r.status IN ('DIRTY', 'CLEANING', 'INSPECTING')
@@ -1334,10 +1346,10 @@ app.get('/api/Admin/live-operations', verifyToken, requireRole(['ADMIN', 'SUPER_
     `);
 
     const dirtyRoomsRes = await pool.query(`
-      SELECT r.room_number, rt.name as room_type, rt.base_price, h.name as hotel_name
+      SELECT r.room_number, rt.name as room_type, COALESCE(rt.current_price, rt.base_price) AS base_price, h.name as hotel_name
       FROM rooms r JOIN room_types rt ON r.room_type_id = rt.id
       LEFT JOIN hotels h ON r.hotel_id = h.id
-      WHERE r.status IN ('DIRTY', 'CLEANING') AND ${getHotelFilter(req, 'r')} ORDER BY rt.base_price DESC LIMIT 6
+      WHERE r.status IN ('DIRTY', 'CLEANING') AND ${getHotelFilter(req, 'r')} ORDER BY COALESCE(rt.current_price, rt.base_price) DESC LIMIT 6
     `);
 
     let highPriorityTickets = [];
@@ -1384,7 +1396,7 @@ app.get('/api/Admin/rooms', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), 
 
 
     const query = `
-      SELECT r.id, r.room_number, r.status, r.room_blocked, r.room_type_id, rt.name as room_type, rt.base_price, h.name as hotel_name
+      SELECT r.id, r.room_number, r.status, r.room_blocked, r.room_type_id, rt.name as room_type, COALESCE(rt.current_price, rt.base_price) AS base_price, h.name as hotel_name
       FROM rooms r JOIN room_types rt ON r.room_type_id = rt.id 
       LEFT JOIN hotels h ON r.hotel_id = h.id
       WHERE ${getHotelFilter(req, 'r')}
@@ -1416,19 +1428,34 @@ app.post('/api/Admin/rooms/:id/toggle-block', verifyToken, requireRole(['ADMIN',
 // 4. GET ROOM TYPES (For the Add Room Dropdown)
 app.get('/api/Admin/room-types', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, name, base_price FROM room_types ORDER BY base_price ASC');
+    const result = await pool.query('SELECT id, name, COALESCE(current_price, base_price) AS base_price FROM room_types ORDER BY COALESCE(current_price, base_price) ASC');
     res.json({ status: 'success', data: { roomTypes: result.rows } });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch room types' });
   }
 });
 
+// 4b. ADD ROOM TYPE (Category)
+app.post('/api/Admin/room-types', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
+  const { name, base_price, capacity_adult, capacity_child, hotel_id } = req.body;
+  const targetHotelId = req.user.hotelId || req.body.hotel_id || req.query.hotel_id;
+  try {
+    const result = await pool.query(
+      'INSERT INTO room_types (name, base_price, capacity_adult, capacity_child, hotel_id) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, base_price',
+      [name, base_price || 0, capacity_adult || 2, capacity_child || 0, targetHotelId || null]
+    );
+    res.status(201).json({ status: 'success', data: { roomType: result.rows[0] } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create room type' });
+  }
+});
+
 // 5. ADD NEW ROOM TO INVENTORY
 app.post('/api/Admin/rooms', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   const { room_number, room_type_id, hotel_id } = req.body;
-  const targetHotelId = req.user.hotelId || hotel_id;
+  const targetHotelId = req.user.hotelId || req.body.hotel_id || req.query.hotel_id;
   try {
-    // Room number must be unique per hotel
+    // Room number must be unique per hotel (Migration: ALTER TABLE rooms ADD CONSTRAINT rooms_room_number_hotel_id_key UNIQUE (room_number, hotel_id))
     const check = await pool.query(
       targetHotelId
         ? 'SELECT id FROM rooms WHERE room_number = $1 AND hotel_id = $2'
@@ -1732,7 +1759,16 @@ app.get('/api/Admin/yield-rules', verifyToken, requireRole(['ADMIN', 'SUPER_ADMI
       crm_triggers: { pre_arrival_upsell: false, post_checkout_feedback: false },
       maintenance_automation: { ac_servicing_days: 90, backup_contractor: 'QuickFix Hospitality Group', auto_route_contractor: false, generator_check_days: 30 }
     };
-    rules.rows.forEach(r => { rulesObj[r.key] = r.value; });
+    rules.rows.forEach(r => { 
+      let val = r.value;
+      if (typeof val === 'string') {
+        try { val = JSON.parse(val); } catch(e) {}
+      }
+      if (r.key === 'seasonal_multiplier' && !Array.isArray(val)) {
+        val = [];
+      }
+      rulesObj[r.key] = val; 
+    });
     res.json({ status: 'success', data: { rules: rulesObj } });
   } catch (err) {
     res.status(500).json({ error: 'Database error while fetching yield rules' });
@@ -1742,16 +1778,18 @@ app.get('/api/Admin/yield-rules', verifyToken, requireRole(['ADMIN', 'SUPER_ADMI
 // 2. DYNAMIC PRICING & YIELD MANAGEMENT: Update Yield Rule
 app.post('/api/Admin/yield-rules', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   const { key, value, apply_to_all } = req.body;
+  const targetHotelId = req.user.hotelId || req.body.hotel_id || req.query.hotel_id;
   if (!key || value === undefined) return res.status(400).json({ error: 'Key and value are required' });
   try {
+    const stringifiedValue = JSON.stringify(value);
     if (apply_to_all && req.user.role === 'SUPER_ADMIN') {
       const hotelsRes = await pool.query('SELECT id FROM hotels');
       for (const h of hotelsRes.rows) {
-        await pool.query('INSERT INTO yield_rules (key, value, hotel_id) VALUES ($1, $2, $3) ON CONFLICT (hotel_id, key) DO UPDATE SET value = EXCLUDED.value;', [key, value, h.id]);
+        await pool.query('INSERT INTO yield_rules (key, value, hotel_id) VALUES ($1, $2, $3) ON CONFLICT (hotel_id, key) DO UPDATE SET value = EXCLUDED.value;', [key, stringifiedValue, h.id]);
       }
       await logAuditAction(req.user.userId, 'Global Yield Override', `Forced configuration for rule: ${key} to all properties`);
     } else {
-      await pool.query('INSERT INTO yield_rules (key, value, hotel_id) VALUES ($1, $2, $3) ON CONFLICT (hotel_id, key) DO UPDATE SET value = EXCLUDED.value;', [key, value, req.user.hotelId]);
+      await pool.query('INSERT INTO yield_rules (key, value, hotel_id) VALUES ($1, $2, $3) ON CONFLICT (hotel_id, key) DO UPDATE SET value = EXCLUDED.value;', [key, stringifiedValue, targetHotelId]);
       await logAuditAction(req.user.userId, 'Update Yield Rule', `Updated configuration for rule: ${key}`);
     }
     res.json({ status: 'success', message: `Rule ${key} updated successfully` });
@@ -1907,16 +1945,16 @@ app.post('/api/Admin/crm/guests/:id', verifyToken, requireRole(['ADMIN', 'SUPER_
 
 // 8. DEPARTMENTAL BROADCASTING
 app.post('/api/Admin/broadcast', verifyToken, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
-  const { targetDept, message } = req.body;
+  const { targetDept, message, hotel_id } = req.body;
   if (!message) return res.status(400).json({ error: 'Message content is required' });
   try {
     const senderName = await pool.query('SELECT name FROM users WHERE id = $1', [req.user.userId]);
     const name = senderName.rows.length > 0 ? senderName.rows[0].name : 'Admin';
 
     await pool.query(
-      `INSERT INTO broadcasts (target_dept, message, sender_id, sender_name, expires_at)
-       VALUES ($1, $2, $3, $4, NOW() + INTERVAL '24 hours')`,
-      [targetDept || 'ALL', message, req.user.userId, name]
+      `INSERT INTO broadcasts (target_dept, message, sender_id, sender_name, expires_at, hotel_id)
+       VALUES ($1, $2, $3, $4, NOW() + INTERVAL '24 hours', $5)`,
+      [targetDept || 'ALL', message, req.user.userId, name, hotel_id || null]
     );
 
     await logAuditAction(
@@ -1949,27 +1987,29 @@ app.get('/api/broadcasts', verifyToken, async (req, res) => {
 app.get('/api/notifications', verifyToken, async (req, res) => {
   try {
     const userId = req.user.userId;
-    const userRes = await pool.query('SELECT role, hotel_id FROM users WHERE id = $1', [userId]);
+    const userRes = await pool.query('SELECT role, department, hotel_id FROM users WHERE id = $1', [userId]);
     const userRole = userRes.rows.length > 0 ? userRes.rows[0].role : 'NONE';
     const userHotelId = userRes.rows.length > 0 ? userRes.rows[0].hotel_id : null;
+    const userDepts = userRes.rows.length > 0 ? userRes.rows[0].department : [];
 
     const result = await pool.query(`
       SELECT n.*,
-        (CASE WHEN nr.id IS NOT NULL OR n.sender_id = $1 THEN true ELSE false END) as is_read,
+        (CASE WHEN nr.id IS NOT NULL THEN true ELSE false END) as is_read,
         nr.read_at
       FROM notifications n
       LEFT JOIN notification_reads nr ON nr.notification_id = n.id AND nr.user_id = $1
       WHERE (
         n.target_user_id = $1
-        OR (n.notification_type = 'DEPARTMENT' AND UPPER(n.target_dept) = UPPER($2))
+        OR (n.notification_type = 'DEPARTMENT' AND (UPPER(n.target_dept) = UPPER($2) OR n.target_dept = ANY($4::text[])))
         OR n.notification_type = 'GLOBAL'
         OR $2 = 'SUPER_ADMIN'
       )
+      AND n.sender_id != $1
       AND (n.expires_at IS NULL OR n.expires_at > NOW())
       AND (n.hotel_id IS NULL OR n.hotel_id = $3 OR $2 = 'SUPER_ADMIN')
       ORDER BY n.created_at DESC
       LIMIT 100
-    `, [userId, userRole, userHotelId]);
+    `, [userId, userRole, userHotelId, userDepts]);
 
     res.json({ status: 'success', data: { notifications: result.rows } });
   } catch (err) {
@@ -2812,7 +2852,7 @@ async function runMigrations() {
     const enums = [
       { type: 'room_status', values: ['INSPECTING'] },
       { type: 'user_role', values: ['RESTAURANT', 'SALES', 'TRAVEL', 'FRONT_DESK'] },
-      { type: 'department_type', values: ['FRONT_DESK', 'SALES', 'TRAVEL'] }
+      { type: 'department_type', values: ['FRONT_DESK', 'SALES', 'TRAVEL', 'RESTAURANT', 'HOUSEKEEPING', 'FINANCE', 'GLOBAL', 'DINING'] }
     ];
     for (const e of enums) {
       for (const val of e.values) {
@@ -2822,6 +2862,28 @@ async function runMigrations() {
         }
       }
     }
+
+    // Convert global unique constraint on room_number to composite (hotel_id, room_number)
+    try {
+      await pool.query('ALTER TABLE rooms DROP CONSTRAINT IF EXISTS rooms_room_number_key CASCADE');
+      await pool.query('ALTER TABLE rooms ADD CONSTRAINT rooms_room_number_hotel_id_key UNIQUE (room_number, hotel_id)');
+    } catch (e) {}
+
+    // Yield Rules Migration for multi-hotel
+    try {
+      await pool.query('ALTER TABLE room_types ADD COLUMN IF NOT EXISTS current_price DECIMAL(10, 2);');
+      await pool.query('ALTER TABLE yield_rules ADD COLUMN IF NOT EXISTS hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE');
+      await pool.query('ALTER TABLE yield_rules DROP CONSTRAINT IF EXISTS yield_rules_pkey CASCADE');
+      await pool.query('ALTER TABLE yield_rules ADD CONSTRAINT yield_rules_hotel_key_unique UNIQUE (hotel_id, key)');
+    } catch (e) {}
+
+    // Broadcasts table migration
+    try {
+      await pool.query('ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS target_dept VARCHAR(50) DEFAULT \'ALL\'');
+      await pool.query('ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS sender_id UUID REFERENCES users(id) ON DELETE SET NULL');
+      await pool.query('ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS sender_name VARCHAR(100)');
+      await pool.query('ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITH TIME ZONE');
+    } catch (e) {}
 
     // Seed default yield rules
     const seedRules = [
@@ -2834,7 +2896,10 @@ async function runMigrations() {
     ];
     for (const rule of seedRules) {
       try {
-        await pool.query('INSERT INTO yield_rules (key, value) VALUES ($1, $2) ON CONFLICT DO NOTHING;', [rule.key, JSON.stringify(rule.value)]);
+        const check = await pool.query('SELECT 1 FROM yield_rules WHERE key = $1 AND hotel_id IS NULL', [rule.key]);
+        if (check.rows.length === 0) {
+          await pool.query('INSERT INTO yield_rules (key, value) VALUES ($1, $2)', [rule.key, JSON.stringify(rule.value)]);
+        }
       } catch(e) {}
     }
 
@@ -2862,9 +2927,62 @@ async function runMigrations() {
   }
 }
 
+// ==========================================
+// YIELD & DISTRIBUTION ENGINE (Background Worker)
+// ==========================================
+function startYieldEngine() {
+  console.log('🤖 Starting Yield & Distribution Engine...');
+  // Run every 5 minutes
+  setInterval(async () => {
+    try {
+      const hotels = await pool.query('SELECT id FROM hotels');
+      
+      for (const hotel of hotels.rows) {
+        // 1. Calculate occupancy
+        const stats = await pool.query(`
+          SELECT 
+            COUNT(*) as total_rooms,
+            COUNT(CASE WHEN status IN ('OCCUPIED') THEN 1 END) as occupied_rooms
+          FROM rooms WHERE hotel_id = $1
+        `, [hotel.id]);
+        
+        const total = parseInt(stats.rows[0].total_rooms) || 0;
+        const occupied = parseInt(stats.rows[0].occupied_rooms) || 0;
+        const occupancyRate = total === 0 ? 0 : (occupied / total) * 100;
+
+        // 2. Fetch Yield Rule for this hotel
+        const rules = await pool.query("SELECT value FROM yield_rules WHERE key = 'pricing_surges' AND hotel_id = $1", [hotel.id]);
+        if (rules.rows.length > 0) {
+          const rule = rules.rows[0].value;
+          if (rule.enabled && occupancyRate >= rule.occupancy_threshold) {
+            // Apply surge: calculate current_price = base_price * (1 + surge/100)
+            const surgeMultiplier = 1 + (rule.surge_percentage / 100);
+            await pool.query(`
+              UPDATE room_types 
+              SET current_price = base_price * $1
+              WHERE hotel_id = $2
+            `, [surgeMultiplier, hotel.id]);
+            console.log(`📈 [YIELD ENGINE] Surged prices by ${rule.surge_percentage}% for hotel ${hotel.id} (Occupancy: ${occupancyRate.toFixed(1)}%)`);
+          } else {
+            // Reset surge
+            await pool.query(`
+              UPDATE room_types 
+              SET current_price = NULL
+              WHERE hotel_id = $1 AND current_price IS NOT NULL
+            `, [hotel.id]);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Yield Engine Error:', err.message);
+    }
+  }, 300000); // 5 mins
+}
+
 const server = app.listen(PORT, async () => {
   console.log(`🚀 Secure Server active on http://localhost:${PORT}`);
   await runMigrations();
+  startYieldEngine();
 });
 
 server.on('error', (err) => {
