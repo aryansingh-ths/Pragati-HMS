@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -8,7 +8,7 @@ import {
   PieChart, Plane, UtensilsCrossed, Sofa, Car, Sparkles, ChefHat, PartyPopper,
   BedDouble, Filter, TrendingDown, Printer, Truck, CalendarClock, Scale,
   Target, Percent, Users, UserCheck, LockKeyhole, Undo2, History, ShieldAlert,
-  ArrowRightLeft, FileBarChart2, FileSpreadsheet, FileDown, LogOut, Zap
+  ArrowRightLeft, FileBarChart2, FileSpreadsheet, FileDown, LogOut, Zap, Settings, Trash2
 } from 'lucide-react';
 import DepartmentHRModule from '../components/DepartmentHRModule';
 import StaffDirectoryModule from '../components/StaffDirectoryModule';
@@ -63,7 +63,9 @@ function DonutChart({ data, size = 170, centerLabel = 'Collected' }) {
             />
           );
         })}
-        <text x={cx} y={cy - 6} textAnchor="middle" className="fill-zinc-900" style={{ fontSize: '20px', fontWeight: 900 }}>₹{(total / 1000).toFixed(0)}k</text>
+        <text x={cx} y={cy - 6} textAnchor="middle" className="fill-zinc-900" style={{ fontSize: '20px', fontWeight: 900 }}>
+          {total >= 1000 ? `₹${(total / 1000).toFixed(1).replace(/\.0$/, '')}k` : `₹${total.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
+        </text>
         <text x={cx} y={cy + 14} textAnchor="middle" className="fill-zinc-400" style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{centerLabel}</text>
       </svg>
     </div>
@@ -151,10 +153,12 @@ function RevenueTrendLine({ data = [] }) {
       <AnimatePresence>
         {active && (
           <motion.div
-            initial={{ opacity: 0, y: 6, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 6, scale: 0.95 }}
+            initial={{ opacity: 0, y: '-130%', x: hoverIdx === data.length - 1 ? '-95%' : hoverIdx === 0 ? '-5%' : '-50%', scale: 0.95 }}
+            animate={{ opacity: 1, y: '-140%', x: hoverIdx === data.length - 1 ? '-95%' : hoverIdx === 0 ? '-5%' : '-50%', scale: 1 }}
+            exit={{ opacity: 0, y: '-130%', x: hoverIdx === data.length - 1 ? '-95%' : hoverIdx === 0 ? '-5%' : '-50%', scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 400, damping: 25 }}
             className="absolute pointer-events-none px-2.5 py-1.5 rounded-lg bg-zinc-900 text-white text-[10px] font-bold shadow-lg shadow-[#D4A373]/20 whitespace-nowrap"
-            style={{ left: `${(active.x / width) * 100}%`, top: `${(active.y / height) * 100}%`, transform: 'translate(-50%, -140%)' }}
+            style={{ left: `${(active.x / width) * 100}%`, top: `${(active.y / height) * 100}%` }}
           >
             {active.label}: <span className="text-emerald-300">₹{active.value.toLocaleString('en-IN')}</span>
           </motion.div>
@@ -256,10 +260,12 @@ function ExpenseTrendLine({ data = [] }) {
       <AnimatePresence>
         {active && (
           <motion.div
-            initial={{ opacity: 0, y: 6, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 6, scale: 0.95 }}
+            initial={{ opacity: 0, y: '-130%', x: hoverIdx === data.length - 1 ? '-95%' : hoverIdx === 0 ? '-5%' : '-50%', scale: 0.95 }}
+            animate={{ opacity: 1, y: '-140%', x: hoverIdx === data.length - 1 ? '-95%' : hoverIdx === 0 ? '-5%' : '-50%', scale: 1 }}
+            exit={{ opacity: 0, y: '-130%', x: hoverIdx === data.length - 1 ? '-95%' : hoverIdx === 0 ? '-5%' : '-50%', scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 400, damping: 25 }}
             className="absolute pointer-events-none px-2.5 py-1.5 rounded-lg bg-zinc-900 text-white text-[10px] font-bold shadow-lg shadow-rose-500/20 whitespace-nowrap"
-            style={{ left: `${(active.x / width) * 100}%`, top: `${(active.y / height) * 100}%`, transform: 'translate(-50%, -140%)' }}
+            style={{ left: `${(active.x / width) * 100}%`, top: `${(active.y / height) * 100}%` }}
           >
             {active.label}: <span className="text-rose-300">₹{active.value.toLocaleString('en-IN')}</span>
           </motion.div>
@@ -421,8 +427,8 @@ export default function FinanceDashboard() {
           setApiStatements(data);
         }
         if (budgetRes.ok) {
-          const { data } = await budgetRes.json();
-          setApiBudgets(data.budgets);
+          const data = await budgetRes.json();
+          setApiBudgets(data.budgets || []);
         }
         if (cashRegisterRes.ok) {
           const { data } = await cashRegisterRes.json();
@@ -452,6 +458,47 @@ export default function FinanceDashboard() {
   const [payableSearch, setPayableSearch] = useState('');
   const [payableStatusFilter, setPayableStatusFilter] = useState('All');
   const [isBillModalOpen, setIsBillModalOpen] = useState(false);
+
+  // --- Budget Management ---
+  const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
+  const [newBudgetForm, setNewBudgetForm] = useState({ department_name: '', budget_amount: '' });
+
+  const handleCreateBudget = async () => {
+    if (!newBudgetForm.department_name || !newBudgetForm.budget_amount) return;
+    const res = await fetch('http://localhost:3000/api/finance/budgets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
+      body: JSON.stringify({ ...newBudgetForm, type: 'Expense' })
+    });
+    if (res.ok) {
+      const b = await res.json();
+      setApiBudgets([...apiBudgets, b]);
+      setNewBudgetForm({ department_name: '', budget_amount: '' });
+    }
+  };
+
+  const handleUpdateBudget = async (id, newAmount) => {
+    const res = await fetch(`http://localhost:3000/api/finance/budgets/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
+      body: JSON.stringify({ budget_amount: newAmount })
+    });
+    if (res.ok) {
+      const b = await res.json();
+      setApiBudgets(apiBudgets.map(x => x.id === id ? b : x));
+    }
+  };
+
+  const handleDeleteBudget = async (id) => {
+    const res = await fetch(`http://localhost:3000/api/finance/budgets/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` }
+    });
+    if (res.ok) {
+      setApiBudgets(apiBudgets.filter(x => x.id !== id));
+    }
+  };
+
   const [billForm, setBillForm] = useState({ vendor: '', category: 'Kitchen & F&B Supplies', amount: '', dueDate: '', notes: '' });
 
   // --- Financial Statements ---
@@ -486,7 +533,7 @@ export default function FinanceDashboard() {
   // --- Simulated data ---
   const todaysRevenueVal = apiOverview?.todaysRevenue || 0;
   const pendingRecVal = apiOverview?.pendingReceivables || 0;
-  const overviewTotalTax = (apiInvoices || []).reduce((sum, inv) => sum + Number(inv.tax_amount || 0), 0);
+  const overviewTotalTax = apiOverview?.totalTax || 0;
 
   const cashRegisterValue = apiCashRegister?.actual_amount
     ? `₹${Number(apiCashRegister.actual_amount).toLocaleString('en-IN')}`
@@ -497,10 +544,9 @@ export default function FinanceDashboard() {
   const cashRegisterBalanced = apiCashRegister?.status === 'Balanced';
 
   const metrics = [
-    { label: "Today's Revenue", value: `₹${Number(todaysRevenueVal).toLocaleString('en-IN')}`, sub: "Live from API", icon: <DollarSign size={16} />, theme: '#D4A373' },
-    { label: "Pending Receivables", value: `₹${Number(pendingRecVal).toLocaleString('en-IN')}`, sub: "Live from API", icon: <Clock size={16} />, theme: '#D4A373', bars: [40, 65, 30, 55] },
-    { label: "Tax Collected (GST)", value: `₹${Number(overviewTotalTax).toLocaleString('en-IN')}`, sub: "Live from Invoices", icon: <FileText size={16} />, theme: 'indigo' },
-    { label: "Cash Register", value: cashRegisterValue, sub: cashRegisterSub, icon: <Wallet size={16} />, theme: 'sky', balanced: cashRegisterBalanced, action: 'countCash' },
+    { label: "Today's Revenue", value: `₹${Number(todaysRevenueVal).toLocaleString('en-IN')}`, icon: <DollarSign size={16} />, theme: '#D4A373' },
+    { label: "Tax Collected (GST)", value: `₹${Number(overviewTotalTax).toLocaleString('en-IN')}`, icon: <FileText size={16} />, theme: 'indigo' },
+    { label: "Cash Register", value: cashRegisterValue, icon: <Wallet size={16} />, theme: 'sky', balanced: cashRegisterBalanced, action: 'countCash' },
   ];
 
   const themeMap = {
@@ -582,17 +628,16 @@ export default function FinanceDashboard() {
     expenseCatSpent[e.category] = (expenseCatSpent[e.category] || 0) + Number(e.amount);
   });
 
-  const expenseCategories = [
-    { key: 'travel', label: 'Travel Packages', icon: <Plane size={15} />, spent: expenseCatSpent['Travel Packages'] || 0, budget: 100000, color: '#6366f1' },
-    { key: 'dining', label: 'Dining', icon: <UtensilsCrossed size={15} />, spent: expenseCatSpent['Dining'] || 0, budget: 160000, color: '#f59e0b' },
-    { key: 'roomAcc', label: 'Room Accessories', icon: <Sofa size={15} />, spent: expenseCatSpent['Room Accessories'] || 0, budget: 70000, color: '#0ea5e9' },
-    { key: 'vehicles', label: 'Hotel Vehicles', icon: <Car size={15} />, spent: expenseCatSpent['Hotel Vehicles'] || 0, budget: 45000, color: '#f43f5e' },
-    { key: 'amenities', label: 'Other Amenities', icon: <Sparkles size={15} />, spent: expenseCatSpent['Other Amenities'] || 0, budget: 30000, color: '#a855f7' },
-    { key: 'accounts', label: 'Hotel Accounts', icon: <Landmark size={15} />, spent: expenseCatSpent['Hotel Accounts'] || 0, budget: 210000, color: '#10b981' },
-    { key: 'kitchen', label: 'Kitchen Items', icon: <ChefHat size={15} />, spent: expenseCatSpent['Kitchen Items'] || 0, budget: 120000, color: '#eab308' },
-    { key: 'roomBookings', label: 'Room Bookings Ops', icon: <BedDouble size={15} />, spent: expenseCatSpent['Room Bookings Ops'] || 0, budget: 85000, color: '#4f46e5' },
-    { key: 'eventBookings', label: 'Event Bookings Ops', icon: <PartyPopper size={15} />, spent: expenseCatSpent['Event Bookings Ops'] || 0, budget: 150000, color: '#ec4899' },
-  ];
+  const expenseColors = ['#f59e0b', '#0ea5e9', '#f43f5e', '#a855f7', '#10b981', '#eab308', '#4f46e5', '#ec4899', '#6366f1', '#14b8a6'];
+  const expenseCategories = (apiBudgets || []).filter(b => b.type === 'Expense').map((b, i) => ({
+    id: b.id,
+    key: b.department_name.toLowerCase().replace(/[^a-z0-9]/g, ''),
+    label: b.department_name,
+    icon: <PieChart size={15} />,
+    spent: expenseCatSpent[b.department_name] || 0,
+    budget: Number(b.budget_amount) || 0,
+    color: expenseColors[i % expenseColors.length]
+  }));
 
   const totalExpense = expenseCategories.reduce((s, c) => s + c.spent, 0);
   const totalExpenseBudget = expenseCategories.reduce((s, c) => s + c.budget, 0);
@@ -914,7 +959,6 @@ export default function FinanceDashboard() {
       heading: 'Accounts & Finance',
       items: [
         ...(accessLevel !== 'EXECUTIVE' ? [{ key: 'overview', label: 'Financial Overview', icon: <Building2 size={15} /> }] : []),
-        { key: 'invoices', label: 'Invoices & Billing', icon: <FileText size={15} /> },
         { key: 'expenses', label: 'Expenses & Payables', icon: <PieChart size={15} /> },
         ...(accessLevel !== 'EXECUTIVE' ? [{ key: 'reconciliation', label: 'Reconciliation', icon: <Link2 size={15} /> }] : []),
       ],
@@ -1065,7 +1109,7 @@ export default function FinanceDashboard() {
             <h2 className="text-2xl font-black text-zinc-500 tracking-tight mt-0.5">
               {{
                 overview: 'Financial Overview', expenses: 'Expenses & Payables', reconciliation: 'Reconciliation',
-                invoices: 'Invoices & Billing', statements: 'Financial Statements',
+                statements: 'Financial Statements',
                 payroll: 'Payroll & Staff Costs', bank: 'Bank & Deposits',
               }[activeTab]}
             </h2>
@@ -1192,7 +1236,7 @@ export default function FinanceDashboard() {
                 <motion.div key="overview" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
 
                   {/* KPI Cards Row */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
                     {metrics.map((kpi, i) => {
                       const t = themeMap[kpi.theme];
                       return (
@@ -1353,14 +1397,13 @@ export default function FinanceDashboard() {
                 <motion.div key="expenses" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
 
                   {/* KPI Cards Row */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                     {[
-                      { label: 'Total Monthly Expense', value: `₹${totalExpense.toLocaleString('en-IN')}`, sub: `${expenseUtilizationPct}% of ₹${totalExpenseBudget.toLocaleString('en-IN')} budget`, icon: <Wallet size={16} />, theme: 'rose' },
-                      { label: 'Highest Category', value: topExpenseCategory.label, sub: `₹${topExpenseCategory.spent.toLocaleString('en-IN')} spent`, icon: topExpenseCategory.icon, theme: 'indigo' },
+                      { label: 'Total Monthly Expense', value: `₹${totalExpense.toLocaleString('en-IN')}`, sub: `${expenseUtilizationPct}% of ₹${totalExpenseBudget.toLocaleString('en-IN')} budget`, icon: <Wallet size={16} />, theme: '#D4A373' },
                       { label: 'Budget Utilization', value: `${expenseUtilizationPct}%`, sub: `${overBudgetCount} categor${overBudgetCount === 1 ? 'y' : 'ies'} over budget`, icon: <ScanLine size={16} />, theme: overBudgetCount > 0 ? '#D4A373' : '#D4A373' },
                       { label: 'Month-on-Month', value: `${momChangePct > 0 ? '+' : ''}${momChangePct}%`, sub: `vs ₹${expenseTrend[4].value.toLocaleString('en-IN')} last month`, icon: momChangePct > 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />, theme: momChangePct > 0 ? '#D4A373' : '#D4A373' },
                     ].map((kpi, i) => {
-                      const t = { rose: { iconBg: 'bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-lg shadow-rose-500/30', glow: 'rgba(225,29,72,0.3)' }, ...themeMap }[kpi.theme];
+                      const t = themeMap[kpi.theme] || themeMap['#D4A373'];
                       return (
                         <motion.div key={i} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, type: 'spring', stiffness: 300, damping: 24 }}
                           whileHover={{ y: -5, scale: 1.015 }}
@@ -1384,11 +1427,14 @@ export default function FinanceDashboard() {
                       className="relative overflow-hidden bg-gradient-to-br from-white via-white to-rose-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60"
                     >
                       <div className="absolute -top-14 -left-14 w-40 h-40 rounded-full bg-rose-200/20 blur-3xl pointer-events-none" />
-                      <div className="relative flex items-center gap-2 mb-5">
-                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center shadow-md shadow-rose-500/30">
-                          <PieChart size={14} className="text-white" />
+                      <div className="relative flex items-center justify-between mb-5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center shadow-md shadow-rose-500/30">
+                            <PieChart size={14} className="text-white" />
+                          </div>
+                          <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Spend by Category</h3>
                         </div>
-                        <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Spend by Category</h3>
+                        <button onClick={() => setIsBudgetModalOpen(true)} className="text-[10px] font-bold text-zinc-500 hover:text-zinc-900 uppercase tracking-wider flex items-center gap-1"><Settings size={12}/> Manage</button>
                       </div>
                       <div className="relative">
                         <BarRankChart data={expenseCategories.map(c => ({ label: c.label, value: c.spent, color: c.color, icon: c.icon }))} />
@@ -1477,41 +1523,6 @@ export default function FinanceDashboard() {
                     </div>
                   </div>
 
-                  {/* Budget vs Actual by Department */}
-                  <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden p-6">
-                    <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider mb-5"><Percent size={16} className="text-indigo-600" /> Budget vs Actual by Department</h3>
-                    <div className="flex flex-col gap-5">
-                      {budgetByDept.map((d, i) => {
-                        const variancePct = (((d.actual - d.budget) / d.budget) * 100).toFixed(1);
-                        const over = d.actual > d.budget;
-                        const maxVal = Math.max(d.budget, d.actual);
-                        return (
-                          <div key={i}>
-                            <div className="flex items-center justify-between mb-1.5">
-                              <span className="text-xs font-bold text-zinc-700">{d.dept}</span>
-                              <span className={`text-[11px] font-black ${over ? 'text-rose-600' : 'text-[#D4A373]'}`}>{over ? '+' : ''}{variancePct}% vs budget</span>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                              <div className="flex items-center gap-2">
-                                <span className="text-[9px] font-bold uppercase text-zinc-400 w-14 shrink-0">Budget</span>
-                                <div className="flex-1 h-2 rounded-full bg-zinc-100 overflow-hidden">
-                                  <motion.div initial={{ width: 0 }} animate={{ width: `${(d.budget / maxVal) * 100}%` }} transition={{ duration: 0.8, delay: i * 0.05 }} className="h-full rounded-full bg-zinc-300" />
-                                </div>
-                                <span className="text-[10px] font-bold text-zinc-500 w-24 text-right shrink-0">₹{d.budget.toLocaleString('en-IN')}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[9px] font-bold uppercase text-zinc-400 w-14 shrink-0">Actual</span>
-                                <div className="flex-1 h-2 rounded-full bg-zinc-100 overflow-hidden">
-                                  <motion.div initial={{ width: 0 }} animate={{ width: `${(d.actual / maxVal) * 100}%` }} transition={{ duration: 0.8, delay: i * 0.05 + 0.1 }} className={`h-full rounded-full ${over ? 'bg-rose-500' : 'bg-[#D4A373]'}`} />
-                                </div>
-                                <span className="text-[10px] font-bold text-zinc-900 w-24 text-right shrink-0">₹{d.actual.toLocaleString('en-IN')}</span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
 
                   {/* Expense Ledger Table */}
                   <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
@@ -1715,151 +1726,6 @@ export default function FinanceDashboard() {
                 </motion.div>
               )}
 
-
-              {/* ============================================ */}
-              {/* TAB: INVOICES & BILLING                       */}
-              {/* ============================================ */}
-              {activeTab === 'invoices' && (
-                <motion.div key="invoices" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
-
-                  {/* KPI Cards Row */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                    {[
-                      { label: 'Total Invoiced', value: `₹${totalInvoiced.toLocaleString('en-IN')}`, sub: `${allInvoices.filter(i => i.amount > 0).length} invoices this month`, icon: <FileText size={16} />, theme: '#D4A373' },
-                      { label: 'Outstanding', value: `₹${totalOutstanding.toLocaleString('en-IN')}`, sub: 'Across guest & corporate accounts', icon: <Clock size={16} />, theme: '#D4A373' },
-                      { label: 'Overdue', value: `₹${overdueAmount.toLocaleString('en-IN')}`, sub: `${overdueInvoices.length} invoice${overdueInvoices.length === 1 ? '' : 's'} past due`, icon: <AlertTriangle size={16} />, theme: 'rose' },
-                      { label: 'Credit Notes Issued', value: creditNotesCount, sub: 'This month', icon: <Undo2 size={16} />, theme: 'indigo' },
-                    ].map((kpi, i) => {
-                      const t = { rose: { iconBg: 'bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-lg shadow-rose-500/30', glow: 'rgba(225,29,72,0.3)' }, ...themeMap }[kpi.theme];
-                      return (
-                        <motion.div key={i} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, type: 'spring', stiffness: 300, damping: 24 }}
-                          whileHover={{ y: -5, scale: 1.015 }}
-                          className="relative overflow-hidden bg-white rounded-[1.75rem] p-5 border border-zinc-200/60"
-                          style={{ boxShadow: `0 1px 2px rgba(0,0,0,0.04), 0 14px 30px -18px ${t.glow}` }}
-                        >
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${t.iconBg}`}>{kpi.icon}</div>
-                          <p className="text-2xl font-black text-zinc-900 tracking-tight leading-none mb-1.5 truncate">{kpi.value}</p>
-                          <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 leading-none">{kpi.label}</p>
-                          <p className="text-[10px] text-zinc-400 mt-1">{kpi.sub}</p>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-
-                  {/* GST Breakup */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                    {gstBreakup.map((g, i) => (
-                      <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
-                        className="bg-white rounded-[1.5rem] p-5 border border-zinc-200/60"
-                        style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 14px 30px -18px rgba(79,70,229,0.2)' }}>
-                        <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">{g.label}</p>
-                        <p className="text-2xl font-black text-zinc-900 mb-1">{g.value}</p>
-                        <p className="text-[10px] text-zinc-400">{g.sub}</p>
-                      </motion.div>
-                    ))}
-                  </div>
-
-                  {/* Charts row: aging + status split */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <motion.div whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-rose-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
-                      <div className="absolute -top-14 -left-14 w-40 h-40 rounded-full bg-rose-200/20 blur-3xl pointer-events-none" />
-                      <div className="relative flex items-center gap-2 mb-5">
-                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center shadow-md shadow-rose-500/30"><CalendarClock size={14} className="text-white" /></div>
-                        <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Receivables Aging</h3>
-                      </div>
-                      <div className="relative"><BarRankChart data={agingBuckets} /></div>
-                    </motion.div>
-
-                    <motion.div whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-zinc-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
-                      <div className="absolute -top-14 -right-14 w-40 h-40 rounded-full bg-emerald-200/20 blur-3xl pointer-events-none" />
-                      <div className="relative flex items-center gap-2 mb-4">
-                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#D4A373] to-[#D4A373] flex items-center justify-center shadow-md shadow-[#D4A373]/20"><PieChart size={14} className="text-white" /></div>
-                        <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Invoice Status Split</h3>
-                      </div>
-                      <div className="relative flex flex-col sm:flex-row items-center justify-around gap-6">
-                        <DonutChart data={invoiceStatusSplit} centerLabel="Invoiced" />
-                        <div className="grid grid-cols-1 gap-y-2.5">
-                          {invoiceStatusSplit.map((d, i) => (
-                            <motion.div key={i} initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.08 }} className="flex items-center gap-2 group/legend">
-                              <span className="w-2.5 h-2.5 rounded-full shrink-0 ring-2 ring-white shadow-sm transition-transform duration-200 group-hover/legend:scale-125"
-                                style={{ backgroundColor: d.color, boxShadow: `0 0 8px ${d.color}66` }} />
-                              <span className="text-[11px] text-zinc-500 font-semibold truncate max-w-[110px]">{d.label}</span>
-                              <span className="text-xs font-black text-zinc-900 ml-auto">₹{d.value.toLocaleString('en-IN')}</span>
-                            </motion.div>
-                          ))}
-                        </div>
-                      </div>
-                    </motion.div>
-                  </div>
-
-                  {/* Invoices Table */}
-                  <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
-                    <div className="p-5 border-b border-zinc-150 flex flex-col lg:flex-row gap-3 lg:items-center justify-between bg-white/40">
-                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><FileText size={16} className="text-[#D4A373]" /> All Invoices &amp; Credit Notes</h3>
-                      <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
-                        <div className="relative w-full sm:w-56">
-                          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-                          <input value={invoiceSearch} onChange={e => setInvoiceSearch(e.target.value)} placeholder="Search invoice or guest..." className="fd-input pl-9 py-2 text-xs" />
-                        </div>
-                        <select value={invoiceStatusFilter} onChange={e => setInvoiceStatusFilter(e.target.value)} className="fd-input py-2 text-xs bg-white appearance-none cursor-pointer w-full sm:w-44">
-                          <option value="All">All Statuses</option>
-                          <option value="Paid">Paid</option>
-                          <option value="Partial">Partial</option>
-                          <option value="Overdue">Overdue</option>
-                          <option value="Draft">Draft</option>
-                          <option value="Issued">Issued</option>
-                        </select>
-                        <button onClick={() => setIsInvoiceModalOpen(true)} className="bg-zinc-900 text-white px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-[#D4A373] transition-colors flex items-center justify-center gap-2 shrink-0">
-                          <Plus size={13} /> Create Invoice
-                        </button>
-                      </div>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="border-b border-zinc-150 text-[10px] uppercase tracking-wider text-zinc-400 bg-zinc-50/50">
-                            <th className="p-4 font-bold">Invoice #</th>
-                            <th className="p-4 font-bold">Bill To</th>
-                            <th className="p-4 font-bold">Type</th>
-                            <th className="p-4 font-bold">Due Date</th>
-                            <th className="p-4 font-bold text-right">Amount</th>
-                            <th className="p-4 font-bold text-right">Status</th>
-                            <th className="p-4 font-bold text-right">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-zinc-100">
-                          {invoicesData.length === 0 && (<tr><td colSpan={7} className="p-8 text-center text-xs text-zinc-400">No invoices match your filters.</td></tr>)}
-                          {invoicesData.map((inv, idx) => (
-                            <tr key={idx} className="hover:bg-zinc-50/60 transition-colors">
-                              <td className="p-4 text-xs font-mono text-zinc-500">{inv.id}</td>
-                              <td className="p-4 text-sm font-bold text-zinc-900">{inv.billTo}</td>
-                              <td className="p-4"><span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full bg-zinc-100 text-zinc-600">{inv.type}</span></td>
-                              <td className="p-4 text-sm text-zinc-600">{inv.dueDate}</td>
-                              <td className={`p-4 text-sm font-bold text-right ${inv.amount < 0 ? 'text-rose-500' : 'text-zinc-900'}`}>{inv.amount < 0 ? '-' : ''}₹{Math.abs(inv.amount).toLocaleString('en-IN')}</td>
-                              <td className="p-4 text-right">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${inv.status === 'Paid' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
-                                  : inv.status === 'Partial' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
-                                    : inv.status === 'Overdue' ? 'bg-rose-50 text-rose-600 border-rose-200'
-                                      : inv.status === 'Issued' ? 'bg-indigo-50 text-indigo-600 border-indigo-200'
-                                        : 'bg-zinc-100 text-zinc-500 border-zinc-200'
-                                  }`}>
-                                  {inv.status === 'Paid' ? <CheckCircle2 size={12} /> : inv.status === 'Overdue' ? <AlertTriangle size={12} /> : <Clock size={12} />}
-                                  {inv.status}
-                                </span>
-                              </td>
-                              <td className="p-4 text-right">
-                                <button className="text-xs font-bold text-[#D4A373] hover:text-[#D4A373] inline-flex items-center gap-1"><Download size={12} /> PDF</button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
 
 
 
@@ -2910,6 +2776,94 @@ export default function FinanceDashboard() {
                   <CheckCircle2 size={16} /> Submit Count
                 </button>
               </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isBudgetModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-900/40 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              variants={modalVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="bg-[#fcfcfc] rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden border border-zinc-200/60 flex flex-col max-h-[85vh]"
+            >
+              <div className="bg-gradient-to-br from-indigo-50 to-white px-6 py-5 border-b border-zinc-100 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 text-white">
+                    <Settings size={18} />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-black text-zinc-900 tracking-tight leading-none">Manage Categories</h2>
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 mt-1">Configure expense budgets</p>
+                  </div>
+                </div>
+                <button onClick={() => setIsBudgetModalOpen(false)} className="w-8 h-8 rounded-full bg-white border border-zinc-200 flex items-center justify-center text-zinc-400 hover:text-rose-500 hover:border-rose-200 hover:bg-rose-50 transition-all shadow-sm">
+                  <X size={14} strokeWidth={3} />
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto">
+                <div className="space-y-3 mb-6">
+                  {apiBudgets.filter(b => b.type === 'Expense').map(b => (
+                    <div key={b.id} className="flex items-center gap-3 p-3 bg-white border border-zinc-200/60 rounded-xl">
+                      <div className="flex-1">
+                        <p className="text-sm font-bold text-zinc-900">{b.department_name}</p>
+                      </div>
+                      <div className="relative w-32">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-sm font-medium">₹</span>
+                        <input 
+                          type="number"
+                          defaultValue={b.budget_amount}
+                          onBlur={(e) => {
+                            if (e.target.value !== String(b.budget_amount)) {
+                              handleUpdateBudget(b.id, e.target.value);
+                            }
+                          }}
+                          className="w-full bg-zinc-50 border border-zinc-200 text-sm font-bold text-zinc-900 rounded-lg pl-7 pr-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                        />
+                      </div>
+                      <button onClick={() => handleDeleteBudget(b.id)} className="w-8 h-8 rounded-lg flex items-center justify-center text-zinc-400 hover:text-rose-600 hover:bg-rose-50 transition-all">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                  <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-wider mb-3">Add New Category</h4>
+                  <div className="flex gap-3">
+                    <input 
+                      type="text"
+                      placeholder="Category Name"
+                      value={newBudgetForm.department_name}
+                      onChange={e => setNewBudgetForm({...newBudgetForm, department_name: e.target.value})}
+                      className="flex-1 bg-white border border-zinc-200 text-sm font-medium text-zinc-900 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                    />
+                    <div className="relative w-32">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-sm font-medium">₹</span>
+                      <input 
+                        type="number"
+                        placeholder="Budget"
+                        value={newBudgetForm.budget_amount}
+                        onChange={e => setNewBudgetForm({...newBudgetForm, budget_amount: e.target.value})}
+                        className="w-full bg-white border border-zinc-200 text-sm font-medium text-zinc-900 rounded-lg pl-7 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      />
+                    </div>
+                    <button onClick={handleCreateBudget} className="px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg transition-all shadow-md shadow-indigo-500/20">
+                      Add
+                    </button>
+                  </div>
+                </div>
+              </div>
             </motion.div>
           </motion.div>
         )}

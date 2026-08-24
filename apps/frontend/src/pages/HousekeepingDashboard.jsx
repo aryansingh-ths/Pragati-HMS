@@ -438,7 +438,7 @@ export default function HousekeepingDashboard() {
 
   const loadAllRooms = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/rooms`);
+      const res = await fetchWithAuth(`${API_BASE}/api/rooms`);
       if (res?.ok) {
         const data = await res.json();
         setAllRooms(data.data.rooms);
@@ -461,6 +461,7 @@ export default function HousekeepingDashboard() {
     else if (res) { const err = await res.json(); alert(`Error: ${err.error}`); }
     setIsSubmitting(false);
   };
+
 
   const handleRequestInspection = async (room) => {
     setSelectedRoom(room);
@@ -661,7 +662,7 @@ export default function HousekeepingDashboard() {
             <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Workflow Filters</p>
             <div className="flex flex-col gap-1">
               <button
-                onClick={() => setActiveFilter('all')}
+                onClick={() => { setActiveFilter('all'); setViewMode('kanban'); }}
                 className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeFilter === 'all'
                   ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
                   : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
@@ -671,7 +672,7 @@ export default function HousekeepingDashboard() {
               </button>
 
               <button
-                onClick={() => setActiveFilter('dirty')}
+                onClick={() => { setActiveFilter('dirty'); setViewMode('kanban'); }}
                 className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeFilter === 'dirty'
                   ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
                   : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
@@ -684,7 +685,7 @@ export default function HousekeepingDashboard() {
               </button>
 
               <button
-                onClick={() => setActiveFilter('cleaning')}
+                onClick={() => { setActiveFilter('cleaning'); setViewMode('kanban'); }}
                 className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeFilter === 'cleaning'
                   ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
                   : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
@@ -697,7 +698,7 @@ export default function HousekeepingDashboard() {
               </button>
 
               <button
-                onClick={() => setActiveFilter('inspecting')}
+                onClick={() => { setActiveFilter('inspecting'); setViewMode('kanban'); }}
                 className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeFilter === 'inspecting'
                   ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
                   : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
@@ -716,12 +717,7 @@ export default function HousekeepingDashboard() {
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2 mt-4">Managerial</p>
               <div className="flex flex-col gap-1">
-                <button
-                  onClick={() => { setViewMode('kanban'); }}
-                  className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'kanban' ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'}`}
-                >
-                  <span className="flex items-center gap-3"><Building2 size={16} /> Operations</span>
-                </button>
+
                 <button
                   onClick={() => { setViewMode('hr_hub'); }}
                   className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'hr_hub' ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'}`}
@@ -1287,9 +1283,10 @@ export default function HousekeepingDashboard() {
                         </div>
                         <div className="flex items-center gap-2">
                           <motion.button
+                            type="button"
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
-                            onClick={() => updateAmenityQty(idx, -1)}
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateAmenityQty(idx, -1); }}
                             className="w-7 h-7 rounded-lg border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 text-zinc-500 transition-colors"
                           >
                             <Minus size={12} />
@@ -1304,9 +1301,10 @@ export default function HousekeepingDashboard() {
                             {item.quantity}
                           </motion.span>
                           <motion.button
+                            type="button"
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
-                            onClick={() => updateAmenityQty(idx, 1)}
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateAmenityQty(idx, 1); }}
                             className="w-7 h-7 rounded-lg border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 text-zinc-500 transition-colors"
                           >
                             <Plus size={12} />

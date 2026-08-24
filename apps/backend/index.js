@@ -1026,12 +1026,26 @@ app.post('/api/housekeeping/rooms/:id/expenses', verifyToken, requireRole(['HOUS
 
   try {
     await pool.query('BEGIN');
+    let totalCost = 0;
     for (const item of items) {
+      const qty = item.quantity || 1;
+      const cost = item.unit_cost || 0;
+      totalCost += (qty * cost);
       await pool.query(
         'INSERT INTO room_expenses (room_id, item_name, quantity, unit_cost, logged_by) VALUES ($1, $2, $3, $4, $5)',
-        [id, item.item_name, item.quantity || 1, item.unit_cost || 0, req.user.userId]
+        [id, item.item_name, qty, cost, req.user.userId]
       );
     }
+
+    // Automatically log this restocking to operational_expenses under "Room Amenities"
+    if (totalCost > 0) {
+      await pool.query(
+        `INSERT INTO operational_expenses (hotel_id, category, amount, description, payment_method, status, expense_date)
+         VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE)`,
+        [req.user.hotelId, 'Room Amenities', totalCost, `Amenity Restocking for Room ${id}`, 'Internal Transfer', 'Paid']
+      );
+    }
+
     await pool.query('COMMIT');
     res.json({ status: 'success', message: `${items.length} expense(s) logged for room.` });
   } catch (err) {
@@ -1070,23 +1084,6 @@ app.post('/api/housekeeping/rooms/:id/report-damage', verifyToken, requireRole([
 });
 
 // 5. Finance & Revenue Reconciliation Logs
-app.get('/api/finance/overview', verifyToken, requireRole(['FINANCE', 'ADMIN']), async (req, res) => {
-  try {
-    const revenueRes = await pool.query(`SELECT COALESCE(SUM(total_price), 0) as total FROM bookings WHERE created_at >= CURRENT_DATE AND ${getHotelFilter(req)}`);
-
-    res.json({
-      metrics: [
-        { label: "Today's Revenue", value: `₹${revenueRes.rows[0].total}`, trend: "+14.2%", isPositive: true },
-        { label: "Pending Receivables", value: "₹12,400", trend: "-1.1%", isPositive: false }
-      ],
-      transactions: [
-        { id: 'TXN-9901', guest: 'System Walk-in', room: '101', amount: '₹14,000', method: 'Digital Gateway', status: 'Settled', date: 'Today' }
-      ]
-    });
-  } catch (err) {
-    res.status(500).json({ error: 'Unable to stream general ledger array metrics.' });
-  }
-});
 
 
 // ==========================================
@@ -2284,11 +2281,11 @@ app.get('/api/dining/tables', verifyToken, requireDining, async (req, res) => {
 });
 
 app.post('/api/dining/tables', verifyToken, requireDining, async (req, res) => {
-  const { number, capacity } = req.body;
+  const { table_number, capacity } = req.body;
   try {
     const result = await pool.query(
       `INSERT INTO dining_tables (table_number, capacity, hotel_id) VALUES ($1, $2, $3) RETURNING *`,
-      [number, capacity || 4, req.user.hotelId]
+      [table_number, capacity || 4, req.user.hotelId]
     );
     res.json({ status: 'success', data: result.rows[0] });
   } catch (err) { res.status(500).json({ error: 'Failed to add table' }); }
@@ -2443,7 +2440,64 @@ app.get('/api/dining/overview', verifyToken, requireDining, async (req, res) => 
         salesSplit
       }
     });
-  } catch (err) { res.status(500).json({ error: 'Failed to fetch overview' }); }
+  } catch (err) { 
+    console.error('Dining overview error:', err);
+    res.status(500).json({ error: 'Failed to fetch overview' }); 
+  }
+});
+
+app.post('/api/dining/inventory', verifyToken, requireDining, async (req, res) => {
+  const { id, name, category, uom, par_level, unit_cost, is_active } = req.body;
+  try {
+    if (id) {
+      const result = await pool.query(
+        `UPDATE dining_inventory_items SET name=$1, category=$2, uom=$3, par_level=$4, unit_cost=$5, is_active=$6 WHERE id=$7 AND hotel_id=$8 RETURNING *`,
+        [name, category, uom, par_level, unit_cost, is_active, id, req.user.hotelId]
+      );
+      res.json({ status: 'success', data: result.rows[0] });
+    } else {
+      const result = await pool.query(
+        `INSERT INTO dining_inventory_items (name, category, uom, par_level, unit_cost, is_active, hotel_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        [name, category, uom, par_level, unit_cost, is_active, req.user.hotelId]
+      );
+      res.json({ status: 'success', data: result.rows[0] });
+    }
+  } catch (err) { res.status(500).json({ error: 'Failed to save inventory item' }); }
+});
+
+app.post('/api/dining/procurement', verifyToken, requireDining, async (req, res) => {
+  const { date, vendor, invoice_number, category, amount } = req.body;
+  try {
+    await pool.query('BEGIN');
+    const result = await pool.query(
+      `INSERT INTO dining_procurement_logs (date, vendor, invoice_number, category, amount, hotel_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [date, vendor, invoice_number, category, amount, req.user.hotelId]
+    );
+
+    // Automatically log this procurement to operational_expenses under "Kitchen Items"
+    await pool.query(
+      `INSERT INTO operational_expenses (hotel_id, category, amount, vendor, description, payment_method, status, expense_date)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [req.user.hotelId, 'Kitchen Items', amount, vendor, `Kitchen Procurement (Inv: ${invoice_number})`, 'Bank Transfer', 'Paid', date]
+    );
+
+    await pool.query('COMMIT');
+    res.json({ status: 'success', data: result.rows[0] });
+  } catch (err) { 
+    await pool.query('ROLLBACK');
+    res.status(500).json({ error: 'Failed to log procurement' }); 
+  }
+});
+
+app.post('/api/dining/wastage', verifyToken, requireDining, async (req, res) => {
+  const { date, item_name, quantity, reason, loss_amount } = req.body;
+  try {
+    const result = await pool.query(
+      `INSERT INTO dining_wastage_logs (date, item_name, quantity, reason, loss_amount, hotel_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [date, item_name, quantity, reason, loss_amount, req.user.hotelId]
+    );
+    res.json({ status: 'success', data: result.rows[0] });
+  } catch (err) { res.status(500).json({ error: 'Failed to record wastage' }); }
 });
 
 app.get('/api/dining/inventory', verifyToken, requireDining, async (req, res) => {
@@ -2650,26 +2704,136 @@ app.patch('/api/sales/leads/:id/stage', verifyToken, async (req, res) => {
 app.get('/api/finance/overview', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN', 'FINANCE']), async (req, res) => {
   try {
     const hotelFilter = getHotelFilter(req, '');
+    const hotelFilterB = getHotelFilter(req, 'b');
+    const hotelFilterD = getHotelFilter(req, 'd');
+    const hotelFilterI = getHotelFilter(req, 'i');
     
-    // Total Revenue (From Ledger - Credit)
-    const revRes = await pool.query(`
-      SELECT COALESCE(SUM(amount), 0) as total FROM ledger_transactions 
-      WHERE transaction_type IN ('PAYMENT', 'CREDIT') AND status = 'COMPLETED'
-    `); // Basic implementation, should ideally join with bookings for hotelFilter
+    // 1. Today's Revenue
+    const todaysRevenueQ = `
+      SELECT 
+        (SELECT COALESCE(SUM(total_price), 0) FROM bookings b WHERE DATE(b.created_at) = CURRENT_DATE AND ${hotelFilterB}) +
+        (SELECT COALESCE(SUM(total_amount), 0) FROM dining_billing_records d WHERE DATE(d.created_at) = CURRENT_DATE AND ${hotelFilterD}) +
+        (SELECT COALESCE(SUM(amount), 0) FROM travel_bookings WHERE DATE(created_at) = CURRENT_DATE AND payment_status != 'Pending') +
+        (SELECT COALESCE(SUM(paid_amount), 0) FROM invoices i WHERE DATE(i.created_at) = CURRENT_DATE AND ${hotelFilterI}) AS total
+    `;
+    const revRes = await pool.query(todaysRevenueQ);
+    const todaysRevenue = parseFloat(revRes.rows[0].total || 0);
 
-    // Total Expenses
-    const expRes = await pool.query(`
-      SELECT COALESCE(SUM(amount), 0) as total FROM operational_expenses WHERE ${hotelFilter}
+    // 2. Pending Receivables
+    const receivablesQ = `
+      SELECT 
+        (SELECT COALESCE(SUM(total_amount - COALESCE(paid_amount, 0)), 0) FROM invoices i WHERE status IN ('Pending', 'Partial') AND ${hotelFilterI}) +
+        (SELECT COALESCE(SUM(amount), 0) FROM travel_bookings WHERE payment_status IN ('Pending', 'Partial')) AS total
+    `;
+    const recRes = await pool.query(receivablesQ);
+    const pendingReceivables = parseFloat(recRes.rows[0].total || 0);
+
+    // 3. Tax Collected
+    const taxQ = `
+      SELECT 
+        (SELECT COALESCE(SUM(total_price - (total_price / 1.18)), 0) FROM bookings b WHERE status = 'CHECKED_OUT' AND ${hotelFilterB}) +
+        (SELECT COALESCE(SUM(total_amount - (total_amount / 1.05)), 0) FROM dining_billing_records d WHERE ${hotelFilterD}) +
+        (SELECT COALESCE(SUM(tax_amount), 0) FROM invoices i WHERE ${hotelFilterI}) AS total
+    `;
+    const taxRes = await pool.query(taxQ);
+    const totalTax = parseFloat(taxRes.rows[0].total || 0);
+
+    // 4. Payment Split (Dining proxy)
+    const splitRes = await pool.query(`
+      SELECT payment_method as label, COALESCE(SUM(total_amount), 0) as value 
+      FROM dining_billing_records d
+      WHERE payment_method IS NOT NULL AND ${hotelFilterD}
+      GROUP BY payment_method
     `);
+    const paymentSplit = splitRes.rows.map(r => ({
+      label: r.label,
+      value: parseFloat(r.value)
+    }));
 
-    // Basic Mock Data for now for complex metrics
+    // 5. Recent Transactions
+    const txnsQ = `
+      SELECT * FROM (
+        SELECT b.id, 'Frontdesk Checkout' as guest, r.room_number as room_number, b.total_price as amount, 'N/A' as payment_method, b.status::text, b.created_at 
+        FROM bookings b JOIN rooms r ON b.room_id = r.id WHERE b.status = 'CHECKED_OUT' AND ${hotelFilterB}
+        UNION ALL
+        SELECT id, 'Restaurant Bill', table_number, total_amount, payment_method, 'Settled', created_at 
+        FROM dining_billing_records d WHERE ${hotelFilterD}
+        UNION ALL
+        SELECT id, guest_name, 'Travel Desk', amount, payment_status, booking_status::text, created_at 
+        FROM travel_bookings
+      ) AS combined
+      ORDER BY created_at DESC LIMIT 10
+    `;
+    const txnsRes = await pool.query(txnsQ);
+    const recentTransactions = txnsRes.rows.map(t => ({
+      id: t.id,
+      guest: t.guest,
+      room_number: t.room_number,
+      amount: t.amount,
+      payment_method: t.payment_method,
+      status: t.status,
+      created_at: t.created_at
+    }));
+
+    // 6. 6-Month Trends (Dynamic generation in JS to avoid complex SQL date issues)
+    const rev6Q = `
+      SELECT 'frontdesk' as source, created_at, total_price as amount FROM bookings b WHERE created_at >= CURRENT_DATE - INTERVAL '6 months' AND status = 'CHECKED_OUT' AND ${hotelFilterB}
+      UNION ALL
+      SELECT 'dining', created_at, total_amount FROM dining_billing_records d WHERE created_at >= CURRENT_DATE - INTERVAL '6 months' AND ${hotelFilterD}
+      UNION ALL
+      SELECT 'travel', created_at, amount FROM travel_bookings WHERE created_at >= CURRENT_DATE - INTERVAL '6 months' AND payment_status != 'Pending'
+    `;
+    const exp6Q = `SELECT created_at, amount FROM operational_expenses WHERE created_at >= CURRENT_DATE - INTERVAL '6 months' AND ${getHotelFilter(req, '')}`;
+    
+    const [rev6Res, exp6Res] = await Promise.all([
+      pool.query(rev6Q),
+      pool.query(exp6Q)
+    ]);
+
+    const sixMonthExpenseTrend = [];
+    const sixMonthRevenueProjection = [];
+    
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - i);
+      const targetMonth = d.getMonth();
+      const targetYear = d.getFullYear();
+      const label = d.toLocaleString('en-US', { month: 'short' });
+
+      let revSum = 0;
+      rev6Res.rows.forEach(r => {
+        const d2 = new Date(r.created_at);
+        if (d2.getMonth() === targetMonth && d2.getFullYear() === targetYear) {
+          revSum += parseFloat(r.amount || 0);
+        }
+      });
+
+      let expSum = 0;
+      exp6Res.rows.forEach(r => {
+        const d2 = new Date(r.created_at);
+        if (d2.getMonth() === targetMonth && d2.getFullYear() === targetYear) {
+          expSum += parseFloat(r.amount || 0);
+        }
+      });
+
+      sixMonthRevenueProjection.push({ label, value: revSum });
+      sixMonthExpenseTrend.push({ label, value: expSum });
+    }
+
     res.json({
-      totalRevenue: revRes.rows[0].total,
-      totalExpenses: expRes.rows[0].total,
-      netProfit: revRes.rows[0].total - expRes.rows[0].total,
-      pendingInvoices: 0
+      status: 'success',
+      data: {
+        todaysRevenue,
+        pendingReceivables,
+        totalTax,
+        paymentSplit,
+        recentTransactions,
+        sixMonthExpenseTrend, 
+        sixMonthRevenueProjection
+      }
     });
   } catch (err) {
+    console.error('Failed to fetch finance overview:', err);
     res.status(500).json({ error: 'Failed to fetch finance overview' });
   }
 });
@@ -2677,11 +2841,11 @@ app.get('/api/finance/overview', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN
 app.get('/api/finance/expenses', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN', 'FINANCE']), async (req, res) => {
   try {
     const expenses = await pool.query(`
-      SELECT id, category, amount, description, expense_date as date, 'Operational' as type 
+      SELECT id, category, amount, notes as description, created_at as date, 'Operational' as type 
       FROM operational_expenses WHERE ${getHotelFilter(req, '')}
-      ORDER BY expense_date DESC LIMIT 50
+      ORDER BY created_at DESC LIMIT 50
     `);
-    res.json(expenses.rows);
+    res.json({ data: { expenses: expenses.rows } });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch expenses' });
   }
@@ -2690,11 +2854,11 @@ app.get('/api/finance/expenses', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN
 app.get('/api/finance/invoices', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN', 'FINANCE']), async (req, res) => {
   try {
     const invoices = await pool.query(`
-      SELECT id, invoice_number as number, guest_id, amount as total, status, issue_date, due_date 
+      SELECT id, invoice_number as number, booking_id as guest_id, total_amount as total, status, created_at as issue_date, due_date 
       FROM invoices WHERE ${getHotelFilter(req, '')}
-      ORDER BY issue_date DESC LIMIT 50
+      ORDER BY created_at DESC LIMIT 50
     `);
-    res.json(invoices.rows);
+    res.json({ data: { invoices: invoices.rows } });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch invoices' });
   }
@@ -2703,11 +2867,11 @@ app.get('/api/finance/invoices', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN
 app.get('/api/finance/payables', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN', 'FINANCE']), async (req, res) => {
   try {
     const payables = await pool.query(`
-      SELECT id, vendor_name, amount, due_date, status, description 
+      SELECT id, vendor as vendor_name, amount, due_date, status, notes as description 
       FROM vendor_bills WHERE ${getHotelFilter(req, '')}
       ORDER BY due_date ASC LIMIT 50
     `);
-    res.json(payables.rows);
+    res.json({ data: { payables: payables.rows } });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch payables' });
   }
@@ -2716,11 +2880,11 @@ app.get('/api/finance/payables', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN
 app.get('/api/finance/reconciliations', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN', 'FINANCE']), async (req, res) => {
   try {
     const recon = await pool.query(`
-      SELECT id, period_start, period_end, status, discrepancy_amount, notes 
+      SELECT * 
       FROM reconciliations WHERE ${getHotelFilter(req, '')}
-      ORDER BY period_end DESC LIMIT 20
+      ORDER BY created_at DESC LIMIT 20
     `);
-    res.json(recon.rows);
+    res.json({ data: { reconciliations: recon.rows } });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch reconciliations' });
   }
@@ -2733,7 +2897,7 @@ app.get('/api/finance/ledger', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN',
       FROM ledger_transactions l LEFT JOIN bookings b ON l.booking_id = b.id 
       ORDER BY l.created_at DESC LIMIT 100
     `);
-    res.json(ledger.rows);
+    res.json({ data: { ledger: ledger.rows } });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch ledger' });
   }
@@ -2741,33 +2905,103 @@ app.get('/api/finance/ledger', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN',
 
 app.get('/api/finance/statements', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN', 'FINANCE']), async (req, res) => {
   // Simplified mock statement endpoint
-  res.json([
+  res.json({ data: [
     { id: 1, month: 'Current Month', revenue: 50000, expenses: 20000, net: 30000 }
-  ]);
+  ]});
 });
 
 app.get('/api/finance/budgets', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN', 'FINANCE']), async (req, res) => {
   try {
-    const budgets = await pool.query(`
-      SELECT id, department, allocated_amount, spent_amount, period_start, period_end 
-      FROM department_budgets WHERE ${getHotelFilter(req, '')}
-    `);
-    res.json(budgets.rows);
+    const budgets = await pool.query(`SELECT id, department_name, budget_amount, type FROM department_budgets`);
+    res.json({ budgets: budgets.rows });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch budgets' });
+  }
+});
+
+app.post('/api/finance/budgets', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN', 'FINANCE']), async (req, res) => {
+  const { department_name, budget_amount, type } = req.body;
+  try {
+    const newBudget = await pool.query(
+      `INSERT INTO department_budgets (department_name, budget_amount, type) VALUES ($1, $2, $3) RETURNING id, department_name, budget_amount, type`,
+      [department_name, budget_amount, type || 'Expense']
+    );
+    res.json(newBudget.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create budget' });
+  }
+});
+
+app.put('/api/finance/budgets/:id', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN', 'FINANCE']), async (req, res) => {
+  const { id } = req.params;
+  const { budget_amount } = req.body;
+  try {
+    const updated = await pool.query(
+      `UPDATE department_budgets SET budget_amount = $1 WHERE id = $2 RETURNING id, department_name, budget_amount, type`,
+      [budget_amount, id]
+    );
+    res.json(updated.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update budget' });
+  }
+});
+
+app.delete('/api/finance/budgets/:id', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN', 'FINANCE']), async (req, res) => {
+  const { id } = req.params;
+  try {
+    // Get the department name before deleting
+    const dept = await pool.query(`SELECT department_name FROM department_budgets WHERE id = $1`, [id]);
+    if (dept.rows.length > 0) {
+      const deptName = dept.rows[0].department_name;
+      // Mark orphaned expenses as Uncategorized
+      await pool.query(`UPDATE operational_expenses SET category = 'Uncategorized' WHERE category = $1`, [deptName]);
+      await pool.query(`DELETE FROM department_budgets WHERE id = $1`, [id]);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to delete budget' });
   }
 });
 
 app.get('/api/finance/cash-register', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN', 'FINANCE']), async (req, res) => {
   try {
     const logs = await pool.query(`
-      SELECT id, user_id, action, amount, notes, created_at 
-      FROM cash_drawer_logs WHERE ${getHotelFilter(req, '')}
-      ORDER BY created_at DESC LIMIT 50
+      SELECT id, counted_by as user_id, actual_amount, expected_amount, status, notes, counted_at 
+      FROM cash_drawer_logs 
+      ORDER BY counted_at DESC LIMIT 1
     `);
-    res.json(logs.rows);
+    res.json({ data: logs.rows[0] || null });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Failed to fetch cash register logs' });
+  }
+});
+
+app.post('/api/finance/cash-register', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN', 'FINANCE']), async (req, res) => {
+  try {
+    const { actual_amount, notes } = req.body;
+    
+    // Fetch last expected amount to calculate difference
+    const lastLog = await pool.query('SELECT actual_amount FROM cash_drawer_logs ORDER BY counted_at DESC LIMIT 1');
+    const expected_amount = lastLog.rows.length > 0 ? parseFloat(lastLog.rows[0].actual_amount) : 0;
+    
+    let status = 'Balanced';
+    const actual = parseFloat(actual_amount);
+    if (actual > expected_amount) status = 'Over';
+    if (actual < expected_amount) status = 'Short';
+    if (expected_amount === 0) status = 'Balanced'; // Initial run
+
+    const insertRes = await pool.query(`
+      INSERT INTO cash_drawer_logs (counted_by, actual_amount, expected_amount, status, notes)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id, counted_by as user_id, actual_amount, expected_amount, status, notes, counted_at
+    `, [req.user.userId, actual, expected_amount, status, notes]);
+
+    res.json({ status: 'success', data: insertRes.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to save cash register log' });
   }
 });
 

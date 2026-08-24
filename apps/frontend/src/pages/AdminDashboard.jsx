@@ -379,6 +379,174 @@ function OccupancyTrendLine({ trend = [] }) {
   );
 }
 
+// BOOKING PACE VELOCITY CHART (SVG)
+function BookingPaceChart({ currentPace = [], lastYearPace = [] }) {
+  const [hoverDay, setHoverDay] = useState(null);
+  const width = 600;
+  const height = 160;
+  const padX = 24;
+  const padY = 20;
+
+  // Max value among all points
+  const maxVal = Math.max(
+    ...currentPace.map(d => d.velocity),
+    ...lastYearPace.map(d => d.velocity),
+    10
+  );
+  
+  const getCoords = (data, maxDay) => {
+    return data.map((d) => {
+      const x = padX + ((d.day - 1) / (maxDay - 1)) * (width - padX * 2);
+      const y = height - padY - (d.velocity / maxVal) * (height - padY * 2);
+      return { ...d, x, y };
+    });
+  };
+
+  const currCoords = getCoords(currentPace, 31);
+  const lastCoords = getCoords(lastYearPace, 31);
+
+  const getPath = (coords) => {
+    if (!coords.length) return '';
+    return coords.map((c, i) => (i === 0 ? `M${c.x} ${c.y}` : ` L${c.x} ${c.y}`)).join('');
+  };
+
+  const currPath = getPath(currCoords);
+  const lastPath = getPath(lastCoords);
+
+  const currArea = currCoords.length ? `${currPath} L${currCoords[currCoords.length-1].x} ${height - padY} L${currCoords[0].x} ${height - padY} Z` : '';
+
+  // Get active hover data
+  const currHover = currCoords.find(c => c.day === hoverDay);
+  const lastHover = lastCoords.find(c => c.day === hoverDay);
+
+  return (
+    <div className="relative w-full">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="w-full h-48 overflow-visible"
+        onMouseLeave={() => setHoverDay(null)}
+      >
+        <defs>
+          <linearGradient id="an-area-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#4f46e5" stopOpacity="0" />
+          </linearGradient>
+          <linearGradient id="an-line-stroke" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#6366f1" />
+            <stop offset="100%" stopColor="#0ea5e9" />
+          </linearGradient>
+        </defs>
+
+        {/* Grid Lines */}
+        {[0.25, 0.5, 0.75].map((f, i) => (
+          <line key={i} x1={padX} x2={width - padX} y1={padY + f * (height - padY * 2)} y2={padY + f * (height - padY * 2)} stroke="#f1f2f6" strokeWidth="1" />
+        ))}
+
+        {/* Last Year Line */}
+        <motion.path
+          d={lastPath}
+          fill="none"
+          stroke="#cbd5e1"
+          strokeWidth="2"
+          strokeDasharray="4"
+          strokeLinecap="round"
+          initial={{ pathLength: 0, opacity: 0 }}
+          animate={{ pathLength: 1, opacity: 1 }}
+          transition={{ duration: 1.2, ease: 'easeInOut' }}
+        />
+
+        {/* Current Year Area */}
+        <motion.path
+          d={currArea}
+          fill="url(#an-area-fill)"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.8, delay: 0.3 }}
+        />
+
+        {/* Current Year Line */}
+        <motion.path
+          d={currPath}
+          fill="none"
+          stroke="url(#an-line-stroke)"
+          strokeWidth="2.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          initial={{ pathLength: 0 }}
+          animate={{ pathLength: 1 }}
+          transition={{ duration: 1.4, ease: [0.22, 1, 0.36, 1] }}
+        />
+
+        {/* Current Year Points and Hover Rects */}
+        {Array.from({length: 31}, (_, i) => i + 1).map(day => {
+          const x = padX + ((day - 1) / 30) * (width - padX * 2);
+          const cP = currCoords.find(c => c.day === day);
+          
+          return (
+            <g key={day}>
+              <rect
+                x={x - (width / 31) / 2}
+                y={0}
+                width={width / 31}
+                height={height}
+                fill="transparent"
+                onMouseEnter={() => setHoverDay(day)}
+              />
+              {cP && (
+                <motion.circle
+                  cx={cP.x} cy={cP.y}
+                  r={hoverDay === day ? 5 : 2}
+                  fill="#ffffff"
+                  stroke="#4f46e5"
+                  strokeWidth="1.5"
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.3 + (day/31), type: 'spring', stiffness: 400 }}
+                  style={{ pointerEvents: 'none' }}
+                />
+              )}
+            </g>
+          );
+        })}
+      </svg>
+      
+      {/* Tooltip */}
+      <AnimatePresence>
+        {hoverDay && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="absolute top-0 right-2 bg-white/90 backdrop-blur-sm p-3 rounded-xl border border-indigo-100 shadow-sm text-xs font-bold flex flex-col gap-2 pointer-events-none z-10 min-w-[120px]"
+          >
+            <div className="text-zinc-400 uppercase tracking-widest text-[9px] border-b pb-1">Day {hoverDay} Cumulative Bookings</div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-1.5 text-indigo-700">
+                <span className="w-2.5 h-0.5 rounded-full bg-gradient-to-r from-indigo-600 to-sky-500 inline-block"></span>
+                Current
+              </span>
+              <span>{currHover ? currHover.velocity : '-'}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-1.5 text-zinc-500">
+                <span className="w-2.5 h-0.5 border-b border-dashed border-zinc-400 inline-block"></span>
+                Last Yr
+              </span>
+              <span>{lastHover ? lastHover.velocity : '-'}</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <div className="flex justify-between text-[9px] text-zinc-400 font-bold uppercase tracking-wider mt-2 px-1">
+        <span>Day 1</span>
+        <span>Day 10</span>
+        <span>Day 20</span>
+        <span>Day 31</span>
+      </div>
+    </div>
+  );
+}
+
 // SLA COUNTDOWN TIMER
 function SlaCountdownTimer({ createdAt, priority, status }) {
   const [timeLeft, setTimeLeft] = useState('');
@@ -1503,7 +1671,7 @@ export default function AdminDashboard() {
 
         {/* BROADCAST BANNER */}
         <AnimatePresence>
-          {broadcasts.filter(b => !dismissedBroadcasts.includes(b.id) && (!b.expires_at || new Date(b.expires_at) > new Date())).map((broadcast) => (
+          {broadcasts.filter(b => !dismissedBroadcasts.includes(b.id) && (!b.expires_at || new Date(b.expires_at) > new Date()) && b.sender_name !== sessionStorage.getItem('hms_name')).map((broadcast) => (
             <motion.div
               key={broadcast.id}
               initial={{ opacity: 0, y: -20, scale: 0.98 }}
@@ -2520,89 +2688,11 @@ export default function AdminDashboard() {
                         </div>
                         <p className="relative text-[10px] text-zinc-400 uppercase tracking-wider font-bold mb-4">Month-on-Month pace curve (This Year vs Last Year)</p>
 
-                        <div className="relative h-48 border-l border-b border-zinc-100 flex items-end px-2 pt-2">
-                          <svg className="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
-                            <defs>
-                              <linearGradient id="an-area-fill" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.35" />
-                                <stop offset="100%" stopColor="#4f46e5" stopOpacity="0" />
-                              </linearGradient>
-                              <linearGradient id="an-line-stroke" x1="0" y1="0" x2="1" y2="0">
-                                <stop offset="0%" stopColor="#6366f1" />
-                                <stop offset="100%" stopColor="#0ea5e9" />
-                              </linearGradient>
-                            </defs>
-
-                            {/* Filled area beneath the current-year pace line */}
-                            <motion.path
-                              d="M 0 100 L 15 88 L 30 74 L 45 62 L 60 51 L 80 37 L 100 26 L 100 100 Z"
-                              fill="url(#an-area-fill)"
-                              stroke="none"
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              transition={{ duration: 0.8, delay: 0.3 }}
-                            />
-
-                            {/* Last year pace */}
-                            <motion.path
-                              d="M 0 100 L 15 92 L 30 86 L 45 78 L 60 69 L 80 59 L 100 48"
-                              fill="none"
-                              stroke="#cbd5e1"
-                              strokeWidth="2"
-                              strokeDasharray="4"
-                              strokeLinecap="round"
-                              initial={{ pathLength: 0, opacity: 0 }}
-                              animate={{ pathLength: 1, opacity: 1 }}
-                              transition={{ duration: 1.2, ease: 'easeInOut' }}
-                            />
-
-                            {/* Target points connecting current pace */}
-                            <motion.path
-                              d="M 0 100 L 15 88 L 30 74 L 45 62 L 60 51 L 80 37 L 100 26"
-                              fill="none"
-                              stroke="url(#an-line-stroke)"
-                              strokeWidth="2.8"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              initial={{ pathLength: 0 }}
-                              animate={{ pathLength: 1 }}
-                              transition={{ duration: 1.4, ease: [0.22, 1, 0.36, 1] }}
-                            />
-
-                            {/* Animated vertex markers on the current-year line */}
-                            {[[0, 100], [15, 88], [30, 74], [45, 62], [60, 51], [80, 37], [100, 26]].map(([cx, cy], i) => (
-                              <motion.circle
-                                key={i}
-                                cx={cx} cy={cy} r="1.8"
-                                fill="#ffffff"
-                                stroke="#4f46e5"
-                                strokeWidth="1.4"
-                                initial={{ scale: 0, opacity: 0 }}
-                                animate={{ scale: 1, opacity: 1 }}
-                                transition={{ delay: 0.3 + i * 0.1, type: 'spring', stiffness: 400, damping: 14 }}
-                              />
-                            ))}
-                          </svg>
-
-                          <motion.div
-                            initial={{ opacity: 0, y: -6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.6 }}
-                            className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm p-2 rounded-xl border border-indigo-100 shadow-sm text-[9px] font-bold flex flex-col gap-1"
-                          >
-                            <div className="flex items-center gap-1.5">
-                              <span className="w-2.5 h-0.5 rounded-full bg-gradient-to-r from-indigo-600 to-sky-500 inline-block"></span>
-                              <span className="text-indigo-700">This Month</span>
-                              <span className="px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-600 border border-emerald-100">+15%</span>
-                            </div>
-                            <div className="flex items-center gap-1.5 text-zinc-500"><span className="w-2.5 h-0.5 border-b border-dashed border-zinc-400 inline-block"></span> Last Year</div>
-                          </motion.div>
-                        </div>
-                        <div className="relative flex justify-between text-[9px] text-zinc-400 font-bold uppercase tracking-wider mt-2 px-1">
-                          <span>Day 1</span>
-                          <span>Day 10</span>
-                          <span>Day 20</span>
-                          <span>Day 30</span>
+                        <div className="relative h-56 flex items-end px-2 pt-2">
+                          <BookingPaceChart 
+                            currentPace={analyticsData?.pace?.current || []} 
+                            lastYearPace={analyticsData?.pace?.lastYear || []} 
+                          />
                         </div>
                       </motion.div>
                     </div>
@@ -4618,7 +4708,7 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* Salary & Payroll */}
-                    <div>
+                    {false && (<div>
                       <motion.div
                         whileHover={{ y: -3 }}
                         transition={{ type: 'spring', stiffness: 300, damping: 20 }}
@@ -4720,7 +4810,7 @@ export default function AdminDashboard() {
                           })()}
                         </div>
                       </motion.div>
-                    </div>
+                    </div>)}
                   </div>
 
                   {/* ═══════════════════════════════════════════════

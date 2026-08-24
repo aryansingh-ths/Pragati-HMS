@@ -276,7 +276,11 @@ INSERT INTO department_budgets (department_name, budget_amount, type) VALUES
 ('F&B', 1350000, 'Revenue'),
 ('Banquets & Events', 900000, 'Revenue'),
 ('Housekeeping', 420000, 'Expense'),
-('Marketing & Admin', 230000, 'Expense')
+('Marketing & Admin', 230000, 'Expense'),
+('Room Amenities', 100000, 'Expense'),
+('Kitchen Items', 100000, 'Expense'),
+('Hotel Vehicles Fuels', 100000, 'Expense'),
+('Electricity', 100000, 'Expense')
 ON CONFLICT (department_name) DO NOTHING;
 
 -- 8. Cash Drawer Logs
@@ -350,21 +354,7 @@ CREATE TABLE IF NOT EXISTS dining_menu (
     orders INT DEFAULT 0
 );
 
-CREATE TABLE IF NOT EXISTS dining_kots (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    hotel_id UUID REFERENCES hotels(id) ON DELETE CASCADE,
-    table_number VARCHAR(50) NOT NULL,
-    items JSONB NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    destination VARCHAR(255) NOT NULL,
-    description TEXT,
-    category VARCHAR(100) NOT NULL DEFAULT 'Leisure',
-    price DECIMAL(10, 2) NOT NULL,
-    duration_days INT NOT NULL DEFAULT 3,
-    max_travelers INT NOT NULL DEFAULT 4,
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
+
 
 CREATE TABLE IF NOT EXISTS travel_bookings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -552,6 +542,7 @@ CREATE TABLE IF NOT EXISTS dining_kots (
     items JSONB NOT NULL,
     type VARCHAR(50) DEFAULT 'Dine-in',
     status VARCHAR(50) DEFAULT 'New',
+    billing_id UUID,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 

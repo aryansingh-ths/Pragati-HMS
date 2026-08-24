@@ -74,8 +74,9 @@ export default function NotificationBell({ fetchWithAuth }) {
   // Filter notifications based on active tab
   const filteredNotifications = notifications.filter(n => {
     if (activeTab === 'unread') return !n.is_read;
-    if (activeTab === 'direct') return n.notification_type === 'DIRECT';
-    return true;
+    if (activeTab === 'direct') return n.notification_type === 'DIRECT' && !n.is_sent;
+    if (activeTab === 'sent') return n.is_sent;
+    return activeTab === 'all' ? !n.is_sent : true;
   });
 
   // Get icon for notification type
@@ -111,9 +112,10 @@ export default function NotificationBell({ fetchWithAuth }) {
   };
 
   const tabs = [
-    { id: 'all', label: 'All', count: notifications.length },
+    { id: 'all', label: 'All', count: notifications.filter(n => !n.is_sent).length },
     { id: 'unread', label: 'Unread', count: unreadCount },
-    { id: 'direct', label: 'Direct', count: notifications.filter(n => n.notification_type === 'DIRECT').length },
+    { id: 'direct', label: 'Direct', count: notifications.filter(n => n.notification_type === 'DIRECT' && !n.is_sent).length },
+    { id: 'sent', label: 'Sent', count: notifications.filter(n => n.is_sent).length },
   ];
 
   return (
@@ -311,11 +313,17 @@ export default function NotificationBell({ fetchWithAuth }) {
                       <div className="flex-1 min-w-0 pr-4">
                         {/* Badges row */}
                         <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
-                          <span className={`text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${getTypeBadge(notif.notification_type)}`}>
-                            {notif.notification_type === 'DIRECT' ? 'Direct' :
-                             notif.notification_type === 'DEPARTMENT' ? notif.target_dept || 'Dept' :
-                             'Global'}
-                          </span>
+                          {notif.is_sent ? (
+                            <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border bg-zinc-100 text-zinc-600 border-zinc-200">
+                              Sent by You
+                            </span>
+                          ) : (
+                            <span className={`text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${getTypeBadge(notif.notification_type)}`}>
+                              {notif.notification_type === 'DIRECT' ? 'Direct' :
+                               notif.notification_type === 'DEPARTMENT' ? notif.target_dept || 'Dept' :
+                               'Global'}
+                            </span>
+                          )}
                           {notif.priority === 'URGENT' && (
                             <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border bg-rose-50 text-rose-600 border-rose-200 animate-pulse">
                               Urgent
@@ -331,9 +339,12 @@ export default function NotificationBell({ fetchWithAuth }) {
                           {notif.message}
                         </p>
 
-                        {/* Sender */}
+                        {/* Sender / Target */}
                         <p className="text-[9px] text-zinc-400 mt-1.5 font-medium">
-                          From: <span className="font-semibold text-zinc-500">{notif.sender_name}</span>
+                          {notif.is_sent 
+                            ? <span>To: <span className="font-semibold text-zinc-500">{notif.notification_type === 'DIRECT' ? notif.target_user_id || 'User' : notif.notification_type === 'DEPARTMENT' ? notif.target_dept : 'Global'}</span></span>
+                            : <span>From: <span className="font-semibold text-zinc-500">{notif.sender_name}</span></span>
+                          }
                         </p>
                       </div>
                     </div>

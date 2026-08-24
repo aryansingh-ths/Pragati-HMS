@@ -809,6 +809,29 @@ export default function FrontDeskDashboard() {
     };
   };
 
+  const handlePrintHistoricalInvoice = (b) => {
+    const checkIn = new Date(b.check_in_date);
+    checkIn.setHours(0, 0, 0, 0);
+    const expectedOut = new Date(b.check_out_date);
+    expectedOut.setHours(0, 0, 0, 0);
+    const actualDays = Math.max(1, Math.round((expectedOut - checkIn) / (1000 * 60 * 60 * 24)));
+    
+    const finalTotal = Number(b.total_price);
+    const baseTotal = finalTotal / 1.28;
+    const gstAmount = baseTotal * 0.18;
+    const serviceCharge = baseTotal * 0.10;
+    
+    handlePrintInvoice({
+      ...b,
+      id: b.booking_id,
+      actual_days: actualDays,
+      base_total: baseTotal,
+      gst_amount: gstAmount,
+      service_charge: serviceCharge,
+      final_total: finalTotal
+    });
+  };
+
   const handleCheckout = async (bookingId, finalTotal) => {
     setIsSubmitting(true);
     const res = await fetchWithAuth(`${API_BASE}/api/front-desk/bookings/${bookingId}/checkout`, { 
@@ -1084,8 +1107,7 @@ export default function FrontDeskDashboard() {
 
         {/* Section: History — pinned footer action, matches admin & Housekeeping convention */}
         {/* Section: History & Managerial */}
-        {accessLevel !== 'EXECUTIVE' && (
-          <div className="pt-4 border-t border-zinc-100 shrink-0 space-y-1">
+        <div className="pt-4 border-t border-zinc-100 shrink-0 space-y-1">
             <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">History & Ledger</p>
             <button
               onClick={() => { setViewMode('history'); loadAllBookings(); }}
@@ -1118,7 +1140,6 @@ export default function FrontDeskDashboard() {
               <Users size={16} /> Info Directory
             </button>
           </div>
-        )}
 
       </motion.div>
 
@@ -1680,7 +1701,7 @@ export default function FrontDeskDashboard() {
                               {paginatedBookings.map((b) => {
                                 const bs = getStatusStyle(b.booking_status);
                                 return (
-                                  <tr key={b.booking_id} className="hover:bg-amber-50/40 transition-colors">
+                                  <tr key={b.booking_id} onClick={() => handlePrintHistoricalInvoice(b)} className="cursor-pointer hover:bg-amber-50/40 transition-colors">
                                     <td className="p-3 font-bold text-zinc-900">
                                       {b.guest_name}
                                       <span className="block text-[10px] font-normal text-zinc-400 mt-0.5">{b.guest_email}</span>
