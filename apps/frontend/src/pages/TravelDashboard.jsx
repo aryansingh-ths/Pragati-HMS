@@ -172,6 +172,16 @@ const modalVariants = {
 // MAIN COMPONENT
 // =============================================
 export default function TravelDashboard() {
+  const scopedFetch = async (url, options) => {
+    let finalUrl = url;
+    const currentHotelId = sessionStorage.getItem('hms_current_hotel');
+    if (currentHotelId) {
+      const separator = finalUrl.includes('?') ? '&' : '?';
+      finalUrl = `${finalUrl}${separator}hotel_id=${currentHotelId}`;
+    }
+    return fetch(finalUrl, options);
+  };
+
   const getAccessLevel = () => {
     let raw = sessionStorage.getItem('hms_access_level');
     if (raw && raw !== 'undefined' && raw !== 'null') return raw;
@@ -194,9 +204,10 @@ export default function TravelDashboard() {
   }, [dismissedBroadcasts]);
 
   const fetchBroadcasts = React.useCallback(async () => {
+const fetch = scopedFetch;
     try {
       const token = sessionStorage.getItem('hms_token');
-      const res = await fetch(`http://localhost:3000/api/broadcasts`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await scopedFetch(`http://localhost:3000/api/broadcasts`, { headers: { 'Authorization': `Bearer ${token}` } });
       if (res?.ok) {
         const data = await res.json();
         setBroadcasts(data.data.broadcasts || []);
@@ -243,7 +254,7 @@ export default function TravelDashboard() {
   // --- Data fetchers ---
   const fetchOverview = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/travel/overview`, { headers: authHeaders() });
+      const res = await scopedFetch(`${API_BASE}/api/travel/overview`, { headers: authHeaders() });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to load overview');
       setKpis(json.data.kpis);
@@ -258,7 +269,7 @@ export default function TravelDashboard() {
 
   const fetchPackages = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/travel/packages`, { headers: authHeaders() });
+      const res = await scopedFetch(`${API_BASE}/api/travel/packages`, { headers: authHeaders() });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to load packages');
       setPackages(json.data.packages);
@@ -274,7 +285,7 @@ export default function TravelDashboard() {
       const params = new URLSearchParams();
       if (bookingStatusFilter !== 'All') params.set('status', bookingStatusFilter);
       if (bookingSearch) params.set('search', bookingSearch);
-      const res = await fetch(`${API_BASE}/api/travel/bookings?${params.toString()}`, { headers: authHeaders() });
+      const res = await scopedFetch(`${API_BASE}/api/travel/bookings?${params.toString()}`, { headers: authHeaders() });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to load bookings');
       setBookings(json.data.bookings);
@@ -287,7 +298,7 @@ export default function TravelDashboard() {
 
   const fetchCustomers = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/travel/customers`, { headers: authHeaders() });
+      const res = await scopedFetch(`${API_BASE}/api/travel/customers`, { headers: authHeaders() });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to load customers');
       setCustomers(json.data.customers);
@@ -327,7 +338,7 @@ export default function TravelDashboard() {
     e.preventDefault();
     if (!packageForm.name || !packageForm.destination || !packageForm.price) return;
     try {
-      const res = await fetch(`${API_BASE}/api/travel/packages`, {
+      const res = await scopedFetch(`${API_BASE}/api/travel/packages`, {
         method: 'POST', headers: authHeaders(),
         body: JSON.stringify({
           ...packageForm,
@@ -348,7 +359,7 @@ export default function TravelDashboard() {
 
   const handleTogglePackage = async (id) => {
     try {
-      await fetch(`${API_BASE}/api/travel/packages/${id}/toggle-active`, { method: 'PATCH', headers: authHeaders() });
+      await scopedFetch(`${API_BASE}/api/travel/packages/${id}/toggle-active`, { method: 'PATCH', headers: authHeaders() });
       fetchPackages();
     } catch (err) {
       setErrorMsg(err.message);
@@ -359,7 +370,7 @@ export default function TravelDashboard() {
     e.preventDefault();
     if (!bookingForm.package_id || !bookingForm.guest_name || !bookingForm.travel_date) return;
     try {
-      const res = await fetch(`${API_BASE}/api/travel/bookings`, {
+      const res = await scopedFetch(`${API_BASE}/api/travel/bookings`, {
         method: 'POST', headers: authHeaders(),
         body: JSON.stringify({ ...bookingForm, travelers_count: Number(bookingForm.travelers_count) || 1 })
       });
@@ -376,7 +387,7 @@ export default function TravelDashboard() {
 
   const handleUpdateBookingStatus = async (id, patch) => {
     try {
-      await fetch(`${API_BASE}/api/travel/bookings/${id}/status`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify(patch) });
+      await scopedFetch(`${API_BASE}/api/travel/bookings/${id}/status`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify(patch) });
       fetchBookings();
       fetchOverview();
     } catch (err) {
@@ -434,12 +445,7 @@ export default function TravelDashboard() {
         .fd-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(113, 113, 122, 0.65); }
 
         .fd-sidebar-scroll { scrollbar-width: none; }
-        .fd-sidebar-scroll:hover { scrollbar-width: thin; scrollbar-color: rgba(161,161,170,0.4) transparent; }
-        .fd-sidebar-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
-        .fd-sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
-        .fd-sidebar-scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 999px; transition: background 0.3s; }
-        .fd-sidebar-scroll:hover::-webkit-scrollbar-thumb { background: rgba(161, 161, 170, 0.45); }
-        .fd-sidebar-scroll:hover::-webkit-scrollbar-thumb:hover { background: rgba(113, 113, 122, 0.65); }
+        .fd-sidebar-scroll::-webkit-scrollbar { display: none; }
 
         .fd-app-bg {
           background: #F8F1E3 !important;
@@ -488,16 +494,7 @@ export default function TravelDashboard() {
             </div>
           ))}
 
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Command Center</p>
-            <button
-              onClick={() => navigate('/dashboard/admin')}
-              className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-500 hover:bg-zinc-50 hover:text-[#D4A373] transition-all text-left"
-            >
-              <span className="flex items-center gap-3"><Building2 size={15} /> Back to Admin</span>
-              <ArrowUpRight size={14} className="opacity-50" />
-            </button>
-          </div>
+
         </div>
 
         <div className="rounded-2xl bg-gradient-to-br from-zinc-50 to-white border border-zinc-100 p-4 flex items-start gap-3">
@@ -826,7 +823,7 @@ export default function TravelDashboard() {
                       <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
                         <div className="relative w-full sm:w-56">
                           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-                          <input value={bookingSearch} onChange={e => setBookingSearch(e.target.value)} placeholder="Search guest or package..." className="fd-input pl-9 py-2 text-xs" />
+                          <input value={bookingSearch} onChange={e => setBookingSearch(e.target.value)} placeholder="Search guest or package..." className="fd-input !pl-10 py-2 text-xs w-full" />
                         </div>
                         <select value={bookingStatusFilter} onChange={e => setBookingStatusFilter(e.target.value)} className="fd-input py-2 text-xs bg-white appearance-none cursor-pointer w-full sm:w-40">
                           <option value="All">All Statuses</option>

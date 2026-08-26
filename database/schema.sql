@@ -160,6 +160,7 @@ CREATE TABLE IF NOT EXISTS ledger_transactions (
 
 CREATE TABLE IF NOT EXISTS travel_packages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_id UUID REFERENCES hotels(id) ON DELETE SET NULL,
     name VARCHAR(255) NOT NULL,
     destination VARCHAR(255) NOT NULL,
     description TEXT,
@@ -173,6 +174,7 @@ CREATE TABLE IF NOT EXISTS travel_packages (
 
 CREATE TABLE IF NOT EXISTS travel_bookings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_id UUID REFERENCES hotels(id) ON DELETE SET NULL,
     package_id UUID REFERENCES travel_packages(id) ON DELETE SET NULL,
     guest_name VARCHAR(255) NOT NULL,
     guest_email VARCHAR(255),
@@ -358,6 +360,7 @@ CREATE TABLE IF NOT EXISTS dining_menu (
 
 CREATE TABLE IF NOT EXISTS travel_bookings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hotel_id UUID REFERENCES hotels(id) ON DELETE SET NULL,
     package_id UUID REFERENCES travel_packages(id) ON DELETE SET NULL,
     guest_name VARCHAR(255) NOT NULL,
     guest_email VARCHAR(255),

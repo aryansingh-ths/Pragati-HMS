@@ -1125,7 +1125,7 @@ export default function AdminDashboard() {
           type: 'DIRECT',
           priority: notifPriority,
           targetEmail: directTargetEmail.trim(),
-          hotel_id: broadcastForm.hotel_id || null
+          hotel_id: broadcastForm.hotel_id || sessionStorage.getItem('hms_current_hotel') || null
         })
       });
     } else {
@@ -1141,7 +1141,7 @@ export default function AdminDashboard() {
           type: broadcastForm.targetDept === 'ALL' ? 'GLOBAL' : 'DEPARTMENT',
           priority: notifPriority,
           targetDept: broadcastForm.targetDept,
-          hotel_id: broadcastForm.hotel_id || null
+          hotel_id: broadcastForm.hotel_id || sessionStorage.getItem('hms_current_hotel') || null
         })
       });
     }
@@ -1671,7 +1671,7 @@ export default function AdminDashboard() {
 
         {/* BROADCAST BANNER */}
         <AnimatePresence>
-          {broadcasts.filter(b => !dismissedBroadcasts.includes(b.id) && (!b.expires_at || new Date(b.expires_at) > new Date()) && b.sender_name !== sessionStorage.getItem('hms_name')).map((broadcast) => (
+          {broadcasts.filter(b => !dismissedBroadcasts.includes(b.id) && (!b.expires_at || new Date(b.expires_at) > new Date())).map((broadcast) => (
             <motion.div
               key={broadcast.id}
               initial={{ opacity: 0, y: -20, scale: 0.98 }}
@@ -4305,7 +4305,7 @@ export default function AdminDashboard() {
                     .mtn-dot-grid { background-image: radial-gradient(rgba(99,102,241,0.14) 1px, transparent 1px); background-size: 18px 18px; -webkit-mask-image: radial-gradient(circle at 85% 10%, rgba(0,0,0,0.8), transparent 68%); mask-image: radial-gradient(circle at 85% 10%, rgba(0,0,0,0.8), transparent 68%); }
                   `}</style>
 
-                  {yieldRules && (
+                  {/* yieldRules && (
                     <div>
                       <motion.div
                         whileHover={{ y: -4, scale: 1.005 }}
@@ -4328,7 +4328,7 @@ export default function AdminDashboard() {
                         </div>
 
                         <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6">
-                          {/* Preventive schedules */}
+                          {/* Preventive schedules * /}
                           <motion.div whileHover={{ y: -2 }} className="group relative bg-gradient-to-br from-indigo-50/60 via-white to-white p-5 rounded-2xl border-2 border-indigo-100/70 hover:border-indigo-300/70 hover:shadow-xl hover:shadow-indigo-500/10 space-y-4 transition-all duration-300 overflow-hidden">
                             <div className="mtn-sheen" />
                             <div className="relative">
@@ -4357,7 +4357,7 @@ export default function AdminDashboard() {
                             </div>
                           </motion.div>
 
-                          {/* Contractor Auto Routing */}
+                          {/* Contractor Auto Routing * /}
                           <motion.div whileHover={{ y: -2 }} className="group relative bg-gradient-to-br from-rose-50/60 via-white to-white p-5 rounded-2xl border-2 border-rose-100/70 hover:border-rose-300/70 hover:shadow-xl hover:shadow-rose-500/10 space-y-4 transition-all duration-300 overflow-hidden">
                             <div className="mtn-sheen" />
                             <div className="relative">
@@ -4391,7 +4391,7 @@ export default function AdminDashboard() {
                         </div>
                       </motion.div>
                     </div>
-                  )}
+                  )} */ }
                 </motion.div>
               )}
 

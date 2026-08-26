@@ -199,6 +199,16 @@ function TargetVsRevenueChart({ period }) {
 // MAIN COMPONENT - SALES EXECUTIVE VIEW
 // =============================================
 export default function SalesExecutiveDashboard() {
+  const scopedFetch = async (url, options) => {
+    let finalUrl = url;
+    const currentHotelId = sessionStorage.getItem('hms_current_hotel');
+    if (currentHotelId) {
+      const separator = finalUrl.includes('?') ? '&' : '?';
+      finalUrl = `${finalUrl}${separator}hotel_id=${currentHotelId}`;
+    }
+    return fetch(finalUrl, options);
+  };
+
   const getAccessLevel = () => {
     let raw = sessionStorage.getItem('hms_access_level');
     if (raw && raw !== 'undefined' && raw !== 'null') return raw;
@@ -221,9 +231,10 @@ export default function SalesExecutiveDashboard() {
   }, [dismissedBroadcasts]);
 
   const fetchBroadcasts = React.useCallback(async () => {
+const fetch = scopedFetch;
     try {
       const token = sessionStorage.getItem('hms_token');
-      const res = await fetch(`http://localhost:3000/api/broadcasts`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await scopedFetch(`http://localhost:3000/api/broadcasts`, { headers: { 'Authorization': `Bearer ${token}` } });
       if (res?.ok) {
         const data = await res.json();
         setBroadcasts(data.data.broadcasts || []);
@@ -248,6 +259,11 @@ export default function SalesExecutiveDashboard() {
   const [myAccounts, setMyAccounts] = useState([]);
   const [ongoingTasks, setOngoingTasks] = useState([]);
   const [assignedTasks, setAssignedTasks] = useState([]);
+
+  // Task Form States
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [isSubmittingTask, setIsSubmittingTask] = useState(false);
+  const [newTaskForm, setNewTaskForm] = useState({ title: '', type: 'Call', client: '', deadline: '' });
   const [bookingModes, setBookingModes] = useState([]);
   const [otaData, setOtaData] = useState([]);
   const [leadSearch, setLeadSearch] = useState('');
@@ -276,11 +292,11 @@ export default function SalesExecutiveDashboard() {
 
       // Fetch all dashboard data concurrently
       const [leadsRes, accountsRes, tasksRes, otaRes, modesRes] = await Promise.all([
-        fetch('http://localhost:3000/api/sales/leads', { headers }),
-        fetch('http://localhost:3000/api/sales/accounts', { headers }),
-        fetch('http://localhost:3000/api/sales/tasks', { headers }),
-        fetch('http://localhost:3000/api/sales/ota', { headers }),
-        fetch('http://localhost:3000/api/sales/booking-modes', { headers })
+        scopedFetch('http://localhost:3000/api/sales/leads', { headers }),
+        scopedFetch('http://localhost:3000/api/sales/accounts', { headers }),
+        scopedFetch('http://localhost:3000/api/sales/tasks', { headers }),
+        scopedFetch('http://localhost:3000/api/sales/ota', { headers }),
+        scopedFetch('http://localhost:3000/api/sales/booking-modes', { headers })
       ]);
 
       if (leadsRes.ok) {
@@ -354,12 +370,41 @@ export default function SalesExecutiveDashboard() {
     fetchData();
   };
 
+  const handleCreateTask = async (e) => {
+    e.preventDefault();
+    setIsSubmittingTask(true);
+    try {
+      const token = sessionStorage.getItem('hms_token');
+      const res = await scopedFetch('http://localhost:3000/api/sales/tasks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(newTaskForm)
+      });
+      if (res.ok) {
+        setIsTaskModalOpen(false);
+        setNewTaskForm({ title: '', type: 'Call', client: '', deadline: '' });
+        fetchData();
+      } else {
+        const err = await res.json();
+        alert('Failed to create task: ' + err.error);
+      }
+    } catch (error) {
+      console.error('Error creating task:', error);
+      alert('Error creating task');
+    } finally {
+      setIsSubmittingTask(false);
+    }
+  };
+
   const handleAddLead = async (e) => {
     e.preventDefault();
     setIsSubmittingLead(true);
     try {
       const token = sessionStorage.getItem('hms_token');
-      const res = await fetch('http://localhost:3000/api/sales/leads', {
+      const res = await scopedFetch('http://localhost:3000/api/sales/leads', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -395,14 +440,14 @@ export default function SalesExecutiveDashboard() {
       const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
 
       // 1. Move lead to 'Contacted' stage
-      await fetch(`http://localhost:3000/api/sales/leads/${lead.id}/stage`, {
+      await scopedFetch(`http://localhost:3000/api/sales/leads/${lead.id}/stage`, {
         method: 'PATCH',
         headers,
         body: JSON.stringify({ stage: 'Contacted' })
       });
 
       // 2. Add as a new Account
-      const accResponse = await fetch(`http://localhost:3000/api/sales/accounts`, {
+      const accResponse = await scopedFetch(`http://localhost:3000/api/sales/accounts`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -525,10 +570,8 @@ export default function SalesExecutiveDashboard() {
   return (
     <div className="min-h-[calc(100vh-6rem)] relative sd-app-bg sd-scrollbar p-6 flex flex-col lg:flex-row gap-6">
       <style>{`
-        .sd-scrollbar { scrollbar-width: thin; scrollbar-color: rgba(161,161,170,0.4) transparent; }
-        .sd-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-        .sd-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .sd-scrollbar::-webkit-scrollbar-thumb { background: rgba(161, 161, 170, 0.45); border-radius: 999px; }
+        .sd-scrollbar { scrollbar-width: none; }
+        .sd-scrollbar::-webkit-scrollbar { display: none; }
 
         .sd-app-bg {
           background: #F8F1E3 !important;
@@ -559,7 +602,7 @@ export default function SalesExecutiveDashboard() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto pr-1 justify-start">
+        <div className="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto pr-1 justify-start sd-scrollbar">
           {navGroups.map((group, index) => (
             <div key={group.heading || `group-${index}`}>
               {group.heading && <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">{group.heading}</p>}
@@ -815,7 +858,7 @@ export default function SalesExecutiveDashboard() {
                     <div className="bg-white border border-zinc-200/60 rounded-[2rem] overflow-hidden p-6 flex flex-col shadow-sm">
                       <div className="flex items-center justify-between mb-6">
                         <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><Activity size={16} className="text-[#D4A373]" /> Ongoing Tasks Status</h3>
-                        <button className="text-[11px] font-bold text-[#D4A373] bg-zinc-50 px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/10 transition flex items-center gap-1"><Plus size={12} /> New Task</button>
+                        <button onClick={() => setIsTaskModalOpen(true)} className="text-[11px] font-bold text-[#D4A373] bg-zinc-50 px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/10 transition flex items-center gap-1"><Plus size={12} /> New Task</button>
                       </div>
                       <div className="flex flex-col gap-3 flex-1">
                         {ongoingTasks.length === 0 && <div className="text-center text-zinc-400 text-xs py-4">No active ongoing tasks.</div>}
@@ -831,8 +874,18 @@ export default function SalesExecutiveDashboard() {
                               <span className="text-[10px] font-bold uppercase text-zinc-400">Status</span>
                               <select
                                 value={task.status}
-                                onChange={(e) => {
-                                  setOngoingTasks(ongoingTasks.map(t => t.id === task.id ? { ...t, status: e.target.value } : t));
+                                onChange={async (e) => {
+                                  const newStatus = e.target.value;
+                                  setOngoingTasks(ongoingTasks.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
+                                  try {
+                                    await scopedFetch(`http://localhost:3000/api/sales/tasks/${task.id}/status`, {
+                                      method: 'PATCH',
+                                      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
+                                      body: JSON.stringify({ status: newStatus })
+                                    });
+                                  } catch (err) {
+                                    console.error('Failed to update task status:', err);
+                                  }
                                 }}
                                 className="text-xs font-bold text-[#D4A373] bg-zinc-50 border-none rounded py-1 px-2 cursor-pointer outline-none focus:ring-2 focus:ring-violet-200"
                               >
@@ -854,7 +907,12 @@ export default function SalesExecutiveDashboard() {
                 <motion.div key="pipeline" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
                   <div className="relative w-full sm:w-72 mb-4">
                     <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-                    <input value={leadSearch} onChange={e => setLeadSearch(e.target.value)} placeholder="Search companies, names..." className="sd-input pl-9 py-2.5 text-xs bg-white shadow-sm" />
+                    <input 
+                      value={leadSearch} 
+                      onChange={e => setLeadSearch(e.target.value)} 
+                      placeholder="Search companies, names..." 
+                      className="w-full bg-white border border-zinc-200 rounded-xl pl-9 pr-4 py-2 text-xs outline-none focus:border-[#D4A373] focus:ring-1 focus:ring-[#D4A373] transition-all shadow-sm" 
+                    />
                   </div>
 
                   <div className="flex gap-4 overflow-x-auto pb-4 sd-scrollbar items-start">
@@ -1271,6 +1329,91 @@ export default function SalesExecutiveDashboard() {
                 >
                   {isSubmittingLead ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
                   {isSubmittingLead ? 'Saving...' : 'Add Lead to Pipeline'}
+                </motion.button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Task Creation Modal */}
+      <AnimatePresence>
+        {isTaskModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/40 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-[2rem] p-8 max-w-md w-full shadow-2xl relative"
+            >
+              <button onClick={() => setIsTaskModalOpen(false)} className="absolute top-6 right-6 text-zinc-400 hover:text-zinc-600 bg-zinc-100 p-2 rounded-full transition-colors"><X size={16} /></button>
+              
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#D4A373] to-[#B38B5D] flex items-center justify-center shadow-md">
+                  <CheckSquare size={20} className="text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-zinc-900 tracking-tight">New Task</h2>
+                  <p className="text-xs text-zinc-500 font-medium">Add a new task to your to-do list</p>
+                </div>
+              </div>
+
+              <form onSubmit={handleCreateTask} className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Task Title</label>
+                  <input
+                    type="text" required placeholder="e.g. Follow up with Corporate Client"
+                    value={newTaskForm.title}
+                    onChange={e => setNewTaskForm({ ...newTaskForm, title: e.target.value })}
+                    className="sd-input bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm w-full outline-none focus:border-[#D4A373] focus:ring-1 focus:ring-[#D4A373] transition-all"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Task Type</label>
+                    <select
+                      value={newTaskForm.type}
+                      onChange={e => setNewTaskForm({ ...newTaskForm, type: e.target.value })}
+                      className="sd-input bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm w-full outline-none focus:border-[#D4A373] focus:ring-1 focus:ring-[#D4A373] transition-all appearance-none cursor-pointer"
+                    >
+                      <option value="Call">Call</option>
+                      <option value="Email">Email</option>
+                      <option value="Meeting">Meeting</option>
+                      <option value="Follow-up">Follow-up</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Deadline</label>
+                    <input
+                      type="datetime-local" required
+                      value={newTaskForm.deadline}
+                      onChange={e => setNewTaskForm({ ...newTaskForm, deadline: e.target.value })}
+                      className="sd-input bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm w-full outline-none focus:border-[#D4A373] focus:ring-1 focus:ring-[#D4A373] transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Related Client (Optional)</label>
+                  <input
+                    type="text" placeholder="e.g. TechHansa"
+                    value={newTaskForm.client}
+                    onChange={e => setNewTaskForm({ ...newTaskForm, client: e.target.value })}
+                    className="sd-input bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm w-full outline-none focus:border-[#D4A373] focus:ring-1 focus:ring-[#D4A373] transition-all"
+                  />
+                </div>
+
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  type="submit"
+                  disabled={isSubmittingTask}
+                  className="w-full mt-6 bg-zinc-900 hover:bg-[#D4A373] text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {isSubmittingTask ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                  {isSubmittingTask ? 'Creating...' : 'Create Task'}
                 </motion.button>
               </form>
             </motion.div>

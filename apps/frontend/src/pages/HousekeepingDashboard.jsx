@@ -375,7 +375,13 @@ export default function HousekeepingDashboard() {
     const token = sessionStorage.getItem('hms_token');
     if (!token) { navigate('/login'); return null; }
     try {
-      const res = await fetch(url, {
+      let finalUrl = url;
+      const currentHotelId = sessionStorage.getItem('hms_current_hotel');
+      if (currentHotelId) {
+        const separator = finalUrl.includes('?') ? '&' : '?';
+        finalUrl = `${finalUrl}${separator}hotel_id=${currentHotelId}`;
+      }
+      const res = await fetch(finalUrl, {
         ...options,
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1393,7 +1399,7 @@ export default function HousekeepingDashboard() {
                       >
                         <option value="">-- Choose Room --</option>
                         {allRooms.map(r => (
-                          <option key={r.id} value={r.id}>
+                          <option key={r.id || r.room_id} value={r.id || r.room_id}>
                             Room {r.room_number} ({r.room_type}) - {r.status}
                           </option>
                         ))}

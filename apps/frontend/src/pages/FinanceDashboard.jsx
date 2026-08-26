@@ -325,6 +325,16 @@ function BarRankChart({ data = [] }) {
 // MAIN COMPONENT
 // =============================================
 export default function FinanceDashboard() {
+  const scopedFetch = async (url, options) => {
+    let finalUrl = url;
+    const currentHotelId = sessionStorage.getItem('hms_current_hotel');
+    if (currentHotelId) {
+      const separator = finalUrl.includes('?') ? '&' : '?';
+      finalUrl = `${finalUrl}${separator}hotel_id=${currentHotelId}`;
+    }
+    return fetch(finalUrl, options);
+  };
+
   const navigate = useNavigate();
   const getAccessLevel = () => {
     let raw = sessionStorage.getItem('hms_access_level');
@@ -348,9 +358,10 @@ export default function FinanceDashboard() {
   }, [dismissedBroadcasts]);
 
   const fetchBroadcasts = React.useCallback(async () => {
+const fetch = scopedFetch;
     try {
       const token = sessionStorage.getItem('hms_token');
-      const res = await fetch(`http://localhost:3000/api/broadcasts`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await scopedFetch(`http://localhost:3000/api/broadcasts`, { headers: { 'Authorization': `Bearer ${token}` } });
       if (res?.ok) {
         const data = await res.json();
         setBroadcasts(data.data.broadcasts || []);
@@ -386,16 +397,17 @@ export default function FinanceDashboard() {
         const token = sessionStorage.getItem('hms_token');
         const headers = { 'Authorization': `Bearer ${token}` };
 
-        const [overviewRes, expensesRes, invoicesRes, payablesRes, reconRes, ledgerRes, stmtRes, budgetRes, cashRegisterRes] = await Promise.all([
-          fetch('http://localhost:3000/api/finance/overview', { headers }),
-          fetch('http://localhost:3000/api/finance/expenses', { headers }),
-          fetch('http://localhost:3000/api/finance/invoices', { headers }),
-          fetch('http://localhost:3000/api/finance/payables', { headers }),
-          fetch('http://localhost:3000/api/finance/reconciliations', { headers }),
-          fetch('http://localhost:3000/api/finance/ledger', { headers }),
-          fetch('http://localhost:3000/api/finance/statements', { headers }),
-          fetch('http://localhost:3000/api/finance/budgets', { headers }),
-          fetch('http://localhost:3000/api/finance/cash-register', { headers })
+        const [overviewRes, expensesRes, invoicesRes, payablesRes, reconRes, ledgerRes, stmtRes, budgetRes, cashRegisterRes, payrollRes] = await Promise.all([
+          scopedFetch('http://localhost:3000/api/finance/overview', { headers }),
+          scopedFetch('http://localhost:3000/api/finance/expenses', { headers }),
+          scopedFetch('http://localhost:3000/api/finance/invoices', { headers }),
+          scopedFetch('http://localhost:3000/api/finance/payables', { headers }),
+          scopedFetch('http://localhost:3000/api/finance/reconciliations', { headers }),
+          scopedFetch('http://localhost:3000/api/finance/ledger', { headers }),
+          scopedFetch('http://localhost:3000/api/finance/statements', { headers }),
+          scopedFetch('http://localhost:3000/api/finance/budgets', { headers }),
+          scopedFetch('http://localhost:3000/api/finance/cash-register', { headers }),
+          scopedFetch('http://localhost:3000/api/finance/payroll', { headers })
         ]);
 
         if (overviewRes.ok) {
@@ -434,6 +446,10 @@ export default function FinanceDashboard() {
           const { data } = await cashRegisterRes.json();
           setApiCashRegister(data);
         }
+        if (payrollRes.ok) {
+          const { data } = await payrollRes.json();
+          setApiPayroll(data);
+        }
       } catch (err) {
         console.error('Failed to fetch finance data:', err);
       }
@@ -446,7 +462,7 @@ export default function FinanceDashboard() {
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [expenseSearch, setExpenseSearch] = useState('');
   const [expenseCategoryFilter, setExpenseCategoryFilter] = useState('All');
-  const [expenseForm, setExpenseForm] = useState({ category: 'Kitchen Items', vendor: '', amount: '', method: 'Bank Transfer', notes: '' });
+  const [expenseForm, setExpenseForm] = useState({ category: 'Kitchen Items', vendor: '', amount: '', method: 'Bank Transfer', notes: '', status: 'Approved', ref_id: '' });
 
   // --- Invoices & Billing ---
   const [invoiceSearch, setInvoiceSearch] = useState('');
@@ -465,7 +481,7 @@ export default function FinanceDashboard() {
 
   const handleCreateBudget = async () => {
     if (!newBudgetForm.department_name || !newBudgetForm.budget_amount) return;
-    const res = await fetch('http://localhost:3000/api/finance/budgets', {
+    const res = await scopedFetch('http://localhost:3000/api/finance/budgets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
       body: JSON.stringify({ ...newBudgetForm, type: 'Expense' })
@@ -478,7 +494,7 @@ export default function FinanceDashboard() {
   };
 
   const handleUpdateBudget = async (id, newAmount) => {
-    const res = await fetch(`http://localhost:3000/api/finance/budgets/${id}`, {
+    const res = await scopedFetch(`http://localhost:3000/api/finance/budgets/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
       body: JSON.stringify({ budget_amount: newAmount })
@@ -490,7 +506,7 @@ export default function FinanceDashboard() {
   };
 
   const handleDeleteBudget = async (id) => {
-    const res = await fetch(`http://localhost:3000/api/finance/budgets/${id}`, {
+    const res = await scopedFetch(`http://localhost:3000/api/finance/budgets/${id}`, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` }
     });
@@ -499,7 +515,7 @@ export default function FinanceDashboard() {
     }
   };
 
-  const [billForm, setBillForm] = useState({ vendor: '', category: 'Kitchen & F&B Supplies', amount: '', dueDate: '', notes: '' });
+  const [billForm, setBillForm] = useState({ vendor: '', category: 'Kitchen & F&B Supplies', amount: '', dueDate: '', notes: '', status: 'Scheduled', bill_number: '' });
 
   // --- Financial Statements ---
   const [statementView, setStatementView] = useState('pnl');
@@ -596,7 +612,7 @@ export default function FinanceDashboard() {
     matchedWith: r.matched_with,
     status: r.status,
     rawId: r.id
-  })).filter(r => (r.ref + r.source + r.status).toLowerCase().includes(reconSearch.toLowerCase()));
+  })).filter(r => (`${r.ref || ''} ${r.source || ''} ${r.status || ''}`).toLowerCase().includes(reconSearch.toLowerCase()));
 
   const totalTax = (apiInvoices || []).reduce((sum, inv) => sum + Number(inv.tax_amount || 0), 0);
   const cgst = totalTax / 2;
@@ -664,7 +680,7 @@ export default function FinanceDashboard() {
     status: e.status
   })) : []).filter(e =>
     (expenseCategoryFilter === 'All' || e.category === expenseCategoryFilter) &&
-    (e.vendor + e.id + e.category).toLowerCase().includes(expenseSearch.toLowerCase())
+    (`${e.vendor || ''} ${e.id || ''} ${e.category || ''}`).toLowerCase().includes(expenseSearch.toLowerCase())
   );
 
   const handleAddExpense = async (e) => {
@@ -673,7 +689,7 @@ export default function FinanceDashboard() {
 
     try {
       const token = sessionStorage.getItem('hms_token');
-      const res = await fetch('http://localhost:3000/api/finance/expenses', {
+      const res = await scopedFetch('http://localhost:3000/api/finance/expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(expenseForm)
@@ -687,7 +703,7 @@ export default function FinanceDashboard() {
     }
 
     setIsExpenseModalOpen(false);
-    setExpenseForm({ category: 'Kitchen Items', vendor: '', amount: '', method: 'Bank Transfer', notes: '' });
+    setExpenseForm({ category: 'Kitchen Items', vendor: '', amount: '', method: 'Bank Transfer', notes: '', status: 'Approved', ref_id: '' });
   };
 
   const handleAddEntry = (e) => {
@@ -716,7 +732,7 @@ export default function FinanceDashboard() {
   });
   const invoicesData = allInvoices.filter(i =>
     (invoiceStatusFilter === 'All' || i.status === invoiceStatusFilter) &&
-    (i.id + i.billTo + i.type).toLowerCase().includes(invoiceSearch.toLowerCase())
+    (`${i.id || ''} ${i.billTo || ''} ${i.type || ''}`).toLowerCase().includes(invoiceSearch.toLowerCase())
   );
   const totalInvoiced = allInvoices.filter(i => i.amount > 0).reduce((s, i) => s + i.amount, 0);
   const totalOutstanding = allInvoices.reduce((s, i) => s + Math.max(i.amount - i.paid, 0), 0);
@@ -753,7 +769,7 @@ export default function FinanceDashboard() {
 
     try {
       const token = sessionStorage.getItem('hms_token');
-      const res = await fetch('http://localhost:3000/api/finance/invoices', {
+      const res = await scopedFetch('http://localhost:3000/api/finance/invoices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(invoiceForm)
@@ -783,7 +799,7 @@ export default function FinanceDashboard() {
   }));
   const payablesData = allPayables.filter(b =>
     (payableStatusFilter === 'All' || b.status === payableStatusFilter) &&
-    (b.id + b.vendor + b.category).toLowerCase().includes(payableSearch.toLowerCase())
+    (`${b.id || ''} ${b.vendor || ''} ${b.category || ''}`).toLowerCase().includes(payableSearch.toLowerCase())
   );
   const vendorLedgerMap = {};
   allPayables.forEach(b => {
@@ -805,7 +821,7 @@ export default function FinanceDashboard() {
 
     try {
       const token = sessionStorage.getItem('hms_token');
-      const res = await fetch('http://localhost:3000/api/finance/payables', {
+      const res = await scopedFetch('http://localhost:3000/api/finance/payables', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(billForm)
@@ -819,7 +835,7 @@ export default function FinanceDashboard() {
     }
 
     setIsBillModalOpen(false);
-    setBillForm({ vendor: '', category: 'Kitchen & F&B Supplies', amount: '', dueDate: '', notes: '' });
+    setBillForm({ vendor: '', category: 'Kitchen & F&B Supplies', amount: '', dueDate: '', notes: '', status: 'Scheduled', bill_number: '' });
   };
 
   // --- Financial Statements data ---
@@ -900,18 +916,35 @@ export default function FinanceDashboard() {
   const forecastTrend = apiOverview?.sixMonthRevenueProjection || [];
 
   // --- Payroll & Staff Costs data ---
-  const payrollByDept = apiPayroll;
-  const totalHeadcount = payrollByDept.reduce((s, d) => s + (d.headcount || 0), 0);
-  const totalGrossPayroll = payrollByDept.reduce((s, d) => s + (d.gross || 0), 0);
-  const totalPfLiability = payrollByDept.reduce((s, d) => s + (d.pf || 0), 0);
-  const totalEsiLiability = payrollByDept.reduce((s, d) => s + (d.esi || 0), 0);
+  const payrollList = apiPayroll;
+  const totalHeadcount = payrollList.length;
+  const totalGrossPayroll = payrollList.reduce((s, e) => s + (Number(e.gross) || 0), 0);
   const avgCostPerEmployee = totalHeadcount > 0 ? Math.round(totalGrossPayroll / totalHeadcount) : 0;
+
+  const handleUpdateSalary = async (userId, newGross) => {
+    try {
+      const token = sessionStorage.getItem('hms_token');
+      const res = await scopedFetch(`http://localhost:3000/api/finance/payroll/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ gross: Number(newGross) })
+      });
+      if (res.ok) {
+        setApiPayroll(prev => prev.map(p => p.user_id === userId ? { ...p, gross: Number(newGross) } : p));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   // --- Guest Deposits & Advances data ---
   const allDeposits = apiDeposits;
   const depositsData = allDeposits.filter(d =>
     (depositStatusFilter === 'All' || d.status === depositStatusFilter) &&
-    (d.id + d.guest + d.ref + d.type).toLowerCase().includes(depositSearch.toLowerCase())
+    (`${d.id || ''} ${d.guest || ''} ${d.ref || ''} ${d.type || ''}`).toLowerCase().includes(depositSearch.toLowerCase())
   );
   const totalHeldEscrow = allDeposits.filter(d => d.status === 'Held').reduce((s, d) => s + (d.amount || 0), 0);
   const totalAdvanceBookings = allDeposits.filter(d => d.type === 'Advance Booking').reduce((s, d) => s + (d.amount || 0), 0);
@@ -937,7 +970,7 @@ export default function FinanceDashboard() {
 
     try {
       const token = sessionStorage.getItem('hms_token');
-      const res = await fetch('http://localhost:3000/api/finance/cash-register', {
+      const res = await scopedFetch('http://localhost:3000/api/finance/cash-register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(cashForm)
@@ -960,7 +993,6 @@ export default function FinanceDashboard() {
       items: [
         ...(accessLevel !== 'EXECUTIVE' ? [{ key: 'overview', label: 'Financial Overview', icon: <Building2 size={15} /> }] : []),
         { key: 'expenses', label: 'Expenses & Payables', icon: <PieChart size={15} /> },
-        ...(accessLevel !== 'EXECUTIVE' ? [{ key: 'reconciliation', label: 'Reconciliation', icon: <Link2 size={15} /> }] : []),
       ],
     },
     ...(accessLevel !== 'EXECUTIVE' ? [
@@ -974,7 +1006,6 @@ export default function FinanceDashboard() {
         heading: 'Treasury & HR',
         items: [
           { key: 'payroll', label: 'Payroll & Staff Costs', icon: <Users size={15} /> },
-          { key: 'bank', label: 'Bank & Deposits', icon: <Landmark size={15} /> },
         ],
       }
     ] : []),
@@ -1108,19 +1139,18 @@ export default function FinanceDashboard() {
           <div>
             <h2 className="text-2xl font-black text-zinc-500 tracking-tight mt-0.5">
               {{
-                overview: 'Financial Overview', expenses: 'Expenses & Payables', reconciliation: 'Reconciliation',
+                overview: 'Financial Overview', expenses: 'Expenses & Payables',
                 statements: 'Financial Statements',
                 payroll: 'Payroll & Staff Costs', bank: 'Bank & Deposits',
               }[activeTab]}
             </h2>
             <p className="text-xs text-zinc-400 mt-1">
               {{
-                overview: 'Real-time ledger, revenue and reconciliation metrics.',
+                overview: 'Real-time ledger and revenue metrics.',
                 expenses: 'Unified vendor bills, operational costs, and budget tracking.',
-                reconciliation: 'Match bank statements and gateway payouts against recorded transactions.',
                 invoices: 'Guest folios, corporate invoices, credit notes and partial payments.',
-                statements: 'Profit & Loss, Balance Sheet, Cash Flow and General Ledger.',
-                payroll: 'Salary disbursements, PF/ESI liabilities and department-wise labor cost.',
+                statements: 'Profit & Loss overview.',
+                payroll: 'Salary disbursements and department-wise labor cost.',
                 bank: 'Unified treasury view of bank balances, transfers, and guest deposits in escrow.',
               }[activeTab]}
             </p>
@@ -1350,9 +1380,6 @@ export default function FinanceDashboard() {
                   <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
                     <div className="p-5 border-b border-zinc-150 flex justify-between items-center bg-white/40">
                       <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><DollarSign size={16} className="text-[#D4A373]" /> Recent Transactions</h3>
-                      <button onClick={() => setActiveTab('reconciliation')} className="text-xs font-semibold text-[#D4A373] hover:text-[#D4A373] flex items-center gap-1">
-                        View Full Ledger <ArrowUpRight size={12} />
-                      </button>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-left border-collapse">
@@ -1370,17 +1397,6 @@ export default function FinanceDashboard() {
                           {recentTransactions.map((txn, idx) => (
                             <tr key={idx} className="hover:bg-zinc-50/60 transition-colors">
                               <td className="p-4 text-xs font-mono text-zinc-500">{txn.id}</td>
-                              <td className="p-4 text-sm font-bold text-zinc-900">{txn.guest} <span className="block text-xs font-normal text-zinc-400">Room {txn.room}</span></td>
-                              <td className="p-4 text-sm text-zinc-600">{txn.method}</td>
-                              <td className="p-4 text-sm text-zinc-600">{txn.date}</td>
-                              <td className="p-4 text-sm font-bold text-zinc-900 text-right">{txn.amount}</td>
-                              <td className="p-4 text-right">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${txn.status === 'Settled' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30' : 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
-                                  }`}>
-                                  {txn.status === 'Settled' ? <CheckCircle2 size={12} /> : <Clock size={12} />}
-                                  {txn.status}
-                                </span>
-                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -1531,7 +1547,7 @@ export default function FinanceDashboard() {
                       <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
                         <div className="relative w-full sm:w-56">
                           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-                          <input value={expenseSearch} onChange={e => setExpenseSearch(e.target.value)} placeholder="Search vendor or ID..." className="fd-input pl-9 py-2 text-xs" />
+                          <input value={expenseSearch} onChange={e => setExpenseSearch(e.target.value)} placeholder="Search vendor or ID..." className="fd-input !pl-9 py-2 text-xs" />
                         </div>
                         <select value={expenseCategoryFilter} onChange={e => setExpenseCategoryFilter(e.target.value)} className="fd-input py-2 text-xs bg-white appearance-none cursor-pointer w-full sm:w-52">
                           <option value="All">All Categories</option>
@@ -1592,7 +1608,7 @@ export default function FinanceDashboard() {
                       <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
                         <div className="relative w-full sm:w-56">
                           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-                          <input value={payableSearch} onChange={e => setPayableSearch(e.target.value)} placeholder="Search vendor or bill..." className="fd-input pl-9 py-2 text-xs" />
+                          <input value={payableSearch} onChange={e => setPayableSearch(e.target.value)} placeholder="Search vendor or bill..." className="fd-input !pl-9 py-2 text-xs" />
                         </div>
                         <select value={payableStatusFilter} onChange={e => setPayableStatusFilter(e.target.value)} className="fd-input py-2 text-xs bg-white appearance-none cursor-pointer w-full sm:w-40">
                           <option value="All">All Statuses</option>
@@ -1642,89 +1658,6 @@ export default function FinanceDashboard() {
                 </motion.div>
               )}
 
-              {/* ============================================ */}
-              {/* TAB: RECONCILIATION                           */}
-              {/* ============================================ */}
-              {activeTab === 'reconciliation' && (
-                <motion.div key="reconciliation" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                    {[
-                      { label: 'Matched', value: reconciliationItems.filter(r => r.status === 'Matched').length, icon: <CheckCircle2 size={16} />, theme: '#D4A373' },
-                      { label: 'Unmatched', value: reconciliationItems.filter(r => r.status === 'Unmatched').length, icon: <AlertTriangle size={16} />, theme: '#D4A373' },
-                      { label: 'Total Variance', value: `₹${reconciliationItems.filter(r => r.status === 'Unmatched').reduce((s, r) => s + r.rawAmount, 0).toLocaleString('en-IN')}`, icon: <ScanLine size={16} />, theme: 'indigo' },
-                    ].map((kpi, i) => {
-                      const t = themeMap[kpi.theme];
-                      return (
-                        <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
-                          className="bg-white rounded-[1.5rem] p-5 border border-zinc-200/60 flex items-center gap-4"
-                          style={{ boxShadow: `0 1px 2px rgba(0,0,0,0.04), 0 14px 30px -18px ${t.glow}` }}>
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${t.iconBg}`}>{kpi.icon}</div>
-                          <div>
-                            <p className="text-2xl font-black text-zinc-900 leading-none">{kpi.value}</p>
-                            <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 mt-1">{kpi.label}</p>
-                          </div>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
-                    <div className="p-5 border-b border-zinc-150 flex flex-col sm:flex-row gap-3 sm:items-center justify-between bg-white/40">
-                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><Link2 size={16} className="text-[#D4A373]" /> Bank &amp; Gateway Matching</h3>
-                      <div className="relative w-full sm:w-64">
-                        <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-                        <input
-                          value={reconSearch}
-                          onChange={e => setReconSearch(e.target.value)}
-                          placeholder="Search reference or source..."
-                          className="fd-input pl-9 py-2 text-xs"
-                        />
-                      </div>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="border-b border-zinc-150 text-[10px] uppercase tracking-wider text-zinc-400 bg-zinc-50/50">
-                            <th className="p-4 font-bold">Source</th>
-                            <th className="p-4 font-bold">Reference</th>
-                            <th className="p-4 font-bold">Date</th>
-                            <th className="p-4 font-bold">Matched With</th>
-                            <th className="p-4 font-bold text-right">Amount</th>
-                            <th className="p-4 font-bold text-right">Status</th>
-                            <th className="p-4 font-bold text-right">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-zinc-100">
-                          {reconciliationItems.map((r, idx) => (
-                            <tr key={idx} className="hover:bg-zinc-50/60 transition-colors">
-                              <td className="p-4 text-sm font-semibold text-zinc-700">{r.source}</td>
-                              <td className="p-4 text-xs font-mono text-zinc-500">{r.ref}</td>
-                              <td className="p-4 text-sm text-zinc-600">{r.date}</td>
-                              <td className="p-4 text-xs font-mono text-zinc-500">{r.matchedWith || '—'}</td>
-                              <td className="p-4 text-sm font-bold text-zinc-900 text-right">{r.amount}</td>
-                              <td className="p-4 text-right">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${r.status === 'Matched' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30' : 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
-                                  }`}>
-                                  {r.status === 'Matched' ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
-                                  {r.status}
-                                </span>
-                              </td>
-                              <td className="p-4 text-right">
-                                {r.status === 'Unmatched' ? (
-                                  <button className="text-xs font-bold text-[#D4A373] hover:text-[#D4A373]">Mark Matched</button>
-                                ) : (
-                                  <span className="text-xs text-zinc-300">—</span>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
 
 
 
@@ -1735,23 +1668,6 @@ export default function FinanceDashboard() {
               {activeTab === 'statements' && (
                 <motion.div key="statements" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
 
-                  <div className="flex items-center gap-2 bg-white rounded-2xl p-1.5 border border-zinc-200/60 w-fit">
-                    {[
-                      { key: 'pnl', label: 'Profit & Loss', icon: <TrendingUp size={13} /> },
-                      { key: 'balance', label: 'Balance Sheet', icon: <Scale size={13} /> },
-                      { key: 'cashflow', label: 'Cash Flow', icon: <ArrowRightLeft size={13} /> },
-                      { key: 'ledger', label: 'General Ledger', icon: <Receipt size={13} /> },
-                    ].map(v => (
-                      <button key={v.key} onClick={() => setStatementView(v.key)}
-                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${statementView === v.key ? 'bg-[#D4A373] text-white shadow-md shadow-emerald-600/20' : 'text-zinc-500 hover:bg-zinc-50'
-                          }`}>
-                        {v.icon} {v.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {statementView === 'pnl' && (
-                    <div className="space-y-6">
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
                         <div className="bg-white rounded-[1.5rem] p-5 border border-zinc-200/60" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 14px 30px -18px rgba(5,150,105,0.2)' }}>
                           <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Total Revenue</p>
@@ -1763,7 +1679,7 @@ export default function FinanceDashboard() {
                         </div>
                         <div className="bg-white rounded-[1.5rem] p-5 border border-zinc-200/60" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 14px 30px -18px rgba(79,70,229,0.2)' }}>
                           <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Net Profit</p>
-                          <p className="text-2xl font-black text-zinc-900">₹{netProfit.toLocaleString('en-IN')} <span className="text-xs font-bold text-[#D4A373]">({((netProfit / totalRevenuePnl) * 100).toFixed(1)}% margin)</span></p>
+                          <p className="text-2xl font-black text-zinc-900">₹{netProfit.toLocaleString('en-IN')} <span className="text-xs font-bold text-[#D4A373]">({totalRevenuePnl > 0 ? ((netProfit / totalRevenuePnl) * 100).toFixed(1) : 0}% margin)</span></p>
                         </div>
                       </div>
 
@@ -1788,139 +1704,6 @@ export default function FinanceDashboard() {
                           </div>
                         </motion.div>
                       </div>
-                    </div>
-                  )}
-
-                  {statementView === 'balance' && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      <div className="fd-dealdeck-card rounded-[2rem] p-6">
-                        <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider mb-4"><Landmark size={16} className="text-[#D4A373]" /> Assets</h3>
-                        <div className="divide-y divide-zinc-100">
-                          {balanceSheet.assets.map((a, i) => (
-                            <div key={i} className="flex items-center justify-between py-3">
-                              <span className="text-sm text-zinc-600">{a.label}</span>
-                              <span className="text-sm font-bold text-zinc-900">₹{a.value.toLocaleString('en-IN')}</span>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="flex items-center justify-between pt-4 mt-2 border-t-2 border-zinc-900">
-                          <span className="text-sm font-black uppercase tracking-wider text-zinc-900">Total Assets</span>
-                          <span className="text-lg font-black text-[#D4A373]">₹{totalAssets.toLocaleString('en-IN')}</span>
-                        </div>
-                      </div>
-
-                      <div className="fd-dealdeck-card rounded-[2rem] p-6">
-                        <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider mb-4"><Scale size={16} className="text-indigo-600" /> Liabilities &amp; Equity</h3>
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Liabilities</p>
-                        <div className="divide-y divide-zinc-100 mb-3">
-                          {balanceSheet.liabilities.map((l, i) => (
-                            <div key={i} className="flex items-center justify-between py-3">
-                              <span className="text-sm text-zinc-600">{l.label}</span>
-                              <span className="text-sm font-bold text-zinc-900">₹{l.value.toLocaleString('en-IN')}</span>
-                            </div>
-                          ))}
-                        </div>
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Equity</p>
-                        <div className="divide-y divide-zinc-100">
-                          {balanceSheet.equity.map((e, i) => (
-                            <div key={i} className="flex items-center justify-between py-3">
-                              <span className="text-sm text-zinc-600">{e.label}</span>
-                              <span className="text-sm font-bold text-zinc-900">₹{e.value.toLocaleString('en-IN')}</span>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="flex items-center justify-between pt-4 mt-2 border-t-2 border-zinc-900">
-                          <span className="text-sm font-black uppercase tracking-wider text-zinc-900">Total Liabilities + Equity</span>
-                          <span className="text-lg font-black text-indigo-600">₹{(totalLiabilities + totalEquity).toLocaleString('en-IN')}</span>
-                        </div>
-                        <div className={`mt-4 flex items-center gap-2 text-[11px] font-bold px-3 py-2 rounded-xl ${totalAssets === (totalLiabilities + totalEquity) ? 'bg-zinc-50 text-[#D4A373]' : 'bg-zinc-50 text-[#D4A373]'}`}>
-                          <CheckCircle2 size={14} /> Books balance: Assets = Liabilities + Equity
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {statementView === 'cashflow' && (
-                    <div className="space-y-6">
-                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-5">
-                        {[
-                          { label: 'Operating', value: cfOperating, theme: '#D4A373' },
-                          { label: 'Investing', value: cfInvesting, theme: 'rose' },
-                          { label: 'Financing', value: cfFinancing, theme: '#D4A373' },
-                          { label: 'Net Cash Flow', value: netCashFlow, theme: 'indigo' },
-                        ].map((c, i) => {
-                          const t = { rose: { iconBg: 'bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-lg shadow-rose-500/30', glow: 'rgba(225,29,72,0.3)' }, ...themeMap }[c.theme];
-                          return (
-                            <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
-                              className="bg-white rounded-[1.5rem] p-5 border border-zinc-200/60" style={{ boxShadow: `0 1px 2px rgba(0,0,0,0.04), 0 14px 30px -18px ${t.glow}` }}>
-                              <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">{c.label}</p>
-                              <p className={`text-xl font-black ${c.value < 0 ? 'text-rose-600' : 'text-zinc-900'}`}>{c.value < 0 ? '-' : ''}₹{Math.abs(c.value).toLocaleString('en-IN')}</p>
-                            </motion.div>
-                          );
-                        })}
-                      </div>
-
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {[
-                          { label: 'Operating Activities', items: cashFlow.operating, subtotal: cfOperating, icon: <RefreshCw size={14} /> },
-                          { label: 'Investing Activities', items: cashFlow.investing, subtotal: cfInvesting, icon: <Building2 size={14} /> },
-                          { label: 'Financing Activities', items: cashFlow.financing, subtotal: cfFinancing, icon: <Landmark size={14} /> },
-                        ].map((section, si) => (
-                          <div key={si} className="fd-dealdeck-card rounded-[2rem] p-6">
-                            <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider mb-4">{section.icon} {section.label}</h3>
-                            <div className="divide-y divide-zinc-100">
-                              {section.items.map((it, i) => (
-                                <div key={i} className="flex items-center justify-between py-2.5">
-                                  <span className="text-xs text-zinc-600">{it.label}</span>
-                                  <span className={`text-xs font-bold ${it.value < 0 ? 'text-rose-500' : 'text-zinc-900'}`}>{it.value < 0 ? '-' : '+'}₹{Math.abs(it.value).toLocaleString('en-IN')}</span>
-                                </div>
-                              ))}
-                            </div>
-                            <div className="flex items-center justify-between pt-3 mt-2 border-t border-zinc-200">
-                              <span className="text-xs font-black uppercase tracking-wider text-zinc-900">Subtotal</span>
-                              <span className={`text-sm font-black ${section.subtotal < 0 ? 'text-rose-600' : 'text-[#D4A373]'}`}>{section.subtotal < 0 ? '-' : ''}₹{Math.abs(section.subtotal).toLocaleString('en-IN')}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {statementView === 'ledger' && (
-                    <div className="space-y-6">
-                      <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
-                        <div className="p-5 border-b border-zinc-150 flex justify-between items-center bg-white/40">
-                          <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><Receipt size={16} className="text-[#D4A373]" /> General Ledger</h3>
-                        </div>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left border-collapse">
-                            <thead>
-                              <tr className="border-b border-zinc-150 text-[10px] uppercase tracking-wider text-zinc-400 bg-zinc-50/50">
-                                <th className="p-4 font-bold">Voucher</th>
-                                <th className="p-4 font-bold">Account Head</th>
-                                <th className="p-4 font-bold">Date</th>
-                                <th className="p-4 font-bold text-right">Debit</th>
-                                <th className="p-4 font-bold text-right">Credit</th>
-                                <th className="p-4 font-bold text-right">Balance</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-zinc-100">
-                              {ledgerEntries.map((l, idx) => (
-                                <tr key={idx} className="hover:bg-zinc-50/60 transition-colors">
-                                  <td className="p-4 text-xs font-mono text-zinc-500">{l.voucher}</td>
-                                  <td className="p-4 text-sm font-bold text-zinc-900">{l.account}</td>
-                                  <td className="p-4 text-sm text-zinc-600">{l.date}</td>
-                                  <td className="p-4 text-sm text-red-500 text-right">{l.debit}</td>
-                                  <td className="p-4 text-sm text-[#D4A373] text-right">{l.credit}</td>
-                                  <td className="p-4 text-sm font-bold text-zinc-900 text-right">{l.balance}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </motion.div>
               )}
 
@@ -1931,11 +1714,9 @@ export default function FinanceDashboard() {
               {activeTab === 'payroll' && (
                 <motion.div key="payroll" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-8">
                     {[
                       { label: 'Total Payroll', value: `₹${totalGrossPayroll.toLocaleString('en-IN')}`, sub: `${totalHeadcount} staff across 6 departments`, icon: <Users size={16} />, theme: 'indigo' },
-                      { label: 'PF Liability', value: `₹${totalPfLiability.toLocaleString('en-IN')}`, sub: 'Employer + employee contribution', icon: <ShieldCheck size={16} />, theme: '#D4A373' },
-                      { label: 'ESI Liability', value: `₹${totalEsiLiability.toLocaleString('en-IN')}`, sub: 'Due with this cycle', icon: <FileText size={16} />, theme: '#D4A373' },
                       { label: 'Avg Cost / Employee', value: `₹${avgCostPerEmployee.toLocaleString('en-IN')}`, sub: 'Gross, per month', icon: <UserCheck size={16} />, theme: 'sky' },
                     ].map((kpi, i) => {
                       const t = themeMap[kpi.theme];
@@ -1954,55 +1735,56 @@ export default function FinanceDashboard() {
 
                   <motion.div whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 350, damping: 22 }}
                     className="relative overflow-hidden bg-gradient-to-br from-white via-white to-indigo-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
-                    <div className="relative flex items-center gap-2 mb-5">
-                      <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-md shadow-indigo-500/30"><Users size={14} className="text-white" /></div>
-                      <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Labor Cost by Department</h3>
-                    </div>
-                    <div className="relative"><BarRankChart data={payrollByDept.map(d => ({ label: d.label, value: d.gross, color: d.color, icon: <Users size={13} /> }))} /></div>
-                  </motion.div>
-
-                  <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
-                    <div className="p-5 border-b border-zinc-150 flex justify-between items-center bg-white/40">
-                      <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><Users size={16} className="text-indigo-600" /> Payroll by Department</h3>
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Ties into Admin Dashboard · Staff Hub</span>
+                    <div className="relative flex justify-between items-center mb-5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-md shadow-indigo-500/30"><Users size={14} className="text-white" /></div>
+                        <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Staff Salaries</h3>
+                      </div>
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Manage employee payroll</span>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-left border-collapse">
                         <thead>
                           <tr className="border-b border-zinc-150 text-[10px] uppercase tracking-wider text-zinc-400 bg-zinc-50/50">
+                            <th className="p-4 font-bold">Employee</th>
+                            <th className="p-4 font-bold">Designation</th>
                             <th className="p-4 font-bold">Department</th>
-                            <th className="p-4 font-bold text-right">Headcount</th>
-                            <th className="p-4 font-bold text-right">Gross Salary</th>
-                            <th className="p-4 font-bold text-right">PF</th>
-                            <th className="p-4 font-bold text-right">ESI</th>
-                            <th className="p-4 font-bold text-right">Net Payable</th>
+                            <th className="p-4 font-bold text-right">Monthly Salary (₹)</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-100">
-                          {payrollByDept.map((d, idx) => (
+                          {payrollList.map((emp, idx) => (
                             <tr key={idx} className="hover:bg-zinc-50/60 transition-colors">
-                              <td className="p-4 text-sm font-bold text-zinc-900"><span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} /> {d.label}</span></td>
-                              <td className="p-4 text-sm text-zinc-600 text-right">{d.headcount}</td>
-                              <td className="p-4 text-sm font-bold text-zinc-900 text-right">₹{d.gross.toLocaleString('en-IN')}</td>
-                              <td className="p-4 text-sm text-zinc-600 text-right">₹{d.pf.toLocaleString('en-IN')}</td>
-                              <td className="p-4 text-sm text-zinc-600 text-right">₹{d.esi.toLocaleString('en-IN')}</td>
-                              <td className="p-4 text-sm font-black text-[#D4A373] text-right">₹{(d.gross - d.pf - d.esi).toLocaleString('en-IN')}</td>
+                              <td className="p-4 text-sm font-bold text-zinc-900">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-full bg-zinc-200 flex items-center justify-center text-[10px]">{emp.name?.charAt(0) || '?'}</div>
+                                  {emp.name}
+                                </div>
+                              </td>
+                              <td className="p-4 text-sm text-zinc-600">{emp.designation || '-'}</td>
+                              <td className="p-4 text-sm text-zinc-600">
+                                <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full shrink-0" style={{ background: '#D4A373' }} /> {typeof emp.department === 'string' ? emp.department.replace(/[{}\u0022[\]]/g, '').split(',')[0] : (emp.department?.[0] || '-')}</span>
+                              </td>
+                              <td className="p-4 text-right">
+                                <input
+                                  type="number"
+                                  className="text-sm font-black text-[#D4A373] text-right bg-transparent border-b border-dashed border-zinc-300 focus:border-[#D4A373] outline-none w-24 px-1"
+                                  defaultValue={Number(emp.gross) || 0}
+                                  onBlur={(e) => handleUpdateSalary(emp.user_id, e.target.value)}
+                                />
+                              </td>
                             </tr>
                           ))}
                         </tbody>
                         <tfoot>
                           <tr className="border-t-2 border-zinc-900">
-                            <td className="p-4 text-xs font-black uppercase text-zinc-900">Total</td>
-                            <td className="p-4 text-sm font-black text-zinc-900 text-right">{totalHeadcount}</td>
-                            <td className="p-4 text-sm font-black text-zinc-900 text-right">₹{totalGrossPayroll.toLocaleString('en-IN')}</td>
-                            <td className="p-4 text-sm font-black text-zinc-900 text-right">₹{totalPfLiability.toLocaleString('en-IN')}</td>
-                            <td className="p-4 text-sm font-black text-zinc-900 text-right">₹{totalEsiLiability.toLocaleString('en-IN')}</td>
-                            <td className="p-4 text-sm font-black text-[#D4A373] text-right">₹{(totalGrossPayroll - totalPfLiability - totalEsiLiability).toLocaleString('en-IN')}</td>
+                            <td colSpan="3" className="p-4 text-xs font-black uppercase text-zinc-900">Total Monthly Run Rate</td>
+                            <td className="p-4 text-sm font-black text-[#D4A373] text-right">₹{totalGrossPayroll.toLocaleString('en-IN')}</td>
                           </tr>
                         </tfoot>
                       </table>
                     </div>
-                  </div>
+                  </motion.div>
                 </motion.div>
               )}
 
@@ -2039,7 +1821,7 @@ export default function FinanceDashboard() {
                       <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                         <div className="relative w-full sm:w-56">
                           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-                          <input value={depositSearch} onChange={e => setDepositSearch(e.target.value)} placeholder="Search guest or reference..." className="fd-input pl-9 py-2 text-xs" />
+                          <input value={depositSearch} onChange={e => setDepositSearch(e.target.value)} placeholder="Search guest or reference..." className="fd-input !pl-9 py-2 text-xs" />
                         </div>
                         <select value={depositStatusFilter} onChange={e => setDepositStatusFilter(e.target.value)} className="fd-input py-2 text-xs bg-white appearance-none cursor-pointer w-full sm:w-44">
                           <option value="All">All Statuses</option>
@@ -2124,7 +1906,7 @@ export default function FinanceDashboard() {
                       <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                         <div className="relative w-full sm:w-56">
                           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-                          <input value={auditSearch} onChange={e => setAuditSearch(e.target.value)} placeholder="Search user or entry..." className="fd-input pl-9 py-2 text-xs" />
+                          <input value={auditSearch} onChange={e => setAuditSearch(e.target.value)} placeholder="Search user or entry..." className="fd-input !pl-9 py-2 text-xs" />
                         </div>
                         <select value={auditActionFilter} onChange={e => setAuditActionFilter(e.target.value)} className="fd-input py-2 text-xs bg-white appearance-none cursor-pointer w-full sm:w-48">
                           <option value="All">All Actions</option>
@@ -2424,6 +2206,30 @@ export default function FinanceDashboard() {
                   </div>
                 </div>
 
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Ref ID</label>
+                    <input
+                      placeholder="e.g. INV-1234"
+                      value={expenseForm.ref_id}
+                      onChange={e => setExpenseForm({ ...expenseForm, ref_id: e.target.value })}
+                      className="fd-input bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Status</label>
+                    <select
+                      value={expenseForm.status}
+                      onChange={e => setExpenseForm({ ...expenseForm, status: e.target.value })}
+                      className="fd-input bg-white appearance-none cursor-pointer"
+                    >
+                      <option value="Pending Review">Pending Review</option>
+                      <option value="Approved">Approved</option>
+                      <option value="Paid">Paid</option>
+                    </select>
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Notes</label>
                   <textarea
@@ -2610,6 +2416,31 @@ export default function FinanceDashboard() {
                     />
                   </div>
                 </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Bill # (Ref ID)</label>
+                    <input
+                      placeholder="e.g. BILL-998"
+                      value={billForm.bill_number}
+                      onChange={e => setBillForm({ ...billForm, bill_number: e.target.value })}
+                      className="fd-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Status</label>
+                    <select
+                      value={billForm.status}
+                      onChange={e => setBillForm({ ...billForm, status: e.target.value })}
+                      className="fd-input bg-white appearance-none cursor-pointer"
+                    >
+                      <option value="Scheduled">Scheduled</option>
+                      <option value="Paid">Paid</option>
+                      <option value="Overdue">Overdue</option>
+                    </select>
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Notes</label>
                   <textarea

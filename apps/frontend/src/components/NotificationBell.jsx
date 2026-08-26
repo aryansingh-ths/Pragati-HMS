@@ -14,7 +14,9 @@ export default function NotificationBell({ fetchWithAuth }) {
   // Fetch notifications
   const loadNotifications = useCallback(async () => {
     try {
-      const res = await fetchWithAuth(`${API_BASE}/api/notifications`);
+      const currentHotel = sessionStorage.getItem('hms_current_hotel');
+      const q = currentHotel ? `?hotel_id=${currentHotel}` : '';
+      const res = await fetchWithAuth(`${API_BASE}/api/notifications${q}`);
       if (res?.ok) {
         const data = await res.json();
         setNotifications(data.data?.notifications || []);
@@ -51,7 +53,7 @@ export default function NotificationBell({ fetchWithAuth }) {
     return () => document.removeEventListener('keydown', handleEsc);
   }, []);
 
-  const unreadCount = notifications.filter(n => !n.is_read).length;
+  const unreadCount = notifications.filter(n => !n.is_read && !n.is_sent).length;
 
   const markAsRead = async (id) => {
     try {
@@ -73,7 +75,7 @@ export default function NotificationBell({ fetchWithAuth }) {
 
   // Filter notifications based on active tab
   const filteredNotifications = notifications.filter(n => {
-    if (activeTab === 'unread') return !n.is_read;
+    if (activeTab === 'unread') return !n.is_read && !n.is_sent;
     if (activeTab === 'direct') return n.notification_type === 'DIRECT' && !n.is_sent;
     if (activeTab === 'sent') return n.is_sent;
     return activeTab === 'all' ? !n.is_sent : true;
