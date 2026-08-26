@@ -9,7 +9,7 @@ import {
   TrendingUp, PieChart, LayoutGrid, X, Loader2, Plus, Flame, MapPin,
   RefreshCw, LogOut, Zap, Edit2, Trash2, Minus, PenLine,
   Package, ClipboardList, DollarSign, Activity, Truck, RefreshCcw,
-  AlertCircle, Timer, ArrowRight, Printer
+  AlertCircle, Timer, ArrowRight, Printer, Mail
 } from 'lucide-react';
 import DiningReceipt from '../components/DiningReceipt';
 
@@ -158,6 +158,63 @@ export default function DiningDashboard() {
     }, 200);
   };
 
+  const handleEmailReceipt = async (e, receiptData) => {
+    e.preventDefault();
+    const email = window.prompt("Enter guest email to send receipt:", "");
+    if (!email) return;
+
+    setIsEmailing(true);
+    const html = `
+      <div style="font-family: sans-serif; max-width: 400px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #333; text-align: center;">Dining Receipt</h2>
+        <p><strong>Receipt No:</strong> ${receiptData.id}</p>
+        <p><strong>Table:</strong> ${receiptData.table_number || receiptData.table || 'N/A'}</p>
+        <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+          <tr style="background-color: #f3f4f6;">
+            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #d1d5db;">Item</th>
+            <th style="padding: 10px; text-align: right; border-bottom: 2px solid #d1d5db;">Qty</th>
+            <th style="padding: 10px; text-align: right; border-bottom: 2px solid #d1d5db;">Total</th>
+          </tr>
+          ${receiptData.items?.map(item => `
+            <tr>
+              <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${item.item}</td>
+              <td style="padding: 8px; text-align: right; border-bottom: 1px solid #e5e7eb;">${item.qty}</td>
+              <td style="padding: 8px; text-align: right; border-bottom: 1px solid #e5e7eb;">₹${(item.qty * item.price).toLocaleString('en-IN')}</td>
+            </tr>
+          `).join('') || ''}
+        </table>
+        <div style="margin-top: 20px; text-align: right;">
+          <p>Subtotal: ₹${receiptData.subtotal?.toLocaleString('en-IN')}</p>
+          <p>Tax: ₹${receiptData.tax?.toLocaleString('en-IN')}</p>
+          <h3 style="margin-top: 10px;">Grand Total: ₹${receiptData.total_amount?.toLocaleString('en-IN')}</h3>
+        </div>
+        <p style="margin-top: 30px; font-size: 14px; color: #6b7280; text-align: center;">Thank you for dining with us!</p>
+      </div>
+    `;
+
+    try {
+      const res = await fetch('http://localhost:3000/api/email/send-bill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
+        body: JSON.stringify({
+          to_email: email,
+          subject: `Dining Receipt - ${receiptData.id}`,
+          html: html
+        })
+      });
+      if (res.ok) {
+        alert('Receipt sent successfully via Resend!');
+      } else {
+        const err = await res.json();
+        alert(`Failed to send email: ${err.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      alert('Error sending email');
+    }
+    setIsEmailing(false);
+  };
+
   React.useEffect(() => {
     localStorage.setItem('hms_dismissed_broadcasts', JSON.stringify(dismissedBroadcasts));
   }, [dismissedBroadcasts]);
@@ -185,14 +242,17 @@ export default function DiningDashboard() {
     try {
       const token = sessionStorage.getItem('hms_token');
       const headers = { 'Authorization': `Bearer ${token}` };
-      const [kotsRes, tablesRes, menuRes, overviewRes, invRes, guestsRes, billsRes] = await Promise.all([
-        fetch('http://localhost:3000/api/dining/kots', { headers }),
-        fetch('http://localhost:3000/api/dining/tables', { headers }),
-        fetch('http://localhost:3000/api/dining/menu', { headers }),
-        fetch('http://localhost:3000/api/dining/overview', { headers }),
-        fetch('http://localhost:3000/api/dining/inventory', { headers }),
-        fetch('http://localhost:3000/api/dining/in-house-guests', { headers }),
-        fetch('http://localhost:3000/api/dining/bills', { headers })
+      const currentHotel = sessionStorage.getItem('hms_current_hotel');
+      const q = currentHotel ? `?hotel_id=${currentHotel}` : '';
+      const [kotsRes, tablesRes, menuRes, overviewRes, invRes, guestsRes, billsRes, roomsRes] = await Promise.all([
+        fetch(`http://localhost:3000/api/dining/kots${q}`, { headers }),
+        fetch(`http://localhost:3000/api/dining/tables${q}`, { headers }),
+        fetch(`http://localhost:3000/api/dining/menu${q}`, { headers }),
+        fetch(`http://localhost:3000/api/dining/overview${q}`, { headers }),
+        fetch(`http://localhost:3000/api/dining/inventory${q}`, { headers }),
+        fetch(`http://localhost:3000/api/dining/in-house-guests${q}`, { headers }),
+        fetch(`http://localhost:3000/api/dining/bills${q}`, { headers }),
+        fetch(`http://localhost:3000/api/rooms${q}`, { headers })
       ]);
       if (kotsRes.ok) { 
         const d = await kotsRes.json(); 
@@ -218,6 +278,7 @@ export default function DiningDashboard() {
       if (billsRes) {
         if (billsRes.ok) { const d = await billsRes.json(); setBillingHistory(d.data || []); }
       }
+      if (roomsRes && roomsRes.ok) { const d = await roomsRes.json(); setAllRooms(d.data?.rooms || []); }
     } catch (e) {
       console.error('Failed to fetch dining data:', e);
     } finally {
@@ -256,8 +317,9 @@ export default function DiningDashboard() {
   const [kotForm, setKotForm] = useState({ table: '', items: '', notes: '' });
 
   const [activeKOTs, setActiveKOTs] = useState([]);
-  const [billingHistory, setBillingHistory] = useState([]);
+  const [allRooms, setAllRooms] = useState([]);
   const [tables, setTables] = useState([]);
+  const [billingHistory, setBillingHistory] = useState([]);
   const [menuPerformance, setMenuPerformance] = useState([]);
   const [overview, setOverview] = useState({ metrics: [], orderTrend: [], salesSplit: [] });
 
@@ -306,7 +368,7 @@ export default function DiningDashboard() {
       const res = await fetch('http://localhost:3000/api/dining/kots', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
-        body: JSON.stringify({ table: posTable, items: JSON.stringify(posCart), type: 'Dine-in' })
+        body: JSON.stringify({ table: posTable, items: JSON.stringify(posCart), type: posTable.toLowerCase().includes('room') ? 'Room Service' : 'Dine-in' })
       });
       if (res.ok) {
         alert('KOT Punched to Kitchen!');
@@ -337,7 +399,7 @@ export default function DiningDashboard() {
     try {
       const res = await fetch(`http://localhost:3000/api/dining/menu/${id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` }
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` }
       });
       if (res.ok) fetchDiningData();
     } catch (e) { console.error(e); }
@@ -370,7 +432,7 @@ export default function DiningDashboard() {
     try {
       const res = await fetch(`http://localhost:3000/api/dining/tables/${id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` }
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` }
       });
       if (res.ok) fetchDiningData();
     } catch (e) { console.error(e); }
@@ -420,6 +482,7 @@ export default function DiningDashboard() {
   const [removedItemsCount, setRemovedItemsCount] = useState({});
   const [discountPercent, setDiscountPercent] = useState(0);
   const [applyServiceCharge, setApplyServiceCharge] = useState(false);
+  const [isEmailing, setIsEmailing] = useState(false);
 
   const [inHouseGuests, setInHouseGuests] = useState([]);
 
@@ -533,7 +596,7 @@ export default function DiningDashboard() {
         body: JSON.stringify({
           table: kotForm.table,
           items: kotForm.items,
-          type: kotForm.table.includes('Room') ? 'Room Service' : 'Dine-in'
+          type: kotForm.table.toLowerCase().includes('room') ? 'Room Service' : 'Dine-in'
         })
       });
       if (res.ok) {
@@ -1330,10 +1393,10 @@ export default function DiningDashboard() {
                             {tables.filter(t => t.status === 'Occupied' || t.status === 'Available').map(t => (
                               <option key={t.id} value={t.table_number}>{t.table_number} ({t.status})</option>
                             ))}
-                            <option disabled>──────</option>
-                            <option value="Room 101">Room 101</option>
-                            <option value="Room 102">Room 102</option>
-                            <option value="Room 103">Room 103</option>
+                            <option disabled>&#8212;</option>
+                            {allRooms.map(r => (
+                              <option key={r.room_id} value={`Room ${r.room_number}`}>Room {r.room_number}</option>
+                            ))}
                           </select>
                         </div>
 
@@ -1757,6 +1820,8 @@ export default function DiningDashboard() {
                           });
                           const aggregatedItems = Object.values(itemMap);
                           const grandTotal = Number(selectedHistoryBill.total_amount);
+                          const histSubtotal = aggregatedItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
+                          const tax = histSubtotal * 0.05;
                           
                           return (
                             <div className="flex flex-col h-full relative w-full">
@@ -1773,8 +1838,11 @@ export default function DiningDashboard() {
                                   </div>
                                 </div>
                                 <div className="text-right flex items-center gap-3">
-                                  <button onClick={(e) => handlePrintReceipt(e, { ...selectedHistoryBill, items: aggregatedItems })} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition-colors shadow-sm">
+                                  <button onClick={(e) => handlePrintReceipt(e, { ...selectedHistoryBill, items: aggregatedItems, subtotal: histSubtotal, tax, discount: 0, total_amount: grandTotal })} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition-colors shadow-sm">
                                     <Printer size={16} /> Print Receipt
+                                  </button>
+                                  <button onClick={(e) => handleEmailReceipt(e, { ...selectedHistoryBill, items: aggregatedItems, subtotal: histSubtotal, tax, discount: 0, total_amount: grandTotal })} disabled={isEmailing} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition-colors shadow-sm disabled:opacity-50">
+                                    {isEmailing ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />} Email
                                   </button>
                                   <div>
                                     <h3 className="text-lg font-black text-zinc-800 tracking-wider bg-zinc-100 px-3 py-1 rounded-lg inline-block mb-1">
@@ -1786,7 +1854,7 @@ export default function DiningDashboard() {
                               </div>
                               <div className="flex flex-1 overflow-hidden bg-zinc-100/50 justify-center items-start pt-8 pb-8 dd-scrollbar overflow-y-auto">
                                 <div className="shadow-2xl border border-zinc-200">
-                                  <DiningReceipt receiptData={{...selectedHistoryBill, items: aggregatedItems, subtotal: grandTotal}} hotelSettings={hotelSettings} />
+                                  <DiningReceipt receiptData={{...selectedHistoryBill, items: aggregatedItems, subtotal: histSubtotal, tax, discount: 0, total_amount: grandTotal}} hotelSettings={hotelSettings} />
                                 </div>
                               </div>
                             </div>
@@ -1904,8 +1972,8 @@ export default function DiningDashboard() {
                               </div>
 
                               {/* Financial Math */}
-                              <div className="w-[38%] bg-zinc-50 p-8 flex flex-col shrink-0">
-                                <div className="space-y-4 text-[11px] font-black text-zinc-500 flex-1 uppercase tracking-wider">
+                              <div className="w-[38%] bg-zinc-50 p-8 flex flex-col shrink-0 overflow-y-auto dd-scrollbar">
+                                <div className="space-y-4 text-[11px] font-black text-zinc-500 mb-8 uppercase tracking-wider">
                                   <div className="flex justify-between items-center text-zinc-800 text-sm">
                                     <span>Subtotal</span>
                                     <span className="font-black">₹{subtotal.toFixed(2)}</span>
@@ -1943,7 +2011,7 @@ export default function DiningDashboard() {
                                   </div>
                                 </div>
 
-                                <div className="mt-8 pt-6 border-t-2 border-dashed border-zinc-300">
+                                <div className="pt-6 border-t-2 border-dashed border-zinc-300">
                                   <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-1">Total Payable</p>
                                   <h1 className="text-4xl leading-none font-black text-emerald-600 tracking-tighter">₹{grandTotal.toFixed(2)}</h1>
                                 </div>
@@ -1986,11 +2054,14 @@ export default function DiningDashboard() {
                                 )}
                               </AnimatePresence>
 
-                              <div className="flex gap-3 mt-4">
-                                <button onClick={(e) => handlePrintReceipt(e, { ...billingForm, items: aggregatedItems, subtotal, discount: discountAmount, tax: cgst + sgst, total_amount: grandTotal, invoiceNo, table: billingForm.table_number, id: invoiceNo })} className="flex-1 bg-zinc-100 group text-zinc-700 font-black text-[13px] py-4 rounded-xl hover:bg-zinc-200 transition-all duration-300 flex justify-center items-center gap-2 shadow-sm uppercase tracking-widest">
-                                  <Printer size={18} strokeWidth={3} /> PRINT BILL
+                              <div className="flex gap-2 mt-4">
+                                <button onClick={(e) => handlePrintReceipt(e, { ...billingForm, items: aggregatedItems, subtotal, discount: discountAmount, tax: cgst + sgst, total_amount: grandTotal, invoiceNo, table: billingForm.table_number, id: invoiceNo })} className="flex-[0.5] bg-zinc-100 group text-zinc-700 font-black text-[13px] py-4 rounded-xl hover:bg-zinc-200 transition-all duration-300 flex justify-center items-center gap-2 shadow-sm uppercase tracking-widest">
+                                  <Printer size={18} strokeWidth={3} /> PRINT
                                 </button>
-                                <button onClick={(e) => handleSettleBill(e, grandTotal.toFixed(2))} disabled={(billingForm.is_room_charge && !billingForm.booking_id) || grandTotal === 0} className="flex-[2] bg-zinc-900 group text-white font-black text-[13px] py-4 rounded-xl hover:bg-[#D4A373] hover:scale-[1.01] transition-all duration-300 flex justify-center items-center gap-2 disabled:opacity-50 disabled:scale-100 disabled:bg-zinc-300 disabled:cursor-not-allowed shadow-xl shadow-zinc-900/20 uppercase tracking-widest">
+                                <button onClick={(e) => handleEmailReceipt(e, { ...billingForm, items: aggregatedItems, subtotal, discount: discountAmount, tax: cgst + sgst, total_amount: grandTotal, invoiceNo, table: billingForm.table_number, id: invoiceNo })} disabled={isEmailing} className="flex-[0.5] bg-zinc-100 group text-zinc-700 font-black text-[13px] py-4 rounded-xl hover:bg-zinc-200 transition-all duration-300 flex justify-center items-center gap-2 shadow-sm uppercase tracking-widest disabled:opacity-50">
+                                  {isEmailing ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} strokeWidth={3} />} EMAIL
+                                </button>
+                                <button onClick={(e) => handleSettleBill(e, grandTotal.toFixed(2))} disabled={(billingForm.is_room_charge && !billingForm.booking_id) || grandTotal === 0} className="flex-[1.5] bg-zinc-900 group text-white font-black text-[13px] py-4 rounded-xl hover:bg-[#D4A373] hover:scale-[1.01] transition-all duration-300 flex justify-center items-center gap-2 disabled:opacity-50 disabled:scale-100 disabled:bg-zinc-300 disabled:cursor-not-allowed shadow-xl shadow-zinc-900/20 uppercase tracking-widest">
                                   <CheckCircle2 size={18} strokeWidth={3} className={grandTotal > 0 && (!billingForm.is_room_charge || billingForm.booking_id) ? "text-[#D4A373] group-hover:text-white transition-colors" : "text-white"} /> SETTLE BILL & FREE TABLE
                                 </button>
                               </div>
@@ -2019,6 +2090,103 @@ export default function DiningDashboard() {
           )}
         </AnimatePresence>
       </div>
+      {/* WASTAGE MODAL */}
+      <AnimatePresence>
+        {isWastageModalOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center dd-glass-backdrop p-4" onClick={() => setIsWastageModalOpen(false)}>
+            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={e => e.stopPropagation()} className="w-full max-w-md dd-glass-modal rounded-3xl p-7">
+              <div className="flex justify-between items-center mb-6"><div><h2 className="text-lg font-serif font-bold text-zinc-900">Record Wastage</h2></div><button onClick={() => setIsWastageModalOpen(false)}><X size={20} className="text-zinc-500" /></button></div>
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const data = Object.fromEntries(formData);
+                try {
+                  const res = await fetch('http://localhost:3000/api/dining/wastage', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
+                    body: JSON.stringify(data)
+                  });
+                  if (res?.ok) { setIsWastageModalOpen(false); fetchDiningData(); }
+                } catch (error) { console.error('Wastage error', error); }
+              }} className="space-y-4">
+                <div><label className="block text-xs font-bold text-zinc-700 mb-1">Date</label><input required name="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                <div><label className="block text-xs font-bold text-zinc-700 mb-1">Item Name</label><input required name="item_name" type="text" placeholder="e.g. Tomatoes" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div><label className="block text-xs font-bold text-zinc-700 mb-1">Quantity (e.g. 2kg)</label><input required name="quantity" type="text" placeholder="Quantity" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                  <div><label className="block text-xs font-bold text-zinc-700 mb-1">Loss Value (₹)</label><input required name="loss_amount" type="number" step="0.01" placeholder="Amount" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                </div>
+                <div><label className="block text-xs font-bold text-zinc-700 mb-1">Reason</label><input required name="reason" type="text" placeholder="e.g. Spoiled" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                <button type="submit" className="w-full mt-2 bg-rose-600 text-white font-bold text-sm py-3 rounded-xl hover:bg-rose-700 transition-colors">Record Wastage</button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MATERIAL MODAL */}
+      <AnimatePresence>
+        {isMaterialModalOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center dd-glass-backdrop p-4" onClick={() => setIsMaterialModalOpen(false)}>
+            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={e => e.stopPropagation()} className="w-full max-w-md dd-glass-modal rounded-3xl p-7">
+              <div className="flex justify-between items-center mb-6"><div><h2 className="text-lg font-serif font-bold text-zinc-900">{materialForm.id ? 'Edit Material' : 'New Material'}</h2></div><button onClick={() => setIsMaterialModalOpen(false)}><X size={20} className="text-zinc-500" /></button></div>
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const data = Object.fromEntries(formData);
+                data.id = materialForm.id;
+                data.is_active = true;
+                try {
+                  const res = await fetch('http://localhost:3000/api/dining/inventory', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
+                    body: JSON.stringify(data)
+                  });
+                  if (res?.ok) { setIsMaterialModalOpen(false); fetchDiningData(); }
+                } catch (error) { console.error('Material error', error); }
+              }} className="space-y-4">
+                <div><label className="block text-xs font-bold text-zinc-700 mb-1">Item Name</label><input required name="name" defaultValue={materialForm.name} type="text" placeholder="e.g. Flour" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                <div><label className="block text-xs font-bold text-zinc-700 mb-1">Category</label><input required name="category" defaultValue={materialForm.category} type="text" placeholder="e.g. Dry Goods" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div><label className="block text-xs font-bold text-zinc-700 mb-1">UOM</label><input required name="uom" defaultValue={materialForm.uom} type="text" placeholder="kg, L, etc" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                  <div><label className="block text-xs font-bold text-zinc-700 mb-1">Par Level</label><input required name="par_level" defaultValue={materialForm.par_level} type="number" placeholder="Level" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                  <div><label className="block text-xs font-bold text-zinc-700 mb-1">Unit Cost</label><input required name="unit_cost" defaultValue={materialForm.unit_cost} type="number" step="0.01" placeholder="₹" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                </div>
+                <button type="submit" className="w-full mt-2 bg-indigo-600 text-white font-bold text-sm py-3 rounded-xl hover:bg-indigo-700 transition-colors">Save Material</button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* DELIVERY MODAL */}
+      <AnimatePresence>
+        {isDeliveryModalOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center dd-glass-backdrop p-4" onClick={() => setIsDeliveryModalOpen(false)}>
+            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={e => e.stopPropagation()} className="w-full max-w-md dd-glass-modal rounded-3xl p-7">
+              <div className="flex justify-between items-center mb-6"><div><h2 className="text-lg font-serif font-bold text-zinc-900">Log Delivery</h2></div><button onClick={() => setIsDeliveryModalOpen(false)}><X size={20} className="text-zinc-500" /></button></div>
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const data = Object.fromEntries(formData);
+                try {
+                  const res = await fetch('http://localhost:3000/api/dining/procurement', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
+                    body: JSON.stringify(data)
+                  });
+                  if (res?.ok) { setIsDeliveryModalOpen(false); fetchDiningData(); }
+                } catch (error) { console.error('Delivery error', error); }
+              }} className="space-y-4">
+                <div><label className="block text-xs font-bold text-zinc-700 mb-1">Date</label><input required name="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                <div><label className="block text-xs font-bold text-zinc-700 mb-1">Vendor Name</label><input required name="vendor" type="text" placeholder="Vendor" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div><label className="block text-xs font-bold text-zinc-700 mb-1">Invoice #</label><input required name="invoice_number" type="text" placeholder="INV-123" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                  <div><label className="block text-xs font-bold text-zinc-700 mb-1">Category</label><input required name="category" type="text" placeholder="e.g. Vegetables" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                </div>
+                <div><label className="block text-xs font-bold text-zinc-700 mb-1">Amount (₹)</label><input required name="amount" type="number" step="0.01" placeholder="Amount" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                <button type="submit" className="w-full mt-2 bg-zinc-900 text-white font-bold text-sm py-3 rounded-xl hover:bg-black transition-colors">Log Delivery</button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* KOT MODAL */}
       <AnimatePresence>

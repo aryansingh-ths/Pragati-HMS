@@ -497,6 +497,8 @@ export default function FrontDeskDashboard() {
     check_out_date: '', total_price: 0
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [checkoutMethod, setCheckoutMethod] = useState('Cash');
+  const [isEmailing, setIsEmailing] = useState(false);
 
   // ─── Broadcast States ──────────────────────────────────────
   const [broadcasts, setBroadcasts] = useState([]);
@@ -535,6 +537,57 @@ export default function FrontDeskDashboard() {
     }, 200);
   };
 
+  const handleEmailInvoice = async (stay) => {
+    const email = window.prompt("Enter guest email to send invoice:", stay.guest_email || "");
+    if (!email) return;
+    
+    setIsEmailing(true);
+    const html = `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #333;">Invoice for ${stay.guest_name}</h2>
+        <p><strong>Booking ID:</strong> ${stay.booking_id}</p>
+        <p><strong>Room:</strong> ${stay.room_number} (${stay.room_type})</p>
+        <p><strong>Check-In:</strong> ${new Date(stay.check_in_date).toLocaleDateString()}</p>
+        <p><strong>Check-Out:</strong> ${new Date().toLocaleDateString()}</p>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+          <tr style="background-color: #f3f4f6;">
+            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #d1d5db;">Description</th>
+            <th style="padding: 10px; text-align: right; border-bottom: 2px solid #d1d5db;">Amount (INR)</th>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">Room Charges (${stay.actual_days} days)</td>
+            <td style="padding: 10px; text-align: right; border-bottom: 1px solid #e5e7eb;">${stay.base_total.toLocaleString('en-IN')}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; font-weight: bold;">Grand Total</td>
+            <td style="padding: 10px; text-align: right; font-weight: bold;">${stay.final_total.toLocaleString('en-IN')}</td>
+          </tr>
+        </table>
+        <p style="margin-top: 30px; font-size: 14px; color: #6b7280;">Thank you for staying with us!</p>
+      </div>
+    `;
+
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/api/email/send-bill`, {
+        method: 'POST',
+        body: JSON.stringify({
+          to_email: email,
+          subject: `Invoice for your stay - ${stay.booking_id}`,
+          html: html
+        })
+      });
+      if (res?.ok) {
+        alert('Invoice sent successfully via Resend!');
+      } else if (res) {
+        const err = await res.json();
+        alert(`Failed to send email: ${err.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      alert('Error sending email');
+    }
+    setIsEmailing(false);
+  };
+
   useEffect(() => {
     localStorage.setItem('hms_dismissed_broadcasts', JSON.stringify(dismissedBroadcasts));
   }, [dismissedBroadcasts]);
@@ -544,7 +597,13 @@ export default function FrontDeskDashboard() {
     const token = sessionStorage.getItem('hms_token');
     if (!token) { navigate('/login'); return null; }
     try {
-      const res = await fetch(url, {
+      let finalUrl = url;
+      const currentHotelId = sessionStorage.getItem('hms_current_hotel');
+      if (currentHotelId) {
+        const separator = finalUrl.includes('?') ? '&' : '?';
+        finalUrl = `${finalUrl}${separator}hotel_id=${currentHotelId}`;
+      }
+      const res = await fetch(finalUrl, {
         ...options,
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -809,11 +868,34 @@ export default function FrontDeskDashboard() {
     };
   };
 
+  const handlePrintHistoricalInvoice = (b) => {
+    const checkIn = new Date(b.check_in_date);
+    checkIn.setHours(0, 0, 0, 0);
+    const expectedOut = new Date(b.check_out_date);
+    expectedOut.setHours(0, 0, 0, 0);
+    const actualDays = Math.max(1, Math.round((expectedOut - checkIn) / (1000 * 60 * 60 * 24)));
+    
+    const finalTotal = Number(b.total_price);
+    const baseTotal = finalTotal / 1.28;
+    const gstAmount = baseTotal * 0.18;
+    const serviceCharge = baseTotal * 0.10;
+    
+    handlePrintInvoice({
+      ...b,
+      id: b.booking_id,
+      actual_days: actualDays,
+      base_total: baseTotal,
+      gst_amount: gstAmount,
+      service_charge: serviceCharge,
+      final_total: finalTotal
+    });
+  };
+
   const handleCheckout = async (bookingId, finalTotal) => {
     setIsSubmitting(true);
     const res = await fetchWithAuth(`${API_BASE}/api/front-desk/bookings/${bookingId}/checkout`, { 
       method: 'POST',
-      body: JSON.stringify({ final_total: finalTotal })
+      body: JSON.stringify({ final_total: finalTotal, payment_method: checkoutMethod })
     });
     if (res?.ok) {
       setModalType('none');
@@ -1084,8 +1166,7 @@ export default function FrontDeskDashboard() {
 
         {/* Section: History — pinned footer action, matches admin & Housekeeping convention */}
         {/* Section: History & Managerial */}
-        {accessLevel !== 'EXECUTIVE' && (
-          <div className="pt-4 border-t border-zinc-100 shrink-0 space-y-1">
+        <div className="pt-4 border-t border-zinc-100 shrink-0 space-y-1">
             <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">History & Ledger</p>
             <button
               onClick={() => { setViewMode('history'); loadAllBookings(); }}
@@ -1118,7 +1199,6 @@ export default function FrontDeskDashboard() {
               <Users size={16} /> Info Directory
             </button>
           </div>
-        )}
 
       </motion.div>
 
@@ -1680,7 +1760,7 @@ export default function FrontDeskDashboard() {
                               {paginatedBookings.map((b) => {
                                 const bs = getStatusStyle(b.booking_status);
                                 return (
-                                  <tr key={b.booking_id} className="hover:bg-amber-50/40 transition-colors">
+                                  <tr key={b.booking_id} onClick={() => handlePrintHistoricalInvoice(b)} className="cursor-pointer hover:bg-amber-50/40 transition-colors">
                                     <td className="p-3 font-bold text-zinc-900">
                                       {b.guest_name}
                                       <span className="block text-[10px] font-normal text-zinc-400 mt-0.5">{b.guest_email}</span>
@@ -1978,6 +2058,20 @@ export default function FrontDeskDashboard() {
                     </div>
                   </div>
                   <p className="text-xs text-zinc-500">This will mark the booking as <strong>CHECKED OUT</strong> and set Room {checkoutDetails.room_number} to <strong>DIRTY</strong> for housekeeping.</p>
+                  <div className="flex items-center gap-3 bg-zinc-50 border border-zinc-200 rounded-xl p-3">
+                    <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider shrink-0">Pay Method</label>
+                    <select
+                      value={checkoutMethod}
+                      onChange={(e) => setCheckoutMethod(e.target.value)}
+                      className="flex-1 bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm font-bold text-zinc-800 outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-400/20"
+                    >
+                      <option value="Cash">Cash</option>
+                      <option value="Credit Card">Credit Card</option>
+                      <option value="UPI">UPI</option>
+                      <option value="Bank Transfer">Bank Transfer</option>
+                    </select>
+                  </div>
+
                   <RippleButton
                     onClick={() => handleCheckout(checkoutDetails.booking_id, checkoutDetails.final_total)}
                     disabled={isSubmitting}
@@ -1988,14 +2082,27 @@ export default function FrontDeskDashboard() {
                     {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <DoorOpen size={16} />}
                     {isSubmitting ? 'Processing…' : 'Confirm Check-Out'}
                   </RippleButton>
-                  <RippleButton
-                    onClick={() => handlePrintInvoice(checkoutDetails)}
-                    whileHover={{ scale: 1.015, y: -1 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="w-full bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-sm py-3.5 rounded-xl transition-all flex items-center justify-center gap-2"
-                  >
-                    <FileText size={16} /> Print Guest Invoice
-                  </RippleButton>
+                  
+                  <div className="flex gap-3">
+                    <RippleButton
+                      onClick={() => handlePrintInvoice(checkoutDetails)}
+                      whileHover={{ scale: 1.015, y: -1 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="flex-1 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-sm py-3.5 rounded-xl transition-all flex items-center justify-center gap-2"
+                    >
+                      <FileText size={16} /> Print
+                    </RippleButton>
+                    <RippleButton
+                      onClick={() => handleEmailInvoice(checkoutDetails)}
+                      disabled={isEmailing}
+                      whileHover={{ scale: 1.015, y: -1 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="flex-1 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-sm py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {isEmailing ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />} 
+                      {isEmailing ? 'Sending...' : 'Email Invoice'}
+                    </RippleButton>
+                  </div>
                 </div>
                 );
               })()}
