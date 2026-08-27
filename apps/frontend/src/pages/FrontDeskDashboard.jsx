@@ -494,7 +494,7 @@ export default function FrontDeskDashboard() {
   const [bookingForm, setBookingForm] = useState({
     guest_name: '', guest_email: '', guest_phone: '', guest_id_number: '', number_of_guests: 1,
     room_id: '', check_in_date: new Date().toISOString().split('T')[0],
-    check_out_date: '', total_price: 0
+    check_out_date: new Date(Date.now() + 86400000).toISOString().split('T')[0], total_price: 0
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [checkoutMethod, setCheckoutMethod] = useState('Cash');
@@ -994,9 +994,9 @@ export default function FrontDeskDashboard() {
   const openWalkIn = async () => {
     await loadAvailableRooms();
     setBookingForm({
-      guest_name: '', guest_email: '', guest_phone: '',
+      guest_name: '', guest_email: '', guest_phone: '', guest_id_number: '', number_of_guests: 1,
       room_id: '', check_in_date: new Date().toISOString().split('T')[0],
-      check_out_date: '', total_price: 0
+      check_out_date: new Date(Date.now() + 86400000).toISOString().split('T')[0], total_price: 0
     });
     setModalType('booking');
   };
@@ -1957,7 +1957,7 @@ export default function FrontDeskDashboard() {
               animate="visible"
               exit="exit"
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-lg fd-glass-modal rounded-3xl p-7 overflow-y-auto max-h-[90vh]"
+              className="w-full max-w-lg fd-glass-modal rounded-3xl p-7 overflow-y-auto fd-scrollbar max-h-[90vh]"
             >
               {/* Modal Header */}
               <div className="flex justify-between items-center mb-6">

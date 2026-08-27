@@ -1238,7 +1238,7 @@ export default function HousekeepingDashboard() {
               animate="visible"
               exit="exit"
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-lg fd-glass-modal rounded-3xl p-7 overflow-y-auto max-h-[90vh]"
+              className="w-full max-w-lg fd-glass-modal rounded-3xl p-7 overflow-y-auto fd-scrollbar max-h-[90vh]"
             >
               {/* ── AMENITY RESTOCKING MODAL ── */}
               {modalType === 'amenity' && selectedRoom && (

@@ -1160,6 +1160,29 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleResetPassword = async (userId) => {
+    if (!confirm('Are you sure you want to reset this user\'s password? This action cannot be undone.')) return;
+    try {
+      const res = await fetch('http://localhost:3000/api/auth/reset-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}`
+        },
+        body: JSON.stringify({ userId })
+      });
+      const data = await res.json();
+      if (res.ok && data.status === 'success') {
+        alert(`Password successfully reset!\n\nPlease give the user their new temporary password:\n\n${data.temporaryPassword}\n\nThey can use this to log in immediately.`);
+      } else {
+        alert(data.error || 'Failed to reset password');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error resetting password');
+    }
+  };
+
   const handleRemoveAdmin = async (id) => {
     if (!confirm('Are you sure you want to terminate this Administrator? This action is irreversible.')) return;
     try {
@@ -2073,7 +2096,7 @@ export default function AdminDashboard() {
                   >
                     <div className="absolute -bottom-16 -right-10 w-56 h-56 rounded-full bg-indigo-200/20 blur-3xl pointer-events-none" />
                     <div className="relative flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-md shadow-indigo-500/30">
                           <TrendingUp size={14} className="text-white" />
                         </div>
@@ -2577,7 +2600,14 @@ export default function AdminDashboard() {
                                           <p className="text-xs text-zinc-800 font-bold truncate">
                                             {item.guest_name}
                                             <span className="text-zinc-400 font-normal mx-1.5">·</span>
-                                            <span className="text-zinc-500 font-normal">{formatActivityAction(item.action)}</span>
+                                            <span className="text-zinc-500 font-normal">
+                                                {formatActivityAction(item.action)}
+                                                {item.action === 'CHECKED_OUT' && item.check_in_date && (
+                                                  <span className="text-[10px] text-zinc-400 italic ml-1">
+                                                    (Checked in: {new Date(item.check_in_date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })})
+                                                  </span>
+                                                )}
+                                              </span>
                                           </p>
                                           <p className="text-[9px] text-zinc-400">
                                             Room {item.room_number} ({item.room_type})
@@ -5472,7 +5502,7 @@ export default function AdminDashboard() {
                                             </div>
                                           </div>
 
-                                          <div className="flex items-center justify-between gap-2">
+                                          <div className="flex items-center gap-2">
                                             <button
                                               onClick={() => {
                                                 setEditingUser(user);
@@ -5488,6 +5518,14 @@ export default function AdminDashboard() {
                                             >
                                               Edit Access
                                             </button>
+
+                                            <button
+                                              onClick={() => handleResetPassword(user.id)}
+                                              disabled={user.role === 'SUPER_ADMIN'}
+                                              className="text-[10px] font-bold uppercase tracking-wider bg-amber-50 border border-amber-200 text-amber-600 hover:bg-amber-100 rounded-lg px-3 py-1.5 outline-none transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                                            >
+                                                RESET PASS
+                                              </button>
 
                                             {user.role !== 'SUPER_ADMIN' && (
                                               <button
