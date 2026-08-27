@@ -671,17 +671,34 @@ const fetch = scopedFetch;
   const momChangePct = lastMonthExp > 0 ? (((currentMonthExp - lastMonthExp) / lastMonthExp) * 100).toFixed(1) : 0;
 
   const expenseEntries = (apiExpenses?.length ? apiExpenses.map(e => ({
-    id: `EXP-${e.id.substring(0, 4).toUpperCase()}`,
-    category: e.category,
-    vendor: e.vendor,
-    method: e.payment_method,
+    id: e.id ? `EXP-${e.id.substring(0, 4).toUpperCase()}` : 'EXP-XXXX',
+    category: e.category || 'Uncategorized',
+    vendor: e.vendor || 'N/A',
+    method: e.payment_method || 'N/A',
     amount: `₹${Number(e.amount).toLocaleString('en-IN')}`,
-    date: new Date(e.created_at).toLocaleDateString(),
+    date: e.created_at ? new Date(e.created_at).toLocaleDateString() : 'N/A',
     status: e.status
   })) : []).filter(e =>
     (expenseCategoryFilter === 'All' || e.category === expenseCategoryFilter) &&
-    (`${e.vendor || ''} ${e.id || ''} ${e.category || ''}`).toLowerCase().includes(expenseSearch.toLowerCase())
+    (e.vendor?.toLowerCase().includes(expenseSearch.toLowerCase()) || e.id?.toLowerCase().includes(expenseSearch.toLowerCase()))
   );
+
+  
+  const updateExpenseStatus = async (realId, newStatus) => {
+    if (!realId) return;
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/api/finance/expenses/${realId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (res?.ok) {
+        setApiExpenses(prev => prev.map(exp => exp.id === realId ? { ...exp, status: newStatus } : exp));
+      }
+    } catch (err) {
+      console.error('Failed to update expense status:', err);
+    }
+  };
 
   const handleAddExpense = async (e) => {
     e.preventDefault();
@@ -1397,6 +1414,15 @@ const fetch = scopedFetch;
                           {recentTransactions.map((txn, idx) => (
                             <tr key={idx} className="hover:bg-zinc-50/60 transition-colors">
                               <td className="p-4 text-xs font-mono text-zinc-500">{txn.id}</td>
+                              <td className="p-4 text-sm font-bold text-zinc-900">{txn.guest} <span className="text-[10px] text-zinc-400 font-normal ml-1">({txn.room})</span></td>
+                              <td className="p-4 text-sm text-zinc-600">{txn.method}</td>
+                              <td className="p-4 text-sm text-zinc-600">{txn.date}</td>
+                              <td className="p-4 text-sm font-bold text-zinc-900 text-right">{txn.amount}</td>
+                              <td className="p-4 text-right">
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1 ${txn.status === 'Settled' || txn.status === 'SUCCESS' ? 'bg-emerald-50 text-emerald-600' : 'bg-zinc-100 text-zinc-500'}`}>
+                                  {txn.status === 'Settled' || txn.status === 'SUCCESS' ? <CheckCircle2 size={12} /> : <Clock size={12} />} {txn.status}
+                                </span>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -1589,10 +1615,9 @@ const fetch = scopedFetch;
                               <td className="p-4 text-sm text-zinc-600">{e.date}</td>
                               <td className="p-4 text-sm font-bold text-zinc-900 text-right">{e.amount}</td>
                               <td className="p-4 text-right">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${e.status === 'Approved' ? 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30' : 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'
-                                  }`}>
-                                  {e.status === 'Approved' ? <CheckCircle2 size={12} /> : <Clock size={12} />}
-                                  {e.status}
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1 ${e.status === 'Approved' || e.status === 'Paid' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-zinc-50 text-[#D4A373] border-[#D4A373]/30'}`}>
+                                  {e.status === 'Approved' || e.status === 'Paid' ? <CheckCircle2 size={12} /> : <Clock size={12} />}
+                                  {e.status || 'Pending'}
                                 </span>
                               </td>
                             </tr>

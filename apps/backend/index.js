@@ -198,6 +198,36 @@ app.post('/api/auth/logout', verifyToken, async (req, res) => {
   }
 });
 
+app.post('/api/auth/reset-password', verifyToken, async (req, res) => {
+    // Only SUPER_ADMIN can trigger this
+    if (req.user.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ error: 'Only Super Admins can reset passwords' });
+    }
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+    try {
+      // Generate a temporary 8-char password
+      const tempPassword = 'Pragati#' + Math.floor(1000 + Math.random() * 9000);
+      const passwordHash = await bcrypt.hash(tempPassword, 10);
+      
+      const result = await pool.query(
+        'UPDATE users SET password_hash = $1 WHERE id = $2 RETURNING email',
+        [passwordHash, userId]
+      );
+      
+      if (result.rowCount === 0) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      await logAuditAction(req.user.userId, 'Password Reset', `Reset password for user ID ${userId}`);
+      res.json({ status: 'success', temporaryPassword: tempPassword });
+    } catch (err) {
+      console.error('Reset password error:', err);
+      res.status(500).json({ error: 'Failed to reset password' });
+    }
+  });
+
 const requireRole = (allowedRoles) => {
   return (req, res, next) => {
     // 1. Direct backward compatibility with old role
@@ -1043,7 +1073,7 @@ app.post('/api/housekeeping/rooms/:id/expenses', verifyToken, requireRole(['HOUS
       await pool.query(
         `INSERT INTO operational_expenses (hotel_id, category, vendor, amount, notes, payment_method, status, logged_by)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [req.user.hotelId, 'Room Amenities', 'Internal Inventory', totalCost, `Amenity Restocking for Room ${id}`, 'Internal Transfer', 'Paid', req.user.userId]
+        [req.user.hotelId, 'Room Amenities', 'Internal Inventory', totalCost, `Amenity Restocking for Room ${id}`, 'Internal Transfer', 'Approved', req.user.userId]
       );
     }
 
@@ -2436,7 +2466,7 @@ app.patch('/api/dining/kots/:id/status', verifyToken, requireDining, async (req,
 app.get('/api/dining/overview', verifyToken, requireDining, async (req, res) => {
   try {
     const filter = getHotelFilter(req);
-    const activeKotsRes = await pool.query(`SELECT COUNT(*) FROM dining_kots WHERE status != 'Served' AND ${filter}`);
+    const activeKotsRes = await pool.query(`SELECT COUNT(*) FROM dining_kots WHERE status IN ('New', 'Preparing', 'Ready') AND ${filter}`);
     const occupiedTablesRes = await pool.query(`SELECT COUNT(*) FROM dining_tables WHERE status = 'Occupied' AND ${filter}`);
     const totalTablesRes = await pool.query(`SELECT COUNT(*) FROM dining_tables WHERE ${filter}`);
 
@@ -2445,7 +2475,7 @@ app.get('/api/dining/overview', verifyToken, requireDining, async (req, res) => 
     const revenueToday = parseFloat(revRes.rows[0].rev || 0);
 
     // 2. Avg Prep Time (for Active KOTs)
-    const prepRes = await pool.query(`SELECT AVG(EXTRACT(EPOCH FROM (NOW() - created_at)))/60 as avg_prep FROM dining_kots WHERE status != 'Served' AND ${filter}`);
+    const prepRes = await pool.query(`SELECT AVG(EXTRACT(EPOCH FROM (NOW() - created_at)))/60 as avg_prep FROM dining_kots WHERE status IN ('New', 'Preparing', 'Ready') AND ${filter}`);
     const avgPrep = Math.round(parseFloat(prepRes.rows[0].avg_prep || 0));
 
     // 3. Order Trend (Last 7 days)
@@ -2808,7 +2838,9 @@ app.get('/api/finance/overview', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN
     // 5. Recent Transactions
     const txnsQ = `
       SELECT * FROM (
-        SELECT b.id, 'Frontdesk Checkout' as guest, r.room_number as room_number, b.total_price as amount, 'N/A' as payment_method, b.status::text, b.created_at 
+        SELECT b.id, 'Frontdesk Checkout' as guest, r.room_number as room_number, b.total_price as amount, 
+        COALESCE((SELECT payment_method FROM ledger_transactions WHERE booking_id = b.id ORDER BY created_at DESC LIMIT 1), 'N/A') as payment_method, 
+        b.status::text, b.created_at 
         FROM bookings b JOIN rooms r ON b.room_id = r.id WHERE b.status = 'CHECKED_OUT' AND ${hotelFilterB}
         UNION ALL
         SELECT id, 'Restaurant Bill', table_number, total_amount, payment_method, 'Settled', created_at 
@@ -2896,13 +2928,25 @@ app.get('/api/finance/overview', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN
 app.get('/api/finance/expenses', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN', 'FINANCE']), async (req, res) => {
   try {
     const expenses = await pool.query(`
-      SELECT id, category, amount, notes as description, created_at as date, 'Operational' as type 
+      SELECT id, category, vendor, amount, payment_method, status, notes as description, created_at, 'Operational' as type 
       FROM operational_expenses WHERE ${getHotelFilter(req, '')}
       ORDER BY created_at DESC LIMIT 50
     `);
     res.json({ data: { expenses: expenses.rows } });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch expenses' });
+  }
+});
+
+app.put('/api/finance/expenses/:id/status', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN', 'FINANCE', 'MANAGER']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    if (!status) return res.status(400).json({ error: 'Status is required' });
+    await pool.query('UPDATE operational_expenses SET status = $1 WHERE id = $2', [status, id]);
+    res.json({ status: 'success' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update expense status' });
   }
 });
 
