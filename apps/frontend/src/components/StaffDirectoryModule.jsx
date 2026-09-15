@@ -91,7 +91,7 @@ export default function StaffDirectoryModule() {
     fetchDirectory();
   }, []);
 
-  const uniqueProperties = ['All', ...new Set(staff.map(s => s.hotel_name || 'All Properties'))].filter(p => p !== 'All Properties' || staff.some(s => !s.hotel_name));
+  const uniqueProperties = ['All', ...new Set(staff.map(s => s.hotel_name || 'Global'))];
 
   const filteredStaff = staff.filter(member => {
     const term = searchTerm.toLowerCase();
@@ -102,7 +102,7 @@ export default function StaffDirectoryModule() {
       member.designation?.toLowerCase().includes(term) ||
       member.hotel_name?.toLowerCase().includes(term)
     );
-    const matchesProperty = propertyFilter === 'All' || (member.hotel_name || 'All Properties') === propertyFilter;
+    const matchesProperty = propertyFilter === 'All' || (member.hotel_name || 'Global') === propertyFilter;
     return matchesSearch && matchesProperty;
   }).sort((a, b) => {
     const weights = { 'SUPER_ADMIN': 1, 'ADMIN': 2, 'MANAGER': 3, 'EXECUTIVE': 4 };
@@ -183,7 +183,7 @@ export default function StaffDirectoryModule() {
                     </div>
                   )}
                   <div className="flex items-center gap-2 text-xs text-zinc-500">
-                    <Building2 size={12} /> <span className="truncate">{member.hotel_name || 'All Properties'}</span>
+                    <Building2 size={12} /> <span className="truncate">{member.hotel_name || 'Global'}</span>
                   </div>
                   {member.department && member.department.length > 0 && (
                     <div className="flex items-center gap-2 text-xs text-zinc-500">

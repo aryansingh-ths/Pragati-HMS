@@ -124,29 +124,30 @@ export default function DiningDashboard() {
   const [printReceiptData, setPrintReceiptData] = React.useState(null);
 
   React.useEffect(() => {
-    fetch(`http://localhost:3000/api/hotels`)
+    fetch(`http://localhost:3000/api/hotels`, { headers: { 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` }, cache: 'no-store' })
       .then(res => res.json())
       .then(data => {
         const hotelsList = data.data || [];
-        
+
         let selectedId = sessionStorage.getItem('hms_selected_hotel_id');
         if (!selectedId) {
           const userStr = sessionStorage.getItem('hms_user');
           if (userStr) {
-            try { selectedId = JSON.parse(userStr).hotelId; } catch (e) {}
+            try { selectedId = JSON.parse(userStr).hotelId; } catch (e) { }
           }
         }
 
         const currentHotel = hotelsList.find(h => String(h.id) === String(selectedId)) || hotelsList[0] || {};
-        setHotelSettings({ 
-          name: currentHotel.name || 'Grand Plaza Hotel', 
-          address: currentHotel.address || '123 Elite Avenue, City Center', 
-          gst_no: currentHotel.gst_no || '27XXXXX1234X1Z5', 
-          contact_no: currentHotel.contact_no || currentHotel.phone || '+91 98765 43210' 
+        setHotelSettings({
+          name: currentHotel.name || 'Grand Plaza Hotel',
+          address: currentHotel.address || '123 Elite Avenue, City Center',
+          gst_no: currentHotel.gst_no || '27XXXXX1234X1Z5',
+          contact_no: currentHotel.contact_no || currentHotel.phone || '+91 98765 43210',
+          taxes: currentHotel.taxes || []
         });
       })
       .catch(err => {
-        setHotelSettings({ name: 'Grand Plaza Hotel', address: '123 Elite Avenue, City Center', gst_no: '27XXXXX1234X1Z5', contact_no: '+91 98765 43210' });
+        setHotelSettings({ name: 'Grand Plaza Hotel', address: '123 Elite Avenue, City Center', gst_no: '27XXXXX1234X1Z5', contact_no: '+91 98765 43210', taxes: [] });
       });
   }, []);
 
@@ -254,19 +255,19 @@ export default function DiningDashboard() {
         fetch(`http://localhost:3000/api/dining/bills${q}`, { headers }),
         fetch(`http://localhost:3000/api/rooms${q}`, { headers })
       ]);
-      if (kotsRes.ok) { 
-        const d = await kotsRes.json(); 
+      if (kotsRes.ok) {
+        const d = await kotsRes.json();
         setActiveKOTs((d.data || []).map(k => ({
           ...k,
           table: k.table_number,
           time: new Date(k.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }))); 
+        })));
       }
       if (tablesRes.ok) { const d = await tablesRes.json(); setTables(d.data || []); }
       if (menuRes.ok) { const d = await menuRes.json(); setPosMenu(d.data || []); }
       if (overviewRes.ok) { const d = await overviewRes.json(); setOverview(d.data || { metrics: [], orderTrend: [], salesSplit: [] }); }
-      if (invRes.ok) { 
-        const d = await invRes.json(); 
+      if (invRes.ok) {
+        const d = await invRes.json();
         if (d.data) {
           setInventoryItems(d.data.items || []);
           setProcurementLogs(d.data.procurement || []);
@@ -359,7 +360,8 @@ export default function DiningDashboard() {
   const updateCartNote = (id, note) => setPosCart(prev => prev.map(x => x.id === id ? { ...x, note } : x));
 
   const cartTotal = posCart.reduce((sum, item) => sum + (parseFloat(item.price) * item.qty), 0);
-  const cartTax = cartTotal * 0.05;
+  const totalTaxRate = hotelSettings?.taxes ? hotelSettings.taxes.reduce((sum, tax) => sum + (tax.rate / 100), 0) : 0.05;
+  const cartTax = cartTotal * totalTaxRate;
   const cartGrandTotal = cartTotal + cartTax;
 
   const handlePunchPOS = async () => {
@@ -404,7 +406,7 @@ export default function DiningDashboard() {
       if (res.ok) fetchDiningData();
     } catch (e) { console.error(e); }
   };
-  
+
   const updateTableStatus = async (id, newStatus) => {
     try {
       const res = await fetch(`http://localhost:3000/api/dining/tables/${id}/status`, {
@@ -497,7 +499,7 @@ export default function DiningDashboard() {
     e.preventDefault();
     if (!billingForm.table_number) return alert('Select a table first.');
     if (billingForm.is_room_charge && !billingForm.booking_id) return alert('Select a room for the charge.');
-    
+
     try {
       const res = await fetch('http://localhost:3000/api/dining/settle-bill', {
         method: 'POST',
@@ -505,7 +507,11 @@ export default function DiningDashboard() {
         body: JSON.stringify({ ...billingForm, total_amount: total })
       });
       if (res.ok) {
-        alert(`Bill settled successfully for ${billingForm.table_number}. Total: ₹${total}`);
+        if (billingForm.is_room_charge) {
+          alert(`✅ ₹${total} charged to Room ${billingForm.room_number} (Booking #${billingForm.booking_id}). Guest will settle at checkout.`);
+        } else {
+          alert(`Bill settled successfully for ${billingForm.table_number}. Total: ₹${total}`);
+        }
         setBillingForm({ table_number: '', payment_method: 'Card', is_room_charge: false, booking_id: '', room_number: '' });
         setRemovedItemsCount({});
         setDiscountPercent(0);
@@ -641,8 +647,8 @@ export default function DiningDashboard() {
 
   return (
     <>
-    <div className="min-h-[calc(100vh-6rem)] relative dd-app-bg dd-scrollbar p-6 flex flex-col lg:flex-row gap-6 print:hidden">
-      <style>{`
+      <div className="min-h-[calc(100vh-6rem)] relative dd-app-bg dd-scrollbar p-6 flex flex-col lg:flex-row gap-6 print:hidden">
+        <style>{`
         .dd-scrollbar { scrollbar-width: thin; scrollbar-color: rgba(161,161,170,0.4) transparent; }
         .dd-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .dd-scrollbar::-webkit-scrollbar-track { background: transparent; }
@@ -678,370 +684,370 @@ export default function DiningDashboard() {
         }
       `}</style>
 
-      {/* FIXED SIDEBAR */}
-      <div className="w-full lg:w-72 shrink-0 rounded-[2rem] p-6 flex flex-col gap-6 dd-sidebar lg:fixed lg:top-30 lg:left-6 z-30 lg:h-[calc(100vh-7.8rem)]">
-        <div className="flex items-center gap-3 px-2">
-          <div className="w-10 h-10 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center justify-center shadow-xs shrink-0">
-            <Coffee size={19} className="text-[#D4A373]" />
-          </div>
-          <div>
-            <h1 className="font-serif font-black text-[23px] text-zinc-600 text-base leading-none">Restaurant</h1>
-            <span className="text-[9px] font-bold text-[#D4A373] uppercase tracking-widest mt-1 block">F&B Operations</span>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-4 flex-1 overflow-y-auto pr-1">
-          {navGroups.map((group, index) => (
-            <div key={group.heading || `group-${index}`}>
-              {group.heading && <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">{group.heading}</p>}
-              <div className="flex flex-col gap-1">
-                {group.items.map(item => (
-                  <button key={item.key} onClick={() => setActiveTab(item.key)} className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === item.key ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'}`}>
-                    {item.icon} {item.label}
-                  </button>
-                ))}
-              </div>
+        {/* FIXED SIDEBAR */}
+        <div className="w-full lg:w-72 shrink-0 rounded-[2rem] p-6 flex flex-col gap-6 dd-sidebar lg:fixed lg:top-30 lg:left-6 z-30 lg:h-[calc(100vh-7.8rem)]">
+          <div className="flex items-center gap-3 px-2">
+            <div className="w-10 h-10 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center justify-center shadow-xs shrink-0">
+              <Coffee size={19} className="text-[#D4A373]" />
             </div>
-          ))}
-
-          {isAdmin && (
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Command Center</p>
-              <button onClick={() => navigate('/dashboard/admin')} className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-500 hover:bg-zinc-50 hover:text-[#D4A373] transition-all text-left">
-                <span className="flex items-center gap-3"><Building2 size={15} /> Back to Admin</span><ArrowUpRight size={14} className="opacity-50" />
-              </button>
+              <h1 className="font-serif font-black text-[23px] text-zinc-600 text-base leading-none">Restaurant</h1>
+              <span className="text-[9px] font-bold text-[#D4A373] uppercase tracking-widest mt-1 block">F&B Operations</span>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* MAIN CONTENT WORKSPACE */}
-      <div className="flex-1 flex flex-col gap-6 overflow-hidden min-w-0 lg:ml-[21rem]">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-black text-zinc-600 tracking-tight mt-0.5">
-              {{ overview: 'Dining Overview', kots: 'Kitchen Order Tickets', tables: 'Table Management', menu: 'Menu & Inventory', billing: 'Billing & Settlements' }[activeTab]}
-            </h2>
-            <p className="text-xs text-zinc-400 mt-1">Manage kitchen workflows, restaurant seating, and F&B revenue.</p>
           </div>
-          <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
-              </span>
-              <span className="text-[9px] font-bold uppercase tracking-wider">Live System</span>
-            </div>
-            <button onClick={refresh} className="p-2.5 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-500 transition-all"><RefreshCw size={15} className={isLoading ? 'animate-spin' : ''} /></button>
-            {(() => {
-              const staffName = sessionStorage.getItem('hms_name') || 'Staff';
-              const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
-              let designation = 'Restaurant admin';
-              try {
-                const user = JSON.parse(sessionStorage.getItem('hms_user'));
-                if (user && user.designation) designation = user.designation;
-              } catch (e) { }
-              return (
-                <motion.button
-                  whileHover={{ y: -2 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => {
-                    localStorage.clear();
-                    window.location.href = '/login';
-                  }}
-                  className="group flex items-center gap-3 bg-white pl-3 pr-4 py-1.5 rounded-2xl border border-zinc-200/60 shadow-xs hover:shadow-md hover:border-rose-200 hover:bg-rose-50 transition-all duration-300 cursor-pointer"
-                  title="Sign Out"
-                >
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-rose-500 to-red-600 group-hover:from-rose-500 group-hover:to-rose-600 text-white font-bold text-xs flex items-center justify-center shadow-xs transition-colors">
-                    {initials}
-                  </div>
-                  <div className="hidden sm:block text-left leading-none pr-1">
-                    <span className="text-xs font-bold text-zinc-900 group-hover:text-rose-600 transition-colors block">{staffName}</span>
-                    <span className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mt-0.5 block group-hover:text-rose-400 transition-colors">{designation}</span>
-                  </div>
-                  <LogOut size={16} className="text-zinc-400 group-hover:text-rose-500 transition-colors ml-1" />
-                </motion.button>
-              );
-            })()}
+
+          <div className="flex flex-col gap-4 flex-1 overflow-y-auto pr-1">
+            {navGroups.map((group, index) => (
+              <div key={group.heading || `group-${index}`}>
+                {group.heading && <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">{group.heading}</p>}
+                <div className="flex flex-col gap-1">
+                  {group.items.map(item => (
+                    <button key={item.key} onClick={() => setActiveTab(item.key)} className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === item.key ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'}`}>
+                      {item.icon} {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            {isAdmin && (
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">Command Center</p>
+                <button onClick={() => navigate('/dashboard/admin')} className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-500 hover:bg-zinc-50 hover:text-[#D4A373] transition-all text-left">
+                  <span className="flex items-center gap-3"><Building2 size={15} /> Back to Admin</span><ArrowUpRight size={14} className="opacity-50" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
-        <AnimatePresence mode="wait">
-          {isLoading ? (
-            <motion.div key="loader" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-96 flex flex-col items-center justify-center text-zinc-400">
-              <Loader2 className="animate-spin mb-2" size={32} />
-              <p className="text-xs font-medium uppercase tracking-wider">Syncing operations...</p>
-            </motion.div>
-          ) : (
-            <div className="space-y-6">
-
-              {/* TAB: OVERVIEW */}
-              {activeTab === 'overview' && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                    {overview.metrics && overview.metrics.map((kpi, i) => {
-                      const t = themeMap[kpi.theme] || themeMap['#D4A373'];
-                      const dotColor = kpi.theme && kpi.theme.startsWith('#') ? kpi.theme : { amber: '#D4A373', rose: '#e11d48', emerald: '#059669', indigo: '#4f46e5' }[kpi.theme] || '#D4A373';
-                      return (
-                        <motion.div
-                          key={i}
-                          initial={{ opacity: 0, y: 16 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: i * 0.08, type: 'spring', stiffness: 200, damping: 20 }}
-                          whileHover={{ y: -8, scale: 1.02 }}
-                          style={{ '--kpi-glow': t.glow }}
-                          className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between gap-2 border border-zinc-200/70 bg-gradient-to-br ${t.gradient} shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_24px_-16px_rgba(0,0,0,0.15)] transition-shadow duration-500 hover:shadow-[0_20px_45px_-18px_var(--kpi-glow)] ring-1 ${t.ring}`}
-                        >
-                          {/* decorative glow blob */}
-                          <div
-                            className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
-                            style={{ background: t.glow }}
-                          />
-                          <div className="relative flex-1 min-w-0">
-                            <div className="flex items-start justify-between mb-4">
-                              <motion.div
-                                whileHover={{ rotate: -8, scale: 1.1 }}
-                                transition={{ type: 'spring', stiffness: 400, damping: 14 }}
-                                className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${t.iconBg}`}
-                              >
-                                {iconMap[kpi.iconName]}
-                              </motion.div>
-                            </div>
-                            <motion.p
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              transition={{ delay: i * 0.08 + 0.2 }}
-                              className="text-2xl 2xl:text-3xl font-black text-zinc-900 tracking-tight leading-none mb-1.5 break-words"
-                            >
-                              {kpi.value}
-                            </motion.p>
-                            <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 leading-none">{kpi.label}</p>
-                            <p className="text-[10px] text-zinc-400 mt-1">{kpi.sub}</p>
-                          </div>
-                          <div className="relative">{kpiGraphic(i, dotColor)}</div>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <motion.div
-                      whileHover={{ y: -6, scale: 1.01 }}
-                      transition={{ type: 'spring', stiffness: 350, damping: 22 }}
-                      className="relative overflow-hidden bg-white rounded-[2rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]"
-                    >
-                      <div className="absolute -bottom-16 -right-10 w-56 h-56 rounded-full bg-amber-200/20 blur-3xl pointer-events-none" />
-                      <div className="relative flex items-center gap-2 mb-4">
-                        <div className="w-7 h-7 rounded-lg bg-[#D4A373] flex items-center justify-center shadow-md shadow-[#D4A373]/30">
-                          <TrendingUp size={14} className="text-white" />
-                        </div>
-                        <h3 className="font-black text-sm uppercase text-zinc-800">Order Volume Trend</h3>
-                      </div>
-                      <OrderTrendLine data={overview.orderTrend || []} />
-                    </motion.div>
-                    <motion.div
-                      whileHover={{ y: -6, scale: 1.01 }}
-                      transition={{ type: 'spring', stiffness: 350, damping: 22 }}
-                      className="relative overflow-hidden bg-white rounded-[2rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]"
-                    >
-                      <div className="absolute -top-14 -right-14 w-40 h-40 rounded-full bg-rose-200/20 blur-3xl pointer-events-none" />
-                      <div className="relative flex items-center gap-2 mb-4">
-                        <div className="w-7 h-7 rounded-lg bg-rose-500 flex items-center justify-center shadow-md shadow-rose-500/30">
-                          <PieChart size={14} className="text-white" />
-                        </div>
-                        <h3 className="font-black text-sm uppercase text-zinc-800">Sales by Outlet</h3>
-                      </div>
-                      <div className="flex flex-col sm:flex-row items-center justify-around gap-6">
-                        <DonutChart data={overview.salesSplit || []} centerLabel="Orders" />
-                        <div className="grid grid-cols-1 gap-y-2.5">
-                          {overview.salesSplit && overview.salesSplit.map((d, i) => (
-                            <div key={i} className="flex items-center gap-2">
-                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
-                              <span className="text-[11px] text-zinc-500 font-semibold">{d.label}</span>
-                              <span className="text-xs font-black text-zinc-900 ml-auto">{d.value}%</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </motion.div>
-                  </div>
-                </motion.div>
-              )}
-
-              {/* TAB: KITCHEN ORDER TICKETS (KOT) */}
-              {activeTab === 'kots' && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-5 h-[calc(100vh-14rem)] flex flex-col">
-                  {/* Enhanced Header Bar */}
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-5 rounded-[2rem] border border-zinc-200/60 shadow-sm gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#D4A373] to-[#b9834f] flex items-center justify-center shadow-lg shadow-[#D4A373]/30">
-                        <ChefHat size={18} className="text-white" />
-                      </div>
-                      <div>
-                        <h2 className="font-black text-zinc-900 text-base tracking-tight">Live Kitchen Display</h2>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span></span>
-                          <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Live</span>
-                        </div>
-                      </div>
+        {/* MAIN CONTENT WORKSPACE */}
+        <div className="flex-1 flex flex-col gap-6 overflow-hidden min-w-0 lg:ml-[21rem]">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-black text-zinc-600 tracking-tight mt-0.5">
+                {{ overview: 'Dining Overview', kots: 'Kitchen Order Tickets', tables: 'Table Management', menu: 'Menu & Inventory', billing: 'Billing & Settlements' }[activeTab]}
+              </h2>
+              <p className="text-xs text-zinc-400 mt-1">Manage kitchen workflows, restaurant seating, and F&B revenue.</p>
+            </div>
+            <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+                </span>
+                <span className="text-[9px] font-bold uppercase tracking-wider">Live System</span>
+              </div>
+              <button onClick={refresh} className="p-2.5 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-500 transition-all"><RefreshCw size={15} className={isLoading ? 'animate-spin' : ''} /></button>
+              {(() => {
+                const staffName = sessionStorage.getItem('hms_name') || 'Staff';
+                const initials = staffName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
+                let designation = 'Restaurant admin';
+                try {
+                  const user = JSON.parse(sessionStorage.getItem('hms_user'));
+                  if (user && user.designation) designation = user.designation;
+                } catch (e) { }
+                return (
+                  <motion.button
+                    whileHover={{ y: -2 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => {
+                      localStorage.clear();
+                      window.location.href = '/login';
+                    }}
+                    className="group flex items-center gap-3 bg-white pl-3 pr-4 py-1.5 rounded-2xl border border-zinc-200/60 shadow-xs hover:shadow-md hover:border-rose-200 hover:bg-rose-50 transition-all duration-300 cursor-pointer"
+                    title="Sign Out"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-rose-500 to-red-600 group-hover:from-rose-500 group-hover:to-rose-600 text-white font-bold text-xs flex items-center justify-center shadow-xs transition-colors">
+                      {initials}
                     </div>
-                    {/* Quick Stats Row */}
-                    <div className="flex items-center gap-3 flex-wrap">
-                      {[
-                        { label: 'New', count: activeKOTs.filter(k => k.status === 'New').length, color: '#0ea5e9', bg: 'bg-sky-50 border-sky-200' },
-                        { label: 'Preparing', count: activeKOTs.filter(k => k.status === 'Preparing').length, color: '#f59e0b', bg: 'bg-amber-50 border-amber-200' },
-                        { label: 'Ready', count: activeKOTs.filter(k => k.status === 'Ready').length, color: '#10b981', bg: 'bg-emerald-50 border-emerald-200' },
-                        { label: 'Served', count: activeKOTs.filter(k => k.status === 'Served').length, color: '#6b7280', bg: 'bg-zinc-50 border-zinc-200' },
-                      ].map(s => (
-                        <div key={s.label} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold ${s.bg}`}>
-                          <span className="w-2 h-2 rounded-full" style={{ background: s.color }} />
-                          <span className="text-zinc-600">{s.label}</span>
-                          <span className="font-black text-zinc-900">{s.count}</span>
-                        </div>
-                      ))}
-                      <button onClick={() => setActiveTab('menu')} className="bg-gradient-to-r from-[#D4A373] to-[#b9834f] text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider hover:shadow-lg hover:shadow-[#D4A373]/30 transition-all hover:-translate-y-0.5 flex items-center gap-1.5">
-                        <Plus size={14} strokeWidth={3} /> Punch Order
-                      </button>
+                    <div className="hidden sm:block text-left leading-none pr-1">
+                      <span className="text-xs font-bold text-zinc-900 group-hover:text-rose-600 transition-colors block">{staffName}</span>
+                      <span className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mt-0.5 block group-hover:text-rose-400 transition-colors">{designation}</span>
                     </div>
-                  </div>
+                    <LogOut size={16} className="text-zinc-400 group-hover:text-rose-500 transition-colors ml-1" />
+                  </motion.button>
+                );
+              })()}
+            </div>
+          </div>
 
-                  {/* Kanban Board */}
-                  <div className="flex-1 flex flex-col xl:flex-row gap-4 overflow-x-hidden pb-2">
-                    {['New', 'Preparing', 'Ready', 'Served'].map(status => {
-                      const columnKOTs = activeKOTs.filter(k => k.status === status);
-                      const colConfig = {
-                        'New': { color: '#0ea5e9', gradient: 'from-sky-500 to-blue-600', lightBg: 'bg-sky-50/70', borderColor: 'border-sky-200/60', icon: <AlertCircle size={14} />, nextLabel: 'Start Preparing' },
-                        'Preparing': { color: '#f59e0b', gradient: 'from-amber-400 to-orange-500', lightBg: 'bg-amber-50/70', borderColor: 'border-amber-200/60', icon: <Flame size={14} />, nextLabel: 'Mark Ready' },
-                        'Ready': { color: '#10b981', gradient: 'from-emerald-500 to-teal-600', lightBg: 'bg-emerald-50/70', borderColor: 'border-emerald-200/60', icon: <CheckCircle2 size={14} />, nextLabel: 'Mark Served' },
-                        'Served': { color: '#6b7280', gradient: 'from-zinc-400 to-zinc-500', lightBg: 'bg-zinc-50/70', borderColor: 'border-zinc-200/60', icon: <CheckCircle2 size={14} />, nextLabel: null },
-                      }[status];
-                      
-                      let widthClass = 'w-full xl:w-1/4 xl:flex-1';
-                      if (expandedColumn) {
-                         if (expandedColumn === status) {
-                            widthClass = 'w-full xl:flex-[3] xl:min-w-[55%]';
-                         } else {
-                            widthClass = 'w-full xl:flex-1 xl:min-w-[12%] opacity-60 hover:opacity-100';
-                         }
-                      }
-                      
-                      return (
-                        <div key={status} onClick={() => setExpandedColumn(expandedColumn === status ? null : status)} className={`flex flex-col rounded-[1.5rem] border ${colConfig.borderColor} ${colConfig.lightBg} overflow-hidden cursor-pointer hover:shadow-xl transition-all duration-500 shrink-0 ${widthClass}`}>
-                          {/* Column Header */}
-                          <div className={`p-3.5 bg-gradient-to-r ${colConfig.gradient} flex items-center justify-between shrink-0`}>
-                            <div className="flex items-center gap-2">
-                              <span className="relative flex h-2.5 w-2.5">
-                                {status !== 'Served' && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-40"></span>}
-                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white/90"></span>
-                              </span>
-                              <h4 className="text-xs font-black uppercase tracking-[0.15em] text-white">{status}</h4>
-                            </div>
-                            <span className="text-[10px] font-black text-white/90 bg-white/20 backdrop-blur-sm px-2.5 py-1 rounded-full min-w-[28px] text-center">{columnKOTs.length}</span>
-                          </div>
+          <AnimatePresence mode="wait">
+            {isLoading ? (
+              <motion.div key="loader" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-96 flex flex-col items-center justify-center text-zinc-400">
+                <Loader2 className="animate-spin mb-2" size={32} />
+                <p className="text-xs font-medium uppercase tracking-wider">Syncing operations...</p>
+              </motion.div>
+            ) : (
+              <div className="space-y-6">
 
-                          {/* Column Body */}
-                          <div className="flex-1 overflow-y-auto dd-scrollbar p-2.5 space-y-2.5">
-                            {columnKOTs.length === 0 && (
-                              <div className="h-full flex flex-col items-center justify-center text-center py-8 opacity-40">
-                                {status === 'New' ? <Utensils size={28} strokeWidth={1.5} className="mb-2 text-sky-400" /> :
-                                  status === 'Preparing' ? <Flame size={28} strokeWidth={1.5} className="mb-2 text-amber-400" /> :
-                                    status === 'Ready' ? <BellRing size={28} strokeWidth={1.5} className="mb-2 text-emerald-400" /> :
-                                      <CheckCircle2 size={28} strokeWidth={1.5} className="mb-2 text-zinc-400" />}
-                                <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">No {status.toLowerCase()} orders</p>
+                {/* TAB: OVERVIEW */}
+                {activeTab === 'overview' && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                      {overview.metrics && overview.metrics.map((kpi, i) => {
+                        const t = themeMap[kpi.theme] || themeMap['#D4A373'];
+                        const dotColor = kpi.theme && kpi.theme.startsWith('#') ? kpi.theme : { amber: '#D4A373', rose: '#e11d48', emerald: '#059669', indigo: '#4f46e5' }[kpi.theme] || '#D4A373';
+                        return (
+                          <motion.div
+                            key={i}
+                            initial={{ opacity: 0, y: 16 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: i * 0.08, type: 'spring', stiffness: 200, damping: 20 }}
+                            whileHover={{ y: -8, scale: 1.02 }}
+                            style={{ '--kpi-glow': t.glow }}
+                            className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between gap-2 border border-zinc-200/70 bg-gradient-to-br ${t.gradient} shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_24px_-16px_rgba(0,0,0,0.15)] transition-shadow duration-500 hover:shadow-[0_20px_45px_-18px_var(--kpi-glow)] ring-1 ${t.ring}`}
+                          >
+                            {/* decorative glow blob */}
+                            <div
+                              className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
+                              style={{ background: t.glow }}
+                            />
+                            <div className="relative flex-1 min-w-0">
+                              <div className="flex items-start justify-between mb-4">
+                                <motion.div
+                                  whileHover={{ rotate: -8, scale: 1.1 }}
+                                  transition={{ type: 'spring', stiffness: 400, damping: 14 }}
+                                  className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${t.iconBg}`}
+                                >
+                                  {iconMap[kpi.iconName]}
+                                </motion.div>
                               </div>
-                            )}
-                            {columnKOTs.map(kot => (
-                              <motion.div
-                                key={kot.id}
-                                layout
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                onClick={(e) => { e.stopPropagation(); setSelectedKOT(kot); }}
-                                className="bg-white rounded-2xl border border-zinc-200/80 shadow-sm relative overflow-hidden group hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
+                              <motion.p
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ delay: i * 0.08 + 0.2 }}
+                                className="text-2xl 2xl:text-3xl font-black text-zinc-900 tracking-tight leading-none mb-1.5 break-words"
                               >
-                                {/* Thick Accent Bar */}
-                                <div className={`absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b ${colConfig.gradient} rounded-l-2xl`} />
+                                {kpi.value}
+                              </motion.p>
+                              <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 leading-none">{kpi.label}</p>
+                              <p className="text-[10px] text-zinc-400 mt-1">{kpi.sub}</p>
+                            </div>
+                            <div className="relative">{kpiGraphic(i, dotColor)}</div>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
 
-                                {/* Card Content */}
-                                <div className="pl-4 pr-3 pt-3 pb-2.5">
-                                  {/* Table & Meta Row */}
-                                  <div className="flex justify-between items-center mb-2.5">
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-black text-sm text-zinc-900 bg-zinc-100 px-2.5 py-1 rounded-lg border border-zinc-200/60">{kot.table}</span>
-                                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-[0.12em]" style={{ background: `${colConfig.color}15`, color: colConfig.color }}>{kot.type}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1 text-zinc-400">
-                                      <Timer size={11} strokeWidth={2.5} />
-                                      <span className="text-[10px] font-bold">{kot.time}</span>
-                                    </div>
-                                  </div>
-
-                                  {/* Items List */}
-                                  <div className="mb-2.5">
-                                    {(() => {
-                                      try {
-                                        const parsed = typeof kot.items === 'string' ? JSON.parse(kot.items) : kot.items;
-                                        if (Array.isArray(parsed)) {
-                                          return (
-                                            <div className="space-y-1.5">
-                                              {parsed.map((item, idx) => (
-                                                <div key={idx} className="flex items-start gap-2">
-                                                  <span className="shrink-0 w-5 h-5 rounded-md bg-zinc-900 text-white text-[10px] font-black flex items-center justify-center mt-0.5">{item.qty}</span>
-                                                  <div className="flex-1 min-w-0">
-                                                    <span className="text-xs font-bold text-zinc-800 leading-tight block">{item.item}</span>
-                                                    {item.note && (
-                                                      <div className="mt-1 flex items-start gap-1.5 bg-amber-50 border border-amber-200/60 rounded-lg px-2 py-1">
-                                                        <PenLine size={9} className="text-amber-500 mt-0.5 shrink-0" />
-                                                        <span className="text-[10px] text-amber-700 font-semibold leading-tight">{item.note}</span>
-                                                      </div>
-                                                    )}
-                                                  </div>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          );
-                                        }
-                                      } catch (e) { }
-                                      return <p className="text-xs text-zinc-600 font-medium leading-relaxed whitespace-pre-wrap">{typeof kot.items === 'string' ? kot.items : JSON.stringify(kot.items)}</p>;
-                                    })()}
-                                  </div>
-
-                                  {/* Footer */}
-                                  <div className="flex justify-between items-center pt-2 border-t border-zinc-100">
-                                    <span className="text-[9px] font-mono font-bold text-zinc-300 tracking-wider">{kot.id}</span>
-                                    {status !== 'Served' && (
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          const nextStatus = status === 'New' ? 'Preparing' : status === 'Preparing' ? 'Ready' : 'Served';
-                                          updateKOTStatus(kot.id, nextStatus);
-                                        }}
-                                        className={`flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md`}
-                                        style={{ background: `${colConfig.color}12`, color: colConfig.color }}
-                                        onMouseEnter={e => { e.currentTarget.style.background = colConfig.color; e.currentTarget.style.color = '#fff'; }}
-                                        onMouseLeave={e => { e.currentTarget.style.background = `${colConfig.color}12`; e.currentTarget.style.color = colConfig.color; }}
-                                      >
-                                        {colConfig.nextLabel} <ArrowRight size={12} strokeWidth={2.5} />
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              </motion.div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <motion.div
+                        whileHover={{ y: -6, scale: 1.01 }}
+                        transition={{ type: 'spring', stiffness: 350, damping: 22 }}
+                        className="relative overflow-hidden bg-white rounded-[2rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]"
+                      >
+                        <div className="absolute -bottom-16 -right-10 w-56 h-56 rounded-full bg-amber-200/20 blur-3xl pointer-events-none" />
+                        <div className="relative flex items-center gap-2 mb-4">
+                          <div className="w-7 h-7 rounded-lg bg-[#D4A373] flex items-center justify-center shadow-md shadow-[#D4A373]/30">
+                            <TrendingUp size={14} className="text-white" />
+                          </div>
+                          <h3 className="font-black text-sm uppercase text-zinc-800">Order Volume Trend</h3>
+                        </div>
+                        <OrderTrendLine data={overview.orderTrend || []} />
+                      </motion.div>
+                      <motion.div
+                        whileHover={{ y: -6, scale: 1.01 }}
+                        transition={{ type: 'spring', stiffness: 350, damping: 22 }}
+                        className="relative overflow-hidden bg-white rounded-[2rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]"
+                      >
+                        <div className="absolute -top-14 -right-14 w-40 h-40 rounded-full bg-rose-200/20 blur-3xl pointer-events-none" />
+                        <div className="relative flex items-center gap-2 mb-4">
+                          <div className="w-7 h-7 rounded-lg bg-rose-500 flex items-center justify-center shadow-md shadow-rose-500/30">
+                            <PieChart size={14} className="text-white" />
+                          </div>
+                          <h3 className="font-black text-sm uppercase text-zinc-800">Sales by Outlet</h3>
+                        </div>
+                        <div className="flex flex-col sm:flex-row items-center justify-around gap-6">
+                          <DonutChart data={overview.salesSplit || []} centerLabel="Orders" />
+                          <div className="grid grid-cols-1 gap-y-2.5">
+                            {overview.salesSplit && overview.salesSplit.map((d, i) => (
+                              <div key={i} className="flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
+                                <span className="text-[11px] text-zinc-500 font-semibold">{d.label}</span>
+                                <span className="text-xs font-black text-zinc-900 ml-auto">{d.value}%</span>
+                              </div>
                             ))}
                           </div>
                         </div>
-                      )
-                    })}
-                  </div>
-                </motion.div>
-              )}
+                      </motion.div>
+                    </div>
+                  </motion.div>
+                )}
 
-              {/* TAB: TABLE MANAGEMENT */}
-              {activeTab === 'tables' && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-              
-                  {/* Local styles for this section only — shimmering border, floating orbs, tilt sheen */}
-                  <style>{`
+                {/* TAB: KITCHEN ORDER TICKETS (KOT) */}
+                {activeTab === 'kots' && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-5 h-[calc(100vh-14rem)] flex flex-col">
+                    {/* Enhanced Header Bar */}
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-5 rounded-[2rem] border border-zinc-200/60 shadow-sm gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#D4A373] to-[#b9834f] flex items-center justify-center shadow-lg shadow-[#D4A373]/30">
+                          <ChefHat size={18} className="text-white" />
+                        </div>
+                        <div>
+                          <h2 className="font-black text-zinc-900 text-base tracking-tight">Live Kitchen Display</h2>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span></span>
+                            <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Live</span>
+                          </div>
+                        </div>
+                      </div>
+                      {/* Quick Stats Row */}
+                      <div className="flex items-center gap-3 flex-wrap">
+                        {[
+                          { label: 'New', count: activeKOTs.filter(k => k.status === 'New').length, color: '#0ea5e9', bg: 'bg-sky-50 border-sky-200' },
+                          { label: 'Preparing', count: activeKOTs.filter(k => k.status === 'Preparing').length, color: '#f59e0b', bg: 'bg-amber-50 border-amber-200' },
+                          { label: 'Ready', count: activeKOTs.filter(k => k.status === 'Ready').length, color: '#10b981', bg: 'bg-emerald-50 border-emerald-200' },
+                          { label: 'Served', count: activeKOTs.filter(k => k.status === 'Served').length, color: '#6b7280', bg: 'bg-zinc-50 border-zinc-200' },
+                        ].map(s => (
+                          <div key={s.label} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold ${s.bg}`}>
+                            <span className="w-2 h-2 rounded-full" style={{ background: s.color }} />
+                            <span className="text-zinc-600">{s.label}</span>
+                            <span className="font-black text-zinc-900">{s.count}</span>
+                          </div>
+                        ))}
+                        <button onClick={() => setActiveTab('menu')} className="bg-gradient-to-r from-[#D4A373] to-[#b9834f] text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider hover:shadow-lg hover:shadow-[#D4A373]/30 transition-all hover:-translate-y-0.5 flex items-center gap-1.5">
+                          <Plus size={14} strokeWidth={3} /> Punch Order
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Kanban Board */}
+                    <div className="flex-1 flex flex-col xl:flex-row gap-4 overflow-x-hidden pb-2">
+                      {['New', 'Preparing', 'Ready', 'Served'].map(status => {
+                        const columnKOTs = activeKOTs.filter(k => k.status === status);
+                        const colConfig = {
+                          'New': { color: '#0ea5e9', gradient: 'from-sky-500 to-blue-600', lightBg: 'bg-sky-50/70', borderColor: 'border-sky-200/60', icon: <AlertCircle size={14} />, nextLabel: 'Start Preparing' },
+                          'Preparing': { color: '#f59e0b', gradient: 'from-amber-400 to-orange-500', lightBg: 'bg-amber-50/70', borderColor: 'border-amber-200/60', icon: <Flame size={14} />, nextLabel: 'Mark Ready' },
+                          'Ready': { color: '#10b981', gradient: 'from-emerald-500 to-teal-600', lightBg: 'bg-emerald-50/70', borderColor: 'border-emerald-200/60', icon: <CheckCircle2 size={14} />, nextLabel: 'Mark Served' },
+                          'Served': { color: '#6b7280', gradient: 'from-zinc-400 to-zinc-500', lightBg: 'bg-zinc-50/70', borderColor: 'border-zinc-200/60', icon: <CheckCircle2 size={14} />, nextLabel: null },
+                        }[status];
+
+                        let widthClass = 'w-full xl:w-1/4 xl:flex-1';
+                        if (expandedColumn) {
+                          if (expandedColumn === status) {
+                            widthClass = 'w-full xl:flex-[3] xl:min-w-[55%]';
+                          } else {
+                            widthClass = 'w-full xl:flex-1 xl:min-w-[12%] opacity-60 hover:opacity-100';
+                          }
+                        }
+
+                        return (
+                          <div key={status} onClick={() => setExpandedColumn(expandedColumn === status ? null : status)} className={`flex flex-col rounded-[1.5rem] border ${colConfig.borderColor} ${colConfig.lightBg} overflow-hidden cursor-pointer hover:shadow-xl transition-all duration-500 shrink-0 ${widthClass}`}>
+                            {/* Column Header */}
+                            <div className={`p-3.5 bg-gradient-to-r ${colConfig.gradient} flex items-center justify-between shrink-0`}>
+                              <div className="flex items-center gap-2">
+                                <span className="relative flex h-2.5 w-2.5">
+                                  {status !== 'Served' && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-40"></span>}
+                                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white/90"></span>
+                                </span>
+                                <h4 className="text-xs font-black uppercase tracking-[0.15em] text-white">{status}</h4>
+                              </div>
+                              <span className="text-[10px] font-black text-white/90 bg-white/20 backdrop-blur-sm px-2.5 py-1 rounded-full min-w-[28px] text-center">{columnKOTs.length}</span>
+                            </div>
+
+                            {/* Column Body */}
+                            <div className="flex-1 overflow-y-auto dd-scrollbar p-2.5 space-y-2.5">
+                              {columnKOTs.length === 0 && (
+                                <div className="h-full flex flex-col items-center justify-center text-center py-8 opacity-40">
+                                  {status === 'New' ? <Utensils size={28} strokeWidth={1.5} className="mb-2 text-sky-400" /> :
+                                    status === 'Preparing' ? <Flame size={28} strokeWidth={1.5} className="mb-2 text-amber-400" /> :
+                                      status === 'Ready' ? <BellRing size={28} strokeWidth={1.5} className="mb-2 text-emerald-400" /> :
+                                        <CheckCircle2 size={28} strokeWidth={1.5} className="mb-2 text-zinc-400" />}
+                                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">No {status.toLowerCase()} orders</p>
+                                </div>
+                              )}
+                              {columnKOTs.map(kot => (
+                                <motion.div
+                                  key={kot.id}
+                                  layout
+                                  initial={{ opacity: 0, scale: 0.95 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  onClick={(e) => { e.stopPropagation(); setSelectedKOT(kot); }}
+                                  className="bg-white rounded-2xl border border-zinc-200/80 shadow-sm relative overflow-hidden group hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
+                                >
+                                  {/* Thick Accent Bar */}
+                                  <div className={`absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b ${colConfig.gradient} rounded-l-2xl`} />
+
+                                  {/* Card Content */}
+                                  <div className="pl-4 pr-3 pt-3 pb-2.5">
+                                    {/* Table & Meta Row */}
+                                    <div className="flex justify-between items-center mb-2.5">
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-black text-sm text-zinc-900 bg-zinc-100 px-2.5 py-1 rounded-lg border border-zinc-200/60">{kot.table}</span>
+                                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-[0.12em]" style={{ background: `${colConfig.color}15`, color: colConfig.color }}>{kot.type}</span>
+                                      </div>
+                                      <div className="flex items-center gap-1 text-zinc-400">
+                                        <Timer size={11} strokeWidth={2.5} />
+                                        <span className="text-[10px] font-bold">{kot.time}</span>
+                                      </div>
+                                    </div>
+
+                                    {/* Items List */}
+                                    <div className="mb-2.5">
+                                      {(() => {
+                                        try {
+                                          const parsed = typeof kot.items === 'string' ? JSON.parse(kot.items) : kot.items;
+                                          if (Array.isArray(parsed)) {
+                                            return (
+                                              <div className="space-y-1.5">
+                                                {parsed.map((item, idx) => (
+                                                  <div key={idx} className="flex items-start gap-2">
+                                                    <span className="shrink-0 w-5 h-5 rounded-md bg-zinc-900 text-white text-[10px] font-black flex items-center justify-center mt-0.5">{item.qty}</span>
+                                                    <div className="flex-1 min-w-0">
+                                                      <span className="text-xs font-bold text-zinc-800 leading-tight block">{item.item}</span>
+                                                      {item.note && (
+                                                        <div className="mt-1 flex items-start gap-1.5 bg-amber-50 border border-amber-200/60 rounded-lg px-2 py-1">
+                                                          <PenLine size={9} className="text-amber-500 mt-0.5 shrink-0" />
+                                                          <span className="text-[10px] text-amber-700 font-semibold leading-tight">{item.note}</span>
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            );
+                                          }
+                                        } catch (e) { }
+                                        return <p className="text-xs text-zinc-600 font-medium leading-relaxed whitespace-pre-wrap">{typeof kot.items === 'string' ? kot.items : JSON.stringify(kot.items)}</p>;
+                                      })()}
+                                    </div>
+
+                                    {/* Footer */}
+                                    <div className="flex justify-between items-center pt-2 border-t border-zinc-100">
+                                      <span className="text-[9px] font-mono font-bold text-zinc-300 tracking-wider">{kot.id}</span>
+                                      {status !== 'Served' && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const nextStatus = status === 'New' ? 'Preparing' : status === 'Preparing' ? 'Ready' : 'Served';
+                                            updateKOTStatus(kot.id, nextStatus);
+                                          }}
+                                          className={`flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md`}
+                                          style={{ background: `${colConfig.color}12`, color: colConfig.color }}
+                                          onMouseEnter={e => { e.currentTarget.style.background = colConfig.color; e.currentTarget.style.color = '#fff'; }}
+                                          onMouseLeave={e => { e.currentTarget.style.background = `${colConfig.color}12`; e.currentTarget.style.color = colConfig.color; }}
+                                        >
+                                          {colConfig.nextLabel} <ArrowRight size={12} strokeWidth={2.5} />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </motion.div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* TAB: TABLE MANAGEMENT */}
+                {activeTab === 'tables' && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+
+                    {/* Local styles for this section only — shimmering border, floating orbs, tilt sheen */}
+                    <style>{`
                     @keyframes tb-shimmer { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
                     @keyframes tb-float { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(10px,-8px) scale(1.05); } }
                     @keyframes tb-pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(99,102,241,0.35); } 70% { box-shadow: 0 0 0 8px rgba(99,102,241,0); } 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0); } }
@@ -1058,746 +1064,822 @@ export default function DiningDashboard() {
                     }
                     .tb-card:hover::after { transform: translateX(130%); }
                   `}</style>
-              
-                  {/* Header / Legend */}
-                  <motion.div
-                    initial={{ opacity: 0, y: -8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4 }}
-                    className="bg-white p-5 rounded-[1.5rem] border border-zinc-200/60 shadow-sm flex flex-wrap gap-4 justify-between items-center"
-                  >
-                    <div className="flex items-center gap-2 text-sm font-bold uppercase text-zinc-800">
-                      <motion.div
-                        whileHover={{ rotate: -10, scale: 1.1 }}
-                        animate={{ y: [0, -2, 0] }}
-                        transition={{ y: { duration: 2.6, repeat: Infinity, ease: 'easeInOut' }, rotate: { type: 'spring', stiffness: 400, damping: 14 } }}
-                        className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-md shadow-indigo-500/30 tb-ring-pulse"
-                      >
-                        <MapPin size={14} className="text-white" />
-                      </motion.div>
-                      <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-700 to-blue-600">Floor Plan Status</span>
-                      <button onClick={() => {
-                        const num = prompt('Enter Table Number (e.g., T11):');
-                        if (num) {
-                          const cap = prompt('Enter Capacity (e.g., 4):');
-                          handleAddTable(num, parseInt(cap) || 4);
-                        }
-                      }} className="ml-4 bg-gradient-to-r from-indigo-500 to-blue-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider hover:shadow-lg hover:-translate-y-0.5 transition-all shadow-indigo-500/30 flex items-center gap-1">
-                        <Plus size={12} strokeWidth={3} /> Add Table
+
+                    {/* Header / Legend */}
+                    <motion.div
+                      initial={{ opacity: 0, y: -8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.4 }}
+                      className="bg-white p-5 rounded-[1.5rem] border border-zinc-200/60 shadow-sm flex flex-wrap gap-4 justify-between items-center"
+                    >
+                      <div className="flex items-center gap-2 text-sm font-bold uppercase text-zinc-800">
+                        <motion.div
+                          whileHover={{ rotate: -10, scale: 1.1 }}
+                          animate={{ y: [0, -2, 0] }}
+                          transition={{ y: { duration: 2.6, repeat: Infinity, ease: 'easeInOut' }, rotate: { type: 'spring', stiffness: 400, damping: 14 } }}
+                          className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-md shadow-indigo-500/30 tb-ring-pulse"
+                        >
+                          <MapPin size={14} className="text-white" />
+                        </motion.div>
+                        <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-700 to-blue-600">Floor Plan Status</span>
+                        <button onClick={() => {
+                          const num = prompt('Enter Table Number (e.g., T11):');
+                          if (num) {
+                            const cap = prompt('Enter Capacity (e.g., 4):');
+                            handleAddTable(num, parseInt(cap) || 4);
+                          }
+                        }} className="ml-4 bg-gradient-to-r from-indigo-500 to-blue-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider hover:shadow-lg hover:-translate-y-0.5 transition-all shadow-indigo-500/30 flex items-center gap-1">
+                          <Plus size={12} strokeWidth={3} /> Add Table
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-4 text-xs font-bold text-zinc-500">
+                        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#D4A373]/20 border border-[#D4A373]/40 shadow-sm" /> Available</span>
+                        <span className="flex items-center gap-1.5"><span className="relative w-3 h-3 rounded-full bg-rose-100 border border-rose-400 shadow-sm"><span className="absolute inset-0 rounded-full bg-rose-400 animate-ping opacity-40" /></span> Occupied</span>
+                        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-amber-100 border border-amber-400 shadow-sm" /> Dirty</span>
+                        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-sky-100 border border-sky-400 shadow-sm" /> Reserved</span>
+                      </div>
+                    </motion.div>
+
+                    {/* Table Grid */}
+                    <motion.div
+                      initial="hidden"
+                      animate="visible"
+                      variants={{ hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.05 } } }}
+                      className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"
+                    >
+                      {tables.map(t => {
+                        const styles = {
+                          Available: 'bg-gradient-to-br from-[#D4A373]/10 to-white border-[#D4A373]/40 text-[#B8895A]',
+                          Occupied: 'bg-gradient-to-br from-rose-50 to-white border-rose-300 text-rose-700',
+                          Dirty: 'bg-gradient-to-br from-amber-50 to-white border-amber-300 text-amber-700',
+                          Reserved: 'bg-gradient-to-br from-sky-50 to-white border-sky-300 text-sky-700'
+                        }[t.status] || 'bg-zinc-50 border-zinc-200 text-zinc-700';
+
+                        const glow = {
+                          Available: 'rgba(212,163,115,0.35)',
+                          Occupied: 'rgba(244,63,94,0.3)',
+                          Dirty: 'rgba(245,158,11,0.3)',
+                          Reserved: 'rgba(14,165,233,0.3)'
+                        }[t.status] || 'rgba(113,113,122,0.2)';
+
+                        return (
+                          <motion.div
+                            key={t.id}
+                            variants={{ hidden: { opacity: 0, y: 14, scale: 0.96 }, visible: { opacity: 1, y: 0, scale: 1 } }}
+                            whileHover={{ y: -5, scale: 1.05, boxShadow: `0px 18px 36px -14px ${glow}` }}
+                            transition={{ type: 'spring', stiffness: 320, damping: 22 }}
+                            className={`tb-card p-4 rounded-[1.5rem] border-2 flex flex-col items-center justify-center gap-2 shadow-sm relative group ${styles}`}
+                          >
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDeleteTable(t.id); }}
+                              className="absolute top-2 left-2 p-1.5 rounded-full bg-white/50 text-zinc-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all shadow-sm border border-black/5"
+                              title="Delete Table"
+                            >
+                              <Trash2 size={10} />
+                            </button>
+                            {t.status === 'Occupied' && (
+                              <span className="absolute top-2 right-2 flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500" />
+                              </span>
+                            )}
+                            <div className="relative flex items-center justify-between w-full text-[10px] font-bold uppercase tracking-widest opacity-70">
+                              <span className="flex items-center gap-1"><Users size={10} /> {t.capacity} Pax</span>
+                              <span className="flex items-center gap-1">{t.reserved_time && <Clock size={10} />}{t.reserved_time || ''}</span>
+                            </div>
+                            <motion.h3
+                              whileHover={{ scale: 1.08 }}
+                              transition={{ type: 'spring', stiffness: 400, damping: 14 }}
+                              className="relative text-2xl font-black tracking-tight"
+                            >
+                              {t.table_number}
+                            </motion.h3>
+                            <select
+                              value={t.status}
+                              onChange={(e) => updateTableStatus(t.id, e.target.value)}
+                              className="relative text-[9px] font-black uppercase tracking-widest bg-white/60 px-2.5 py-1 rounded-full outline-none cursor-pointer appearance-none text-center hover:bg-white transition-colors shadow-sm border border-black/5"
+                            >
+                              <option value="Available">Available</option>
+                              <option value="Occupied">Occupied</option>
+                              <option value="Dirty">Dirty</option>
+                              <option value="Reserved">Reserved</option>
+                            </select>
+                          </motion.div>
+                        )
+                      })}
+                    </motion.div>
+                  </motion.div>
+                )}
+
+                {/* TAB: MENU & INVENTORY (POS) */}
+                {activeTab === 'menu' && (
+                  <div className="flex flex-col gap-4 h-full">
+                    <div className="flex justify-between items-center bg-white px-4 py-2 rounded-2xl border border-zinc-200 shadow-sm">
+                      <div className="flex items-center gap-2">
+                        <Utensils size={18} className="text-[#D4A373]" />
+                        <h3 className="font-black text-sm uppercase tracking-widest text-zinc-800">Menu & POS System</h3>
+                      </div>
+                      <button onClick={() => setIsMenuManageMode(!isMenuManageMode)} className="px-4 py-1.5 bg-[#D4A373]/10 text-[#D4A373] hover:bg-[#D4A373] hover:text-white rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors">
+                        {isMenuManageMode ? 'Switch to POS Mode' : 'Manage Menu'}
                       </button>
                     </div>
-                    <div className="flex flex-wrap gap-4 text-xs font-bold text-zinc-500">
-                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#D4A373]/20 border border-[#D4A373]/40 shadow-sm" /> Available</span>
-                      <span className="flex items-center gap-1.5"><span className="relative w-3 h-3 rounded-full bg-rose-100 border border-rose-400 shadow-sm"><span className="absolute inset-0 rounded-full bg-rose-400 animate-ping opacity-40" /></span> Occupied</span>
-                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-amber-100 border border-amber-400 shadow-sm" /> Dirty</span>
-                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-sky-100 border border-sky-400 shadow-sm" /> Reserved</span>
-                    </div>
-                  </motion.div>
-              
-                  {/* Table Grid */}
-                  <motion.div
-                    initial="hidden"
-                    animate="visible"
-                    variants={{ hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.05 } } }}
-                    className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"
-                  >
-                    {tables.map(t => {
-                      const styles = {
-                        Available: 'bg-gradient-to-br from-[#D4A373]/10 to-white border-[#D4A373]/40 text-[#B8895A]',
-                        Occupied: 'bg-gradient-to-br from-rose-50 to-white border-rose-300 text-rose-700',
-                        Dirty: 'bg-gradient-to-br from-amber-50 to-white border-amber-300 text-amber-700',
-                        Reserved: 'bg-gradient-to-br from-sky-50 to-white border-sky-300 text-sky-700'
-                      }[t.status] || 'bg-zinc-50 border-zinc-200 text-zinc-700';
-              
-                      const glow = {
-                        Available: 'rgba(212,163,115,0.35)',
-                        Occupied: 'rgba(244,63,94,0.3)',
-                        Dirty: 'rgba(245,158,11,0.3)',
-                        Reserved: 'rgba(14,165,233,0.3)'
-                      }[t.status] || 'rgba(113,113,122,0.2)';
-              
-                      return (
-                        <motion.div
-                          key={t.id}
-                          variants={{ hidden: { opacity: 0, y: 14, scale: 0.96 }, visible: { opacity: 1, y: 0, scale: 1 } }}
-                          whileHover={{ y: -5, scale: 1.05, boxShadow: `0px 18px 36px -14px ${glow}` }}
-                          transition={{ type: 'spring', stiffness: 320, damping: 22 }}
-                          className={`tb-card p-4 rounded-[1.5rem] border-2 flex flex-col items-center justify-center gap-2 shadow-sm relative group ${styles}`}
-                        >
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleDeleteTable(t.id); }}
-                            className="absolute top-2 left-2 p-1.5 rounded-full bg-white/50 text-zinc-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all shadow-sm border border-black/5"
-                            title="Delete Table"
-                          >
-                            <Trash2 size={10} />
-                          </button>
-                          {t.status === 'Occupied' && (
-                            <span className="absolute top-2 right-2 flex h-2 w-2">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500" />
-                            </span>
-                          )}
-                          <div className="relative flex items-center justify-between w-full text-[10px] font-bold uppercase tracking-widest opacity-70">
-                            <span className="flex items-center gap-1"><Users size={10} /> {t.capacity} Pax</span>
-                            <span className="flex items-center gap-1">{t.reserved_time && <Clock size={10} />}{t.reserved_time || ''}</span>
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-14rem)]">
+                      {/* Left Canvas */}
+                      <div className={`w-full flex flex-col gap-4 h-full min-h-0 ${isMenuManageMode ? 'lg:w-full' : 'lg:w-[70%]'}`}>
+                        {/* Top Control Bar */}
+                        <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-3 rounded-2xl shadow-sm border border-zinc-200 gap-3">
+                          <div className="flex-1 w-full max-w-md relative">
+                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                            <input type="text" placeholder="Search dish" value={posSearch} onChange={e => setPosSearch(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-xl py-2 pl-9 pr-4 text-sm outline-none focus:border-[#D4A373] transition-colors" />
                           </div>
-                          <motion.h3
-                            whileHover={{ scale: 1.08 }}
-                            transition={{ type: 'spring', stiffness: 400, damping: 14 }}
-                            className="relative text-2xl font-black tracking-tight"
-                          >
-                            {t.table_number}
-                          </motion.h3>
-                          <select
-                            value={t.status}
-                            onChange={(e) => updateTableStatus(t.id, e.target.value)}
-                            className="relative text-[9px] font-black uppercase tracking-widest bg-white/60 px-2.5 py-1 rounded-full outline-none cursor-pointer appearance-none text-center hover:bg-white transition-colors shadow-sm border border-black/5"
-                          >
-                            <option value="Available">Available</option>
-                            <option value="Occupied">Occupied</option>
-                            <option value="Dirty">Dirty</option>
-                            <option value="Reserved">Reserved</option>
-                          </select>
-                        </motion.div>
-                      )
-                    })}
-                  </motion.div>
-                </motion.div>
-              )}
+                          <div className="flex gap-2 shrink-0">
+                            <button onClick={() => setPosSpicy(!posSpicy)} className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] transition-colors ${posSpicy ? 'bg-red-100 border-red-300 shadow-sm' : 'bg-zinc-50 border-zinc-200 opacity-50 hover:opacity-100'} border`} title="Spicy">🌶️</button>
+                            <button onClick={() => setPosGlutenFree(!posGlutenFree)} className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] transition-colors ${posGlutenFree ? 'bg-yellow-100 border-yellow-300 shadow-sm' : 'bg-zinc-50 border-zinc-200 opacity-50 hover:opacity-100'} border`} title="Gluten-Free">🌾</button>
+                            <button onClick={() => setPosNuts(!posNuts)} className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] transition-colors ${posNuts ? 'bg-orange-100 border-orange-300 shadow-sm' : 'bg-zinc-50 border-zinc-200 opacity-50 hover:opacity-100'} border`} title="Contains Nuts">🥜</button>
+                          </div>
+                          <div className="flex bg-zinc-100 p-1 rounded-xl shrink-0 w-full sm:w-auto overflow-x-auto dd-scrollbar">
+                            {['Pure Veg', 'Non-Veg', 'Egg', 'All Items'].map(t => (
+                              <button key={t} onClick={() => setPosDietary(t)} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${posDietary === t ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'}`}>
+                                {t === 'Pure Veg' && '🟢 '}
+                                {t === 'Non-Veg' && '🔴 '}
+                                {t === 'Egg' && '🥚 '}
+                                {t === 'All Items' && '🟡 '}
+                                {t}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
 
-              {/* TAB: MENU & INVENTORY (POS) */}
-              {activeTab === 'menu' && (
-                <div className="flex flex-col gap-4 h-full">
-                  <div className="flex justify-between items-center bg-white px-4 py-2 rounded-2xl border border-zinc-200 shadow-sm">
-                    <div className="flex items-center gap-2">
-                      <Utensils size={18} className="text-[#D4A373]" />
-                      <h3 className="font-black text-sm uppercase tracking-widest text-zinc-800">Menu & POS System</h3>
-                    </div>
-                    <button onClick={() => setIsMenuManageMode(!isMenuManageMode)} className="px-4 py-1.5 bg-[#D4A373]/10 text-[#D4A373] hover:bg-[#D4A373] hover:text-white rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors">
-                      {isMenuManageMode ? 'Switch to POS Mode' : 'Manage Menu'}
-                    </button>
+                        {!isMenuManageMode ? (
+                          <>
+                            {/* Category Ribbon */}
+                            <div className="flex overflow-x-auto gap-2 pb-2 dd-scrollbar shrink-0">
+                              {posCategories.map(c => (
+                                <button key={c} onClick={() => setPosCategory(c)} className={`whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold transition-colors ${posCategory === c ? 'bg-[#D4A373] text-white shadow-md' : 'bg-white border border-zinc-200 text-zinc-600 hover:bg-zinc-50'}`}>{c}</button>
+                              ))}
+                            </div>
+                            {/* Menu Grid */}
+                            <div className="flex-1 overflow-y-auto dd-scrollbar grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 pb-4">
+                              {posFilteredMenu.map(m => {
+                                const catTheme = {
+                                  'Starters': 'from-blue-500/10 to-blue-500/5 text-blue-600',
+                                  'Mains': 'from-emerald-500/10 to-emerald-500/5 text-emerald-600',
+                                  'Breads': 'from-amber-500/10 to-amber-500/5 text-amber-600',
+                                  'Desserts': 'from-rose-500/10 to-rose-500/5 text-rose-600',
+                                  'Beverages': 'from-cyan-500/10 to-cyan-500/5 text-cyan-600',
+                                  'Chef Specials': 'from-indigo-500/10 to-indigo-500/5 text-indigo-600'
+                                }[m.category] || 'from-[#D4A373]/10 to-[#D4A373]/5 text-[#D4A373]';
+                                const badgeTheme = {
+                                  'Starters': 'bg-blue-500/10 text-blue-600',
+                                  'Mains': 'bg-emerald-500/10 text-emerald-600',
+                                  'Breads': 'bg-amber-500/10 text-amber-600',
+                                  'Desserts': 'bg-rose-500/10 text-rose-600',
+                                  'Beverages': 'bg-cyan-500/10 text-cyan-600',
+                                  'Chef Specials': 'bg-indigo-500/10 text-indigo-600'
+                                }[m.category] || 'bg-[#D4A373]/10 text-[#D4A373]';
+
+                                return (
+                                  <div key={m.id} className="group relative bg-white rounded-3xl p-5 border border-zinc-200/80 hover:border-[#D4A373]/40 transition-all duration-300 shadow-sm hover:shadow-xl hover:-translate-y-1 overflow-hidden cursor-pointer flex flex-col justify-between min-h-[160px]" onClick={() => addToCart(m)}>
+                                    <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${catTheme} rounded-full -translate-y-16 translate-x-12 group-hover:scale-150 transition-transform duration-500 pointer-events-none`} />
+
+                                    <div>
+                                      <div className="mb-3 flex items-start justify-between relative z-10">
+                                        <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${badgeTheme}`}>{m.category}</span>
+                                        <div className="flex gap-1.5 items-center bg-white/50 backdrop-blur-sm rounded p-0.5 shadow-sm">
+                                          {m.is_spicy && <span className="bg-red-50 text-red-500 rounded p-1" title="Spicy"><Flame size={12} strokeWidth={3} /></span>}
+                                          {m.dietary === 'Veg' ? <div className="w-4 h-4 border-[1.5px] border-emerald-600 flex items-center justify-center p-[2px] rounded-sm"><div className="bg-emerald-600 w-full h-full rounded-full" /></div> : m.dietary === 'Egg' ? <span className="text-xs grayscale leading-none" title="Contains Egg">🥚</span> : <div className="w-4 h-4 border-[1.5px] border-rose-600 flex items-center justify-center p-[2px] rounded-sm"><div className="bg-rose-600 w-full h-full rounded-full" /></div>}
+                                        </div>
+                                      </div>
+                                      <h4 className="font-black text-[15px] text-zinc-900 leading-tight mb-1 group-hover:text-[#D4A373] transition-colors relative z-10 pr-4">{m.item}</h4>
+                                      <div className="flex gap-2 text-[9px] font-bold text-zinc-400 uppercase tracking-wider relative z-10">
+                                        {m.is_gluten_free && <span>Gluten Free</span>}
+                                        {m.is_gluten_free && m.contains_nuts && <span>•</span>}
+                                        {m.contains_nuts && <span>Nuts</span>}
+                                      </div>
+                                    </div>
+
+                                    <div className="mt-5 flex items-end justify-between relative z-10">
+                                      <span className="font-black text-zinc-900 text-xl tracking-tighter">₹{m.price}</span>
+                                      <button onClick={(e) => { e.stopPropagation(); addToCart(m); }} className="w-10 h-10 rounded-2xl bg-zinc-900 flex items-center justify-center text-white hover:bg-[#D4A373] hover:rotate-90 transition-all duration-300 shadow-lg shadow-zinc-900/20 group-hover:shadow-[#D4A373]/30 shrink-0">
+                                        <Plus size={18} strokeWidth={3} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="flex flex-col lg:flex-row gap-6 w-full h-full min-h-0">
+                            {/* Left: Add/Edit Form */}
+                            <div className="w-full lg:w-[35%] bg-white rounded-[1.5rem] border border-zinc-200 p-6 shadow-sm h-full overflow-y-auto hide-scrollbar shrink-0">
+                              <div className="mb-6">
+                                <h3 className="font-black text-xl text-zinc-900 flex items-center gap-2"><Utensils size={18} className="text-[#D4A373]" /> {menuForm.id ? 'Edit Dish' : 'Add New Dish'}</h3>
+                                <p className="text-xs text-zinc-500 font-bold mt-1">Configure dish details and pricing.</p>
+                              </div>
+                              <form onSubmit={handleMenuSubmit} className="flex flex-col gap-4">
+                                <div>
+                                  <label className="block text-xs font-bold uppercase text-zinc-500 mb-1.5">Item Name</label>
+                                  <input type="text" className="dd-input bg-zinc-50" placeholder="e.g. Butter Chicken" value={menuForm.item} onChange={e => setMenuForm({ ...menuForm, item: e.target.value })} required />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="block text-xs font-bold uppercase text-zinc-500 mb-1.5">Category</label>
+                                    <select className="dd-input bg-zinc-50" value={menuForm.category} onChange={e => setMenuForm({ ...menuForm, category: e.target.value })} required>
+                                      <option value="">Select Category</option>
+                                      {posCategories.filter(c => c !== 'All').map(c => (
+                                        <option key={c} value={c}>{c}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-bold uppercase text-zinc-500 mb-1.5">Price (₹)</label>
+                                    <input type="number" className="dd-input bg-zinc-50 font-black" placeholder="0.00" value={menuForm.price} onChange={e => setMenuForm({ ...menuForm, price: e.target.value })} required />
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-bold uppercase text-zinc-500 mb-1.5">Dietary</label>
+                                  <div className="flex bg-zinc-100 p-1 rounded-xl">
+                                    {['Veg', 'Non-Veg', 'Egg'].map(t => (
+                                      <button type="button" key={t} onClick={() => setMenuForm({ ...menuForm, dietary: t })} className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${menuForm.dietary === t ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'}`}>
+                                        {t}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-bold uppercase text-zinc-500 mb-2">Tags</label>
+                                  <div className="flex flex-wrap gap-4">
+                                    <label className="flex items-center gap-2 text-sm font-bold text-zinc-700 cursor-pointer">
+                                      <input type="checkbox" checked={menuForm.is_spicy} onChange={e => setMenuForm({ ...menuForm, is_spicy: e.target.checked })} className="w-4 h-4 rounded border-zinc-300 text-rose-600 focus:ring-rose-500" />
+                                      🌶️ Spicy
+                                    </label>
+                                    <label className="flex items-center gap-2 text-sm font-bold text-zinc-700 cursor-pointer">
+                                      <input type="checkbox" checked={menuForm.is_gluten_free} onChange={e => setMenuForm({ ...menuForm, is_gluten_free: e.target.checked })} className="w-4 h-4 rounded border-zinc-300 text-yellow-500 focus:ring-yellow-500" />
+                                      🌾 Gluten-Free
+                                    </label>
+                                    <label className="flex items-center gap-2 text-sm font-bold text-zinc-700 cursor-pointer">
+                                      <input type="checkbox" checked={menuForm.contains_nuts} onChange={e => setMenuForm({ ...menuForm, contains_nuts: e.target.checked })} className="w-4 h-4 rounded border-zinc-300 text-amber-600 focus:ring-amber-500" />
+                                      🥜 Contains Nuts
+                                    </label>
+                                  </div>
+                                </div>
+                                <div className="mt-4 flex gap-2">
+                                  {menuForm.id && (
+                                    <button type="button" onClick={() => setMenuForm({ id: null, item: '', category: '', price: '', dietary: 'Veg', is_spicy: false, is_gluten_free: false, contains_nuts: false })} className="flex-1 bg-zinc-200 text-zinc-700 font-black uppercase tracking-widest text-[10px] py-4 rounded-xl hover:bg-zinc-300 transition-colors">Cancel Edit</button>
+                                  )}
+                                  <button type="submit" className="flex-[2] bg-zinc-900 text-white font-black uppercase tracking-widest text-[10px] py-4 rounded-xl hover:bg-black transition-colors shadow-lg shadow-zinc-900/20">
+                                    {menuForm.id ? 'Save Changes' : 'Create Dish'}
+                                  </button>
+                                </div>
+                              </form>
+                            </div>
+
+                            {/* Right: Menu Table */}
+                            <div className="w-full lg:w-[65%] overflow-y-auto hide-scrollbar bg-white rounded-[1.5rem] border border-zinc-200 p-6 shadow-sm h-full">
+                              <div className="flex justify-between items-center mb-6">
+                                <div>
+                                  <h3 className="font-black text-xl text-zinc-900">Existing Dishes</h3>
+                                  <p className="text-xs text-zinc-500 font-bold">Manage all dishes across the menu.</p>
+                                </div>
+                              </div>
+                              <div className="overflow-x-auto hide-scrollbar">
+                                <table className="w-full text-left text-sm border-collapse">
+                                  <thead>
+                                    <tr className="text-zinc-400 border-b border-zinc-100">
+                                      <th className="pb-3 font-bold uppercase tracking-widest text-[10px]">Item Name</th>
+                                      <th className="pb-3 font-bold uppercase tracking-widest text-[10px]">Category</th>
+                                      <th className="pb-3 font-bold uppercase tracking-widest text-[10px]">Price</th>
+                                      <th className="pb-3 font-bold uppercase tracking-widest text-[10px]">Dietary / Tags</th>
+                                      <th className="pb-3 font-bold uppercase tracking-widest text-[10px] text-right">Actions</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {posFilteredMenu.map(m => (
+                                      <tr key={m.id} className="border-b border-zinc-50 hover:bg-zinc-50/50 transition-colors group">
+                                        <td className="py-4 font-black text-zinc-800">{m.item}</td>
+                                        <td className="py-4 font-bold text-zinc-500">{m.category}</td>
+                                        <td className="py-4 font-black text-[#D4A373]">₹{m.price}</td>
+                                        <td className="py-4">
+                                          <div className="flex items-center gap-2">
+                                            <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${m.dietary === 'Veg' ? 'bg-emerald-100 text-emerald-700' : m.dietary === 'Egg' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>{m.dietary}</span>
+                                            {m.is_spicy && <span title="Spicy">🌶️</span>}
+                                            {m.is_gluten_free && <span title="Gluten-Free">🌾</span>}
+                                            {m.contains_nuts && <span title="Contains Nuts">🥜</span>}
+                                          </div>
+                                        </td>
+                                        <td className="py-4 text-right">
+                                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onClick={() => setMenuForm(m)} className="p-2 text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Edit2 size={16} /></button>
+                                            <button onClick={() => handleMenuDelete(m.id)} className="p-2 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"><Trash2 size={16} /></button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                    {posFilteredMenu.length === 0 && (
+                                      <tr>
+                                        <td colSpan="5" className="py-8 text-center text-zinc-400 font-bold text-sm">No menu items found.</td>
+                                      </tr>
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Right Pane (30%) - Hidden in Manage Mode */}
+                      {!isMenuManageMode && (
+                        <div className="w-full lg:w-[30%] bg-white rounded-[2rem] border border-zinc-200 shadow-sm flex flex-col overflow-hidden h-[400px] lg:h-auto">
+                          <div className="p-4 border-b border-zinc-100 bg-zinc-50/50 flex flex-col gap-3 shrink-0">
+                            <h3 className="font-black text-zinc-800 flex items-center gap-2"><ChefHat size={18} className="text-[#D4A373]" /> Active KOT</h3>
+                            <select value={posTable} onChange={e => setPosTable(e.target.value)} className="dd-input text-sm font-bold bg-white" required>
+                              <option value="">Select Table / Room...</option>
+                              {tables.filter(t => t.status === 'Occupied' || t.status === 'Available').map(t => (
+                                <option key={t.id} value={t.table_number}>{t.table_number} ({t.status})</option>
+                              ))}
+                              <option disabled>&#8212;</option>
+                              {allRooms.map(r => (
+                                <option key={r.room_id} value={`Room ${r.room_number}`}>Room {r.room_number}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="flex-1 overflow-y-auto dd-scrollbar p-2">
+                            {posCart.length === 0 && <div className="h-full flex flex-col items-center justify-center text-zinc-400 opacity-50"><Utensils size={32} className="mb-2" /> <p className="text-xs font-bold">Cart is empty</p></div>}
+                            {posCart.map(c => (
+                              <div key={c.id} className="p-3 bg-zinc-50 border border-zinc-100 rounded-xl mb-2 group">
+                                <div className="flex justify-between items-start mb-2">
+                                  <div className="flex-1 pr-2">
+                                    <h4 className="text-xs font-bold text-zinc-800 leading-tight">{c.item}</h4>
+                                    <span className="text-[10px] font-bold text-[#D4A373]">₹{c.price}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 bg-white border border-zinc-200 rounded-lg p-0.5">
+                                    <button onClick={() => updateCartQty(c.id, -1)} className="w-5 h-5 flex items-center justify-center text-zinc-500 hover:bg-zinc-100 rounded"><Minus size={12} /></button>
+                                    <span className="text-xs font-bold w-4 text-center">{c.qty}</span>
+                                    <button onClick={() => updateCartQty(c.id, 1)} className="w-5 h-5 flex items-center justify-center text-zinc-500 hover:bg-zinc-100 rounded"><Plus size={12} /></button>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1.5 opacity-50 focus-within:opacity-100 transition-opacity">
+                                  <PenLine size={12} className="text-zinc-400" />
+                                  <input type="text" placeholder="Add note (e.g. Extra spicy)" value={c.note} onChange={e => updateCartNote(c.id, e.target.value)} className="bg-transparent text-[10px] w-full outline-none text-zinc-600 placeholder-zinc-400" />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="p-4 border-t border-zinc-100 bg-zinc-50/80 shrink-0 space-y-2">
+                            <div className="flex justify-between text-xs font-bold text-zinc-500"><span>Item Total</span><span>₹{cartTotal.toFixed(2)}</span></div>
+                            <div className="flex justify-between text-xs font-bold text-zinc-500"><span>Est. Taxes</span><span>₹{cartTax.toFixed(2)}</span></div>
+                            <div className="flex justify-between text-lg font-black text-zinc-900 pt-2 border-t border-zinc-200/60"><span>Total</span><span>₹{cartGrandTotal.toFixed(2)}</span></div>
+                            <button onClick={handlePunchPOS} disabled={!posTable || posCart.length === 0} className="w-full mt-2 bg-zinc-900 disabled:bg-zinc-300 disabled:cursor-not-allowed hover:bg-black text-white py-3 rounded-xl font-black uppercase tracking-widest text-xs flex justify-center items-center gap-2 shadow-lg shadow-zinc-900/20 transition-all hover:-translate-y-0.5">
+                              <Flame size={16} /> Punch to Kitchen
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </motion.div>
                   </div>
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-14rem)]">
-                    {/* Left Canvas */}
-                    <div className={`w-full flex flex-col gap-4 h-full min-h-0 ${isMenuManageMode ? 'lg:w-full' : 'lg:w-[70%]'}`}>
-                      {/* Top Control Bar */}
-                      <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-3 rounded-2xl shadow-sm border border-zinc-200 gap-3">
-                        <div className="flex-1 w-full max-w-md relative">
-                          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-                          <input type="text" placeholder="Search dish" value={posSearch} onChange={e => setPosSearch(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-xl py-2 pl-9 pr-4 text-sm outline-none focus:border-[#D4A373] transition-colors" />
+                )}
+
+                {/* TAB: KITCHEN INVENTORY & PROCUREMENT */}
+                {activeTab === 'inventory' && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                    {/* Header Ribbon & KPIs */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                      <div className="lg:col-span-4 flex justify-between items-center bg-white p-5 rounded-[2rem] border border-zinc-200/60 shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                            <Package size={18} className="text-white" />
+                          </div>
+                          <div>
+                            <h2 className="font-black text-zinc-900 text-sm tracking-tight">Kitchen Inventory & Procurement</h2>
+                            <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mt-0.5 block">Back-of-House Operations</span>
+                          </div>
                         </div>
-                        <div className="flex gap-2 shrink-0">
-                          <button onClick={() => setPosSpicy(!posSpicy)} className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] transition-colors ${posSpicy ? 'bg-red-100 border-red-300 shadow-sm' : 'bg-zinc-50 border-zinc-200 opacity-50 hover:opacity-100'} border`} title="Spicy">🌶️</button>
-                          <button onClick={() => setPosGlutenFree(!posGlutenFree)} className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] transition-colors ${posGlutenFree ? 'bg-yellow-100 border-yellow-300 shadow-sm' : 'bg-zinc-50 border-zinc-200 opacity-50 hover:opacity-100'} border`} title="Gluten-Free">🌾</button>
-                          <button onClick={() => setPosNuts(!posNuts)} className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] transition-colors ${posNuts ? 'bg-orange-100 border-orange-300 shadow-sm' : 'bg-zinc-50 border-zinc-200 opacity-50 hover:opacity-100'} border`} title="Contains Nuts">🥜</button>
+                        <div className="flex gap-3">
+                          <button onClick={() => setIsWastageModalOpen(true)} className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition-all flex items-center gap-1.5">
+                            <Minus size={12} strokeWidth={3} /> Record Wastage
+                          </button>
+                          <button onClick={() => { setMaterialForm({ id: null, name: '', category: '', uom: 'kg', unit_cost: '', par_level: '', is_active: true }); setIsMaterialModalOpen(true); }} className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider text-zinc-700 bg-white border border-zinc-200 hover:bg-zinc-50 transition-all shadow-sm flex items-center gap-1.5">
+                            <Plus size={12} strokeWidth={3} /> New Material
+                          </button>
+                          <button onClick={openEodModal} className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 transition-all hover:-translate-y-0.5 flex items-center gap-1.5">
+                            <ClipboardList size={12} strokeWidth={3} /> Record EOD Stock
+                          </button>
+                          <button onClick={() => setIsDeliveryModalOpen(true)} className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider text-white bg-zinc-900 hover:bg-black shadow-lg shadow-zinc-900/20 transition-all hover:-translate-y-0.5 flex items-center gap-1.5">
+                            <Plus size={12} strokeWidth={3} /> Log Delivery
+                          </button>
                         </div>
-                        <div className="flex bg-zinc-100 p-1 rounded-xl shrink-0 w-full sm:w-auto overflow-x-auto dd-scrollbar">
-                          {['Pure Veg', 'Non-Veg', 'Egg', 'All Items'].map(t => (
-                            <button key={t} onClick={() => setPosDietary(t)} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${posDietary === t ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'}`}>
-                              {t === 'Pure Veg' && '🟢 '}
-                              {t === 'Non-Veg' && '🔴 '}
-                              {t === 'Egg' && '🥚 '}
-                              {t === 'All Items' && '🟡 '}
-                              {t}
+                      </div>
+
+                      {[
+                        { label: "Today's F&B Sales", value: `₹${(inventoryStats.revenueToday || 0).toLocaleString()}`, sub: "Total sale per day", icon: <TrendingUp size={16} />, theme: 'emerald' },
+                        { label: "Today's Procurement", value: `₹${(inventoryStats.procurementSpendToday || 0).toLocaleString()}`, sub: "Total buying cost today", icon: <Truck size={16} />, theme: 'indigo' },
+                        { label: "Today's Material Utilized", value: `₹${(inventoryStats.utilizedValueToday || 0).toLocaleString()}`, sub: "Cost of raw materials used", icon: <Flame size={16} />, theme: 'amber' },
+                        { label: "True Daily Profit", value: `₹${(inventoryStats.grossProfitToday || 0).toLocaleString()}`, sub: "Sales minus Utilization", icon: <DollarSign size={16} />, theme: 'emerald' },
+                      ].map((kpi, i) => {
+                        const t = themeMap[kpi.theme] || themeMap['indigo'];
+                        const dotColor = { amber: '#D4A373', rose: '#e11d48', emerald: '#059669', indigo: '#4f46e5' }[kpi.theme] || '#4f46e5';
+                        return (
+                          <div key={i} className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between border border-zinc-200/70 bg-gradient-to-br ${t.gradient} shadow-sm transition-shadow duration-500 hover:shadow-md ring-1 ${t.ring}`}>
+                            <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none" style={{ background: t.glow }} />
+                            <div className="relative flex-1 min-w-0">
+                              <div className="flex items-start justify-between mb-4">
+                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${t.iconBg}`}>{kpi.icon}</div>
+                              </div>
+                              <p className="text-2xl font-black text-zinc-900 tracking-tight leading-none mb-1.5">{kpi.value}</p>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 leading-none">{kpi.label}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Analytics Section (Middle Row) */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-zinc-200/60 relative">
+                        <div className="absolute -bottom-16 -right-10 w-56 h-56 rounded-full bg-emerald-200/20 blur-3xl pointer-events-none" />
+                        <div className="relative flex items-center gap-2 mb-4">
+                          <div className="w-7 h-7 rounded-lg bg-indigo-500 flex items-center justify-center shadow-md shadow-indigo-500/30">
+                            <Activity size={14} className="text-white" />
+                          </div>
+                          <h3 className="font-black text-xs uppercase text-zinc-800">Sales vs Spend vs Consumption (7 Days)</h3>
+                        </div>
+                        <SalesVsSpendVsConsumptionChart data={inventoryStats.profitGapData} />
+                        <div className="flex justify-center gap-6 mt-2">
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-600"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Sales (Revenue)</div>
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-600"><span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Procurement (Buying)</div>
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-600"><span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span> Utilization (COGS)</div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-zinc-200/60 relative overflow-hidden">
+                        <div className="absolute -top-14 -right-14 w-40 h-40 rounded-full bg-indigo-200/20 blur-3xl pointer-events-none" />
+                        <div className="relative flex items-center gap-2 mb-4">
+                          <div className="w-7 h-7 rounded-lg bg-indigo-500 flex items-center justify-center shadow-md shadow-indigo-500/30">
+                            <PieChart size={14} className="text-white" />
+                          </div>
+                          <h3 className="font-black text-xs uppercase text-zinc-800">Spend By Category</h3>
+                        </div>
+                        <div className="flex flex-col sm:flex-row items-center justify-around gap-6 h-[180px]">
+                          <DonutChart data={inventoryStats.spendCategories} centerLabel="Spend" />
+                          <div className="grid grid-cols-1 gap-y-2.5 w-full sm:w-auto">
+                            {inventoryStats.spendCategories.map((d, i) => (
+                              <div key={i} className="flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
+                                <span className="text-[10px] text-zinc-500 font-semibold">{d.label}</span>
+                                <span className="text-[11px] font-black text-zinc-900 ml-auto">{d.value}%</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Bottom Workspace (Data Tables) */}
+                    <div className="bg-white rounded-[2rem] border border-zinc-200/60 shadow-sm overflow-hidden flex flex-col h-[400px]">
+                      <div className="flex border-b border-zinc-100 bg-zinc-50/50 p-2 gap-2 overflow-x-auto dd-scrollbar shrink-0">
+                        <div className="flex items-center p-1.5 bg-zinc-100/50 rounded-2xl w-fit">
+                          {[{ id: 'master', icon: Package, label: 'Master List' }, { id: 'reconciliation', icon: ClipboardList, label: 'Reconciliation' }, { id: 'procurement', icon: Truck, label: 'Procurement Logs' }, { id: 'wastage', icon: Trash2, label: 'Wastage Logs' }].map(t => (
+                            <button key={t.id} onClick={() => setInventoryTab(t.id)} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all ${inventoryTab === t.id ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-zinc-200/50' : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'}`}>
+                              <t.icon size={14} strokeWidth={inventoryTab === t.id ? 3 : 2.5} />
+                              {t.label}
                             </button>
                           ))}
                         </div>
                       </div>
 
-                      {!isMenuManageMode ? (
-                        <>
-                          {/* Category Ribbon */}
-                          <div className="flex overflow-x-auto gap-2 pb-2 dd-scrollbar shrink-0">
-                            {posCategories.map(c => (
-                              <button key={c} onClick={() => setPosCategory(c)} className={`whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold transition-colors ${posCategory === c ? 'bg-[#D4A373] text-white shadow-md' : 'bg-white border border-zinc-200 text-zinc-600 hover:bg-zinc-50'}`}>{c}</button>
-                            ))}
-                          </div>
-                          {/* Menu Grid */}
-                          <div className="flex-1 overflow-y-auto dd-scrollbar grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 pb-4">
-                            {posFilteredMenu.map(m => {
-                              const catTheme = {
-                                'Starters': 'from-blue-500/10 to-blue-500/5 text-blue-600',
-                                'Mains': 'from-emerald-500/10 to-emerald-500/5 text-emerald-600',
-                                'Breads': 'from-amber-500/10 to-amber-500/5 text-amber-600',
-                                'Desserts': 'from-rose-500/10 to-rose-500/5 text-rose-600',
-                                'Beverages': 'from-cyan-500/10 to-cyan-500/5 text-cyan-600',
-                                'Chef Specials': 'from-indigo-500/10 to-indigo-500/5 text-indigo-600'
-                              }[m.category] || 'from-[#D4A373]/10 to-[#D4A373]/5 text-[#D4A373]';
-                              const badgeTheme = {
-                                'Starters': 'bg-blue-500/10 text-blue-600',
-                                'Mains': 'bg-emerald-500/10 text-emerald-600',
-                                'Breads': 'bg-amber-500/10 text-amber-600',
-                                'Desserts': 'bg-rose-500/10 text-rose-600',
-                                'Beverages': 'bg-cyan-500/10 text-cyan-600',
-                                'Chef Specials': 'bg-indigo-500/10 text-indigo-600'
-                              }[m.category] || 'bg-[#D4A373]/10 text-[#D4A373]';
-
-                              return (
-                                <div key={m.id} className="group relative bg-white rounded-3xl p-5 border border-zinc-200/80 hover:border-[#D4A373]/40 transition-all duration-300 shadow-sm hover:shadow-xl hover:-translate-y-1 overflow-hidden cursor-pointer flex flex-col justify-between min-h-[160px]" onClick={() => addToCart(m)}>
-                                  <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${catTheme} rounded-full -translate-y-16 translate-x-12 group-hover:scale-150 transition-transform duration-500 pointer-events-none`} />
-
-                                  <div>
-                                    <div className="mb-3 flex items-start justify-between relative z-10">
-                                      <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${badgeTheme}`}>{m.category}</span>
-                                      <div className="flex gap-1.5 items-center bg-white/50 backdrop-blur-sm rounded p-0.5 shadow-sm">
-                                        {m.is_spicy && <span className="bg-red-50 text-red-500 rounded p-1" title="Spicy"><Flame size={12} strokeWidth={3} /></span>}
-                                        {m.dietary === 'Veg' ? <div className="w-4 h-4 border-[1.5px] border-emerald-600 flex items-center justify-center p-[2px] rounded-sm"><div className="bg-emerald-600 w-full h-full rounded-full" /></div> : m.dietary === 'Egg' ? <span className="text-xs grayscale leading-none" title="Contains Egg">🥚</span> : <div className="w-4 h-4 border-[1.5px] border-rose-600 flex items-center justify-center p-[2px] rounded-sm"><div className="bg-rose-600 w-full h-full rounded-full" /></div>}
-                                      </div>
+                      <div className="flex-1 overflow-auto dd-scrollbar p-0">
+                        {inventoryTab === 'master' && (
+                          <table className="w-full text-left border-collapse">
+                            <thead className="bg-zinc-50 text-[10px] uppercase font-bold text-zinc-500 tracking-wider sticky top-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+                              <tr>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold">Item Name</th>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold">Category</th>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold">Stock Level</th>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold">Par Level</th>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold">Unit Cost</th>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold">Asset Value</th>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold text-center">Status</th>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold text-right sticky right-0 bg-zinc-50">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody className="text-xs font-medium text-zinc-700">
+                              {inventoryItems.map(item => (
+                                <tr key={item.id} className={`border-b border-zinc-50 hover:bg-zinc-50/50 transition-colors ${item.is_active === false ? 'opacity-50' : ''}`}>
+                                  <td className="p-4 py-3">
+                                    <div className="font-bold text-zinc-900">{item.name} {item.is_active === false && <span className="ml-2 text-[9px] px-1.5 py-0.5 bg-zinc-200 text-zinc-600 rounded">Archived</span>}</div>
+                                    <div className="text-[9px] text-zinc-400 uppercase tracking-widest">{item.id}</div>
+                                  </td>
+                                  <td className="p-4 py-3">{item.category}</td>
+                                  <td className="p-4 py-3 font-bold">{item.stock} {item.uom}</td>
+                                  <td className="p-4 py-3 text-zinc-500 font-semibold">{item.stock} / {item.par_level} {item.uom}</td>
+                                  <td className="p-4 py-3">₹{item.unit_cost} / {item.uom}</td>
+                                  <td className="p-4 py-3 font-bold text-[#D4A373]">₹{(item.stock * item.unit_cost).toLocaleString()}</td>
+                                  <td className="p-4 py-3 text-center">
+                                    <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${item.status === 'In Stock' ? 'bg-emerald-100 text-emerald-700' : item.status === 'Low' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
+                                      {item.status}
+                                    </span>
+                                  </td>
+                                  <td className="p-4 py-3 text-right sticky right-0 bg-transparent backdrop-blur-md">
+                                    <div className="flex items-center justify-end gap-2">
+                                      <button onClick={() => { setMaterialForm(item); setIsMaterialModalOpen(true); }} className="w-8 h-8 rounded-lg bg-zinc-50 text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 flex items-center justify-center transition-colors">
+                                        <Edit2 size={14} strokeWidth={2.5} />
+                                      </button>
+                                      <button onClick={() => toggleMaterialStatus(item)} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${item.is_active !== false ? 'bg-zinc-50 text-zinc-400 hover:text-rose-600 hover:bg-rose-50' : 'bg-rose-50 text-rose-600 hover:text-rose-700 hover:bg-rose-100'}`}>
+                                        {item.is_active !== false ? <Trash2 size={14} strokeWidth={2.5} /> : <RefreshCcw size={14} strokeWidth={2.5} />}
+                                      </button>
                                     </div>
-                                    <h4 className="font-black text-[15px] text-zinc-900 leading-tight mb-1 group-hover:text-[#D4A373] transition-colors relative z-10 pr-4">{m.item}</h4>
-                                    <div className="flex gap-2 text-[9px] font-bold text-zinc-400 uppercase tracking-wider relative z-10">
-                                      {m.is_gluten_free && <span>Gluten Free</span>}
-                                      {m.is_gluten_free && m.contains_nuts && <span>•</span>}
-                                      {m.contains_nuts && <span>Nuts</span>}
-                                    </div>
-                                  </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
 
-                                  <div className="mt-5 flex items-end justify-between relative z-10">
-                                    <span className="font-black text-zinc-900 text-xl tracking-tighter">₹{m.price}</span>
-                                    <button onClick={(e) => { e.stopPropagation(); addToCart(m); }} className="w-10 h-10 rounded-2xl bg-zinc-900 flex items-center justify-center text-white hover:bg-[#D4A373] hover:rotate-90 transition-all duration-300 shadow-lg shadow-zinc-900/20 group-hover:shadow-[#D4A373]/30 shrink-0">
-                                      <Plus size={18} strokeWidth={3} />
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </>
-                      ) : (
-                        <div className="flex flex-col lg:flex-row gap-6 w-full h-full min-h-0">
-                          {/* Left: Add/Edit Form */}
-                          <div className="w-full lg:w-[35%] bg-white rounded-[1.5rem] border border-zinc-200 p-6 shadow-sm h-full overflow-y-auto hide-scrollbar shrink-0">
-                            <div className="mb-6">
-                              <h3 className="font-black text-xl text-zinc-900 flex items-center gap-2"><Utensils size={18} className="text-[#D4A373]" /> {menuForm.id ? 'Edit Dish' : 'Add New Dish'}</h3>
-                              <p className="text-xs text-zinc-500 font-bold mt-1">Configure dish details and pricing.</p>
-                            </div>
-                            <form onSubmit={handleMenuSubmit} className="flex flex-col gap-4">
-                              <div>
-                                <label className="block text-xs font-bold uppercase text-zinc-500 mb-1.5">Item Name</label>
-                                <input type="text" className="dd-input bg-zinc-50" placeholder="e.g. Butter Chicken" value={menuForm.item} onChange={e => setMenuForm({ ...menuForm, item: e.target.value })} required />
-                              </div>
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <label className="block text-xs font-bold uppercase text-zinc-500 mb-1.5">Category</label>
-                                  <select className="dd-input bg-zinc-50" value={menuForm.category} onChange={e => setMenuForm({ ...menuForm, category: e.target.value })} required>
-                                    <option value="">Select Category</option>
-                                    {posCategories.filter(c => c !== 'All').map(c => (
-                                      <option key={c} value={c}>{c}</option>
-                                    ))}
-                                  </select>
-                                </div>
-                                <div>
-                                  <label className="block text-xs font-bold uppercase text-zinc-500 mb-1.5">Price (₹)</label>
-                                  <input type="number" className="dd-input bg-zinc-50 font-black" placeholder="0.00" value={menuForm.price} onChange={e => setMenuForm({ ...menuForm, price: e.target.value })} required />
-                                </div>
-                              </div>
-                              <div>
-                                <label className="block text-xs font-bold uppercase text-zinc-500 mb-1.5">Dietary</label>
-                                <div className="flex bg-zinc-100 p-1 rounded-xl">
-                                  {['Veg', 'Non-Veg', 'Egg'].map(t => (
-                                    <button type="button" key={t} onClick={() => setMenuForm({ ...menuForm, dietary: t })} className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${menuForm.dietary === t ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'}`}>
-                                      {t}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                              <div>
-                                <label className="block text-xs font-bold uppercase text-zinc-500 mb-2">Tags</label>
-                                <div className="flex flex-wrap gap-4">
-                                  <label className="flex items-center gap-2 text-sm font-bold text-zinc-700 cursor-pointer">
-                                    <input type="checkbox" checked={menuForm.is_spicy} onChange={e => setMenuForm({ ...menuForm, is_spicy: e.target.checked })} className="w-4 h-4 rounded border-zinc-300 text-rose-600 focus:ring-rose-500" />
-                                    🌶️ Spicy
-                                  </label>
-                                  <label className="flex items-center gap-2 text-sm font-bold text-zinc-700 cursor-pointer">
-                                    <input type="checkbox" checked={menuForm.is_gluten_free} onChange={e => setMenuForm({ ...menuForm, is_gluten_free: e.target.checked })} className="w-4 h-4 rounded border-zinc-300 text-yellow-500 focus:ring-yellow-500" />
-                                    🌾 Gluten-Free
-                                  </label>
-                                  <label className="flex items-center gap-2 text-sm font-bold text-zinc-700 cursor-pointer">
-                                    <input type="checkbox" checked={menuForm.contains_nuts} onChange={e => setMenuForm({ ...menuForm, contains_nuts: e.target.checked })} className="w-4 h-4 rounded border-zinc-300 text-amber-600 focus:ring-amber-500" />
-                                    🥜 Contains Nuts
-                                  </label>
-                                </div>
-                              </div>
-                              <div className="mt-4 flex gap-2">
-                                {menuForm.id && (
-                                  <button type="button" onClick={() => setMenuForm({ id: null, item: '', category: '', price: '', dietary: 'Veg', is_spicy: false, is_gluten_free: false, contains_nuts: false })} className="flex-1 bg-zinc-200 text-zinc-700 font-black uppercase tracking-widest text-[10px] py-4 rounded-xl hover:bg-zinc-300 transition-colors">Cancel Edit</button>
-                                )}
-                                <button type="submit" className="flex-[2] bg-zinc-900 text-white font-black uppercase tracking-widest text-[10px] py-4 rounded-xl hover:bg-black transition-colors shadow-lg shadow-zinc-900/20">
-                                  {menuForm.id ? 'Save Changes' : 'Create Dish'}
-                                </button>
-                              </div>
-                            </form>
-                          </div>
+                        {inventoryTab === 'reconciliation' && (
+                          <table className="w-full text-left border-collapse">
+                            <thead className="bg-zinc-50 text-[10px] uppercase font-bold text-zinc-500 tracking-wider sticky top-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+                              <tr>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold">Item Name</th>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold">Category</th>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold text-right">Opening Stock</th>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold text-right text-indigo-600">Bought (+)</th>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold text-right">Closing Stock</th>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold text-right text-orange-600">Utilized Qty</th>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold text-right">Utilized Value</th>
+                              </tr>
+                            </thead>
+                            <tbody className="text-xs font-medium text-zinc-700">
+                              {reconciliationData.map(item => (
+                                <tr key={item.id} className="border-b border-zinc-50 hover:bg-zinc-50/50 transition-colors">
+                                  <td className="p-4 py-3">
+                                    <div className="font-bold text-zinc-900">{item.name}</div>
+                                    <div className="text-[9px] text-zinc-400 uppercase tracking-widest">{item.uom}</div>
+                                  </td>
+                                  <td className="p-4 py-3">{item.category}</td>
+                                  <td className="p-4 py-3 text-right">{item.opening_stock}</td>
+                                  <td className="p-4 py-3 font-bold text-indigo-600 text-right">{item.bought_today > 0 ? `+${item.bought_today}` : '-'}</td>
+                                  <td className="p-4 py-3 text-right">{item.eod_closing_stock !== null ? item.eod_closing_stock : <span className="text-zinc-400 italic">Pending EOD</span>}</td>
+                                  <td className="p-4 py-3 font-bold text-orange-600 text-right">{item.eod_utilized_qty !== null ? item.eod_utilized_qty : '-'}</td>
+                                  <td className="p-4 py-3 font-bold text-zinc-900 text-right">₹{item.eod_utilized_value !== null ? item.eod_utilized_value.toLocaleString() : '0'}</td>
+                                </tr>
+                              ))}
+                              {reconciliationData.length === 0 && (
+                                <tr><td colSpan={7} className="text-center p-8 text-zinc-400 italic">No active reconciliation data available.</td></tr>
+                              )}
+                            </tbody>
+                          </table>
+                        )}
 
-                          {/* Right: Menu Table */}
-                          <div className="w-full lg:w-[65%] overflow-y-auto hide-scrollbar bg-white rounded-[1.5rem] border border-zinc-200 p-6 shadow-sm h-full">
-                            <div className="flex justify-between items-center mb-6">
-                              <div>
-                                <h3 className="font-black text-xl text-zinc-900">Existing Dishes</h3>
-                                <p className="text-xs text-zinc-500 font-bold">Manage all dishes across the menu.</p>
-                              </div>
-                            </div>
-                            <div className="overflow-x-auto hide-scrollbar">
-                              <table className="w-full text-left text-sm border-collapse">
-                                <thead>
-                                  <tr className="text-zinc-400 border-b border-zinc-100">
-                                    <th className="pb-3 font-bold uppercase tracking-widest text-[10px]">Item Name</th>
-                                    <th className="pb-3 font-bold uppercase tracking-widest text-[10px]">Category</th>
-                                    <th className="pb-3 font-bold uppercase tracking-widest text-[10px]">Price</th>
-                                    <th className="pb-3 font-bold uppercase tracking-widest text-[10px]">Dietary / Tags</th>
-                                    <th className="pb-3 font-bold uppercase tracking-widest text-[10px] text-right">Actions</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {posFilteredMenu.map(m => (
-                                    <tr key={m.id} className="border-b border-zinc-50 hover:bg-zinc-50/50 transition-colors group">
-                                      <td className="py-4 font-black text-zinc-800">{m.item}</td>
-                                      <td className="py-4 font-bold text-zinc-500">{m.category}</td>
-                                      <td className="py-4 font-black text-[#D4A373]">₹{m.price}</td>
-                                      <td className="py-4">
-                                        <div className="flex items-center gap-2">
-                                          <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${m.dietary === 'Veg' ? 'bg-emerald-100 text-emerald-700' : m.dietary === 'Egg' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>{m.dietary}</span>
-                                          {m.is_spicy && <span title="Spicy">🌶️</span>}
-                                          {m.is_gluten_free && <span title="Gluten-Free">🌾</span>}
-                                          {m.contains_nuts && <span title="Contains Nuts">🥜</span>}
-                                        </div>
-                                      </td>
-                                      <td className="py-4 text-right">
-                                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                          <button onClick={() => setMenuForm(m)} className="p-2 text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Edit2 size={16} /></button>
-                                          <button onClick={() => handleMenuDelete(m.id)} className="p-2 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"><Trash2 size={16} /></button>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                  {posFilteredMenu.length === 0 && (
-                                    <tr>
-                                      <td colSpan="5" className="py-8 text-center text-zinc-400 font-bold text-sm">No menu items found.</td>
-                                    </tr>
-                                  )}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                        {inventoryTab === 'procurement' && (
+                          <table className="w-full text-left border-collapse">
+                            <thead className="bg-zinc-50 text-[10px] uppercase font-bold text-zinc-500 tracking-wider sticky top-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+                              <tr>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold">Date</th>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold">Vendor/Supplier</th>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold">Invoice #</th>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold">Category</th>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold">Amount Spent</th>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold text-center">Payment</th>
+                              </tr>
+                            </thead>
+                            <tbody className="text-xs font-medium text-zinc-700">
+                              {procurementLogs.map(item => (
+                                <tr key={item.id} className="border-b border-zinc-50 hover:bg-zinc-50/50 transition-colors">
+                                  <td className="p-4 py-3 text-zinc-500 font-semibold">{new Date(item.date).toLocaleDateString()}</td>
+                                  <td className="p-4 py-3 font-bold text-zinc-900">{item.vendor}</td>
+                                  <td className="p-4 py-3 font-mono text-[10px] bg-zinc-100 px-2 py-1 rounded inline-block mt-1.5">{item.invoice_number}</td>
+                                  <td className="p-4 py-3">{item.category}</td>
+                                  <td className="p-4 py-3 font-black text-rose-600">₹{parseFloat(item.amount).toLocaleString()}</td>
+                                  <td className="p-4 py-3 text-center">
+                                    <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${item.status === 'Paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                      {item.status}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
 
-                    {/* Right Pane (30%) - Hidden in Manage Mode */}
-                    {!isMenuManageMode && (
-                      <div className="w-full lg:w-[30%] bg-white rounded-[2rem] border border-zinc-200 shadow-sm flex flex-col overflow-hidden h-[400px] lg:h-auto">
-                        <div className="p-4 border-b border-zinc-100 bg-zinc-50/50 flex flex-col gap-3 shrink-0">
-                          <h3 className="font-black text-zinc-800 flex items-center gap-2"><ChefHat size={18} className="text-[#D4A373]" /> Active KOT</h3>
-                          <select value={posTable} onChange={e => setPosTable(e.target.value)} className="dd-input text-sm font-bold bg-white" required>
-                            <option value="">Select Table / Room...</option>
-                            {tables.filter(t => t.status === 'Occupied' || t.status === 'Available').map(t => (
-                              <option key={t.id} value={t.table_number}>{t.table_number} ({t.status})</option>
-                            ))}
-                            <option disabled>&#8212;</option>
-                            {allRooms.map(r => (
-                              <option key={r.room_id} value={`Room ${r.room_number}`}>Room {r.room_number}</option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto dd-scrollbar p-2">
-                          {posCart.length === 0 && <div className="h-full flex flex-col items-center justify-center text-zinc-400 opacity-50"><Utensils size={32} className="mb-2" /> <p className="text-xs font-bold">Cart is empty</p></div>}
-                          {posCart.map(c => (
-                            <div key={c.id} className="p-3 bg-zinc-50 border border-zinc-100 rounded-xl mb-2 group">
-                              <div className="flex justify-between items-start mb-2">
-                                <div className="flex-1 pr-2">
-                                  <h4 className="text-xs font-bold text-zinc-800 leading-tight">{c.item}</h4>
-                                  <span className="text-[10px] font-bold text-[#D4A373]">₹{c.price}</span>
-                                </div>
-                                <div className="flex items-center gap-2 bg-white border border-zinc-200 rounded-lg p-0.5">
-                                  <button onClick={() => updateCartQty(c.id, -1)} className="w-5 h-5 flex items-center justify-center text-zinc-500 hover:bg-zinc-100 rounded"><Minus size={12} /></button>
-                                  <span className="text-xs font-bold w-4 text-center">{c.qty}</span>
-                                  <button onClick={() => updateCartQty(c.id, 1)} className="w-5 h-5 flex items-center justify-center text-zinc-500 hover:bg-zinc-100 rounded"><Plus size={12} /></button>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-1.5 opacity-50 focus-within:opacity-100 transition-opacity">
-                                <PenLine size={12} className="text-zinc-400" />
-                                <input type="text" placeholder="Add note (e.g. Extra spicy)" value={c.note} onChange={e => updateCartNote(c.id, e.target.value)} className="bg-transparent text-[10px] w-full outline-none text-zinc-600 placeholder-zinc-400" />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="p-4 border-t border-zinc-100 bg-zinc-50/80 shrink-0 space-y-2">
-                          <div className="flex justify-between text-xs font-bold text-zinc-500"><span>Item Total</span><span>₹{cartTotal.toFixed(2)}</span></div>
-                          <div className="flex justify-between text-xs font-bold text-zinc-500"><span>Est. Taxes (5%)</span><span>₹{cartTax.toFixed(2)}</span></div>
-                          <div className="flex justify-between text-lg font-black text-zinc-900 pt-2 border-t border-zinc-200/60"><span>Total</span><span>₹{cartGrandTotal.toFixed(2)}</span></div>
-                          <button onClick={handlePunchPOS} disabled={!posTable || posCart.length === 0} className="w-full mt-2 bg-zinc-900 disabled:bg-zinc-300 disabled:cursor-not-allowed hover:bg-black text-white py-3 rounded-xl font-black uppercase tracking-widest text-xs flex justify-center items-center gap-2 shadow-lg shadow-zinc-900/20 transition-all hover:-translate-y-0.5">
-                            <Flame size={16} /> Punch to Kitchen
-                          </button>
-                        </div>
+                        {inventoryTab === 'wastage' && (
+                          <table className="w-full text-left border-collapse">
+                            <thead className="bg-zinc-50 text-[10px] uppercase font-bold text-zinc-500 tracking-wider sticky top-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+                              <tr>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold">Date</th>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold">Item</th>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold">Quantity Lost</th>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold">Reason</th>
+                                <th className="p-4 py-3 border-b border-zinc-100 font-bold text-right">Financial Loss</th>
+                              </tr>
+                            </thead>
+                            <tbody className="text-xs font-medium text-zinc-700">
+                              {wastageLogs.map(item => (
+                                <tr key={item.id} className="border-b border-zinc-50 hover:bg-zinc-50/50 transition-colors">
+                                  <td className="p-4 py-3 text-zinc-500 font-semibold">{new Date(item.date).toLocaleDateString()}</td>
+                                  <td className="p-4 py-3 font-bold text-zinc-900">{item.item_name}</td>
+                                  <td className="p-4 py-3 font-bold">{item.quantity}</td>
+                                  <td className="p-4 py-3">
+                                    <span className="bg-zinc-100 px-2.5 py-1 rounded-md text-[10px] font-bold text-zinc-600">
+                                      {item.reason}
+                                    </span>
+                                  </td>
+                                  <td className="p-4 py-3 font-black text-rose-600 text-right">₹{parseFloat(item.loss_amount).toLocaleString()}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </motion.div>
-                </div>
-              )}
+                )}
 
-              {/* TAB: KITCHEN INVENTORY & PROCUREMENT */}
-              {activeTab === 'inventory' && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                  {/* Header Ribbon & KPIs */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                    <div className="lg:col-span-4 flex justify-between items-center bg-white p-5 rounded-[2rem] border border-zinc-200/60 shadow-sm">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-                          <Package size={18} className="text-white" />
-                        </div>
-                        <div>
-                          <h2 className="font-black text-zinc-900 text-sm tracking-tight">Kitchen Inventory & Procurement</h2>
-                          <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mt-0.5 block">Back-of-House Operations</span>
-                        </div>
+                {/* TAB: BILLING & SETTLEMENTS */}
+                {activeTab === 'billing' && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex gap-6 h-[600px]">
+
+                    {/* Left Pane: Active Checks (30%) */}
+                    <div className="w-[30%] bg-white rounded-3xl p-5 border border-zinc-200/80 shadow-sm flex flex-col h-full relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#D4A373]/10 to-transparent rounded-full -translate-y-16 translate-x-16 pointer-events-none" />
+                      <div className="flex items-center p-1 bg-zinc-100 rounded-xl mb-5 relative z-10">
+                        <button onClick={() => setBillingViewTab('active')} className={`flex-1 text-[11px] uppercase tracking-wider font-bold py-2 rounded-lg transition-all ${billingViewTab === 'active' ? 'bg-white shadow-sm text-[#D4A373]' : 'text-zinc-500 hover:text-zinc-700'}`}>Active Checks</button>
+                        <button onClick={() => setBillingViewTab('history')} className={`flex-1 text-[11px] uppercase tracking-wider font-bold py-2 rounded-lg transition-all ${billingViewTab === 'history' ? 'bg-white shadow-sm text-blue-500' : 'text-zinc-500 hover:text-zinc-700'}`}>History</button>
                       </div>
-                      <div className="flex gap-3">
-                        <button onClick={() => setIsWastageModalOpen(true)} className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition-all flex items-center gap-1.5">
-                          <Minus size={12} strokeWidth={3} /> Record Wastage
-                        </button>
-                        <button onClick={() => { setMaterialForm({ id: null, name: '', category: '', uom: 'kg', unit_cost: '', par_level: '', is_active: true }); setIsMaterialModalOpen(true); }} className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider text-zinc-700 bg-white border border-zinc-200 hover:bg-zinc-50 transition-all shadow-sm flex items-center gap-1.5">
-                          <Plus size={12} strokeWidth={3} /> New Material
-                        </button>
-                        <button onClick={openEodModal} className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 transition-all hover:-translate-y-0.5 flex items-center gap-1.5">
-                          <ClipboardList size={12} strokeWidth={3} /> Record EOD Stock
-                        </button>
-                        <button onClick={() => setIsDeliveryModalOpen(true)} className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider text-white bg-zinc-900 hover:bg-black shadow-lg shadow-zinc-900/20 transition-all hover:-translate-y-0.5 flex items-center gap-1.5">
-                          <Plus size={12} strokeWidth={3} /> Log Delivery
-                        </button>
-                      </div>
-                    </div>
+                      <div className="flex flex-col gap-3 overflow-y-auto dd-scrollbar flex-1 pr-2 relative z-10">
+                        {billingViewTab === 'active' ? (() => {
+                          const checksMap = new Map();
+                          tables.filter(t => t.status === 'Occupied').forEach(t => checksMap.set(t.table_number, { table_number: t.table_number, time: t.time }));
+                          activeKOTs.forEach(k => {
+                            if (k.status !== 'Settled') {
+                              if (!checksMap.has(k.table)) checksMap.set(k.table, { table_number: k.table, time: k.time });
+                            }
+                          });
+                          const activeChecks = Array.from(checksMap.values());
 
-                    {[
-                      { label: "Today's F&B Sales", value: `₹${(inventoryStats.revenueToday || 0).toLocaleString()}`, sub: "Total sale per day", icon: <TrendingUp size={16} />, theme: 'emerald' },
-                      { label: "Today's Procurement", value: `₹${(inventoryStats.procurementSpendToday || 0).toLocaleString()}`, sub: "Total buying cost today", icon: <Truck size={16} />, theme: 'indigo' },
-                      { label: "Today's Material Utilized", value: `₹${(inventoryStats.utilizedValueToday || 0).toLocaleString()}`, sub: "Cost of raw materials used", icon: <Flame size={16} />, theme: 'amber' },
-                      { label: "True Daily Profit", value: `₹${(inventoryStats.grossProfitToday || 0).toLocaleString()}`, sub: "Sales minus Utilization", icon: <DollarSign size={16} />, theme: 'emerald' },
-                    ].map((kpi, i) => {
-                      const t = themeMap[kpi.theme] || themeMap['indigo'];
-                      const dotColor = { amber: '#D4A373', rose: '#e11d48', emerald: '#059669', indigo: '#4f46e5' }[kpi.theme] || '#4f46e5';
-                      return (
-                        <div key={i} className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between border border-zinc-200/70 bg-gradient-to-br ${t.gradient} shadow-sm transition-shadow duration-500 hover:shadow-md ring-1 ${t.ring}`}>
-                          <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none" style={{ background: t.glow }} />
-                          <div className="relative flex-1 min-w-0">
-                            <div className="flex items-start justify-between mb-4">
-                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${t.iconBg}`}>{kpi.icon}</div>
-                            </div>
-                            <p className="text-2xl font-black text-zinc-900 tracking-tight leading-none mb-1.5">{kpi.value}</p>
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 leading-none">{kpi.label}</p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Analytics Section (Middle Row) */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-zinc-200/60 relative">
-                      <div className="absolute -bottom-16 -right-10 w-56 h-56 rounded-full bg-emerald-200/20 blur-3xl pointer-events-none" />
-                      <div className="relative flex items-center gap-2 mb-4">
-                        <div className="w-7 h-7 rounded-lg bg-indigo-500 flex items-center justify-center shadow-md shadow-indigo-500/30">
-                          <Activity size={14} className="text-white" />
-                        </div>
-                        <h3 className="font-black text-xs uppercase text-zinc-800">Sales vs Spend vs Consumption (7 Days)</h3>
-                      </div>
-                      <SalesVsSpendVsConsumptionChart data={inventoryStats.profitGapData} />
-                      <div className="flex justify-center gap-6 mt-2">
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-600"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Sales (Revenue)</div>
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-600"><span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Procurement (Buying)</div>
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-600"><span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span> Utilization (COGS)</div>
-                      </div>
-                    </div>
-
-                    <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-zinc-200/60 relative overflow-hidden">
-                      <div className="absolute -top-14 -right-14 w-40 h-40 rounded-full bg-indigo-200/20 blur-3xl pointer-events-none" />
-                      <div className="relative flex items-center gap-2 mb-4">
-                        <div className="w-7 h-7 rounded-lg bg-indigo-500 flex items-center justify-center shadow-md shadow-indigo-500/30">
-                          <PieChart size={14} className="text-white" />
-                        </div>
-                        <h3 className="font-black text-xs uppercase text-zinc-800">Spend By Category</h3>
-                      </div>
-                      <div className="flex flex-col sm:flex-row items-center justify-around gap-6 h-[180px]">
-                        <DonutChart data={inventoryStats.spendCategories} centerLabel="Spend" />
-                        <div className="grid grid-cols-1 gap-y-2.5 w-full sm:w-auto">
-                          {inventoryStats.spendCategories.map((d, i) => (
-                            <div key={i} className="flex items-center gap-2">
-                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
-                              <span className="text-[10px] text-zinc-500 font-semibold">{d.label}</span>
-                              <span className="text-[11px] font-black text-zinc-900 ml-auto">{d.value}%</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Bottom Workspace (Data Tables) */}
-                  <div className="bg-white rounded-[2rem] border border-zinc-200/60 shadow-sm overflow-hidden flex flex-col h-[400px]">
-                    <div className="flex border-b border-zinc-100 bg-zinc-50/50 p-2 gap-2 overflow-x-auto dd-scrollbar shrink-0">
-                      <div className="flex items-center p-1.5 bg-zinc-100/50 rounded-2xl w-fit">
-                        {[{ id: 'master', icon: Package, label: 'Master List' }, { id: 'reconciliation', icon: ClipboardList, label: 'Reconciliation' }, { id: 'procurement', icon: Truck, label: 'Procurement Logs' }, { id: 'wastage', icon: Trash2, label: 'Wastage Logs' }].map(t => (
-                          <button key={t.id} onClick={() => setInventoryTab(t.id)} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all ${inventoryTab === t.id ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-zinc-200/50' : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'}`}>
-                            <t.icon size={14} strokeWidth={inventoryTab === t.id ? 3 : 2.5} />
-                            {t.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex-1 overflow-auto dd-scrollbar p-0">
-                      {inventoryTab === 'master' && (
-                        <table className="w-full text-left border-collapse">
-                          <thead className="bg-zinc-50 text-[10px] uppercase font-bold text-zinc-500 tracking-wider sticky top-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-                            <tr>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold">Item Name</th>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold">Category</th>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold">Stock Level</th>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold">Par Level</th>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold">Unit Cost</th>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold">Asset Value</th>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold text-center">Status</th>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold text-right sticky right-0 bg-zinc-50">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody className="text-xs font-medium text-zinc-700">
-                            {inventoryItems.map(item => (
-                              <tr key={item.id} className={`border-b border-zinc-50 hover:bg-zinc-50/50 transition-colors ${item.is_active === false ? 'opacity-50' : ''}`}>
-                                <td className="p-4 py-3">
-                                  <div className="font-bold text-zinc-900">{item.name} {item.is_active === false && <span className="ml-2 text-[9px] px-1.5 py-0.5 bg-zinc-200 text-zinc-600 rounded">Archived</span>}</div>
-                                  <div className="text-[9px] text-zinc-400 uppercase tracking-widest">{item.id}</div>
-                                </td>
-                                <td className="p-4 py-3">{item.category}</td>
-                                <td className="p-4 py-3 font-bold">{item.stock} {item.uom}</td>
-                                <td className="p-4 py-3 text-zinc-500 font-semibold">{item.stock} / {item.par_level} {item.uom}</td>
-                                <td className="p-4 py-3">₹{item.unit_cost} / {item.uom}</td>
-                                <td className="p-4 py-3 font-bold text-[#D4A373]">₹{(item.stock * item.unit_cost).toLocaleString()}</td>
-                                <td className="p-4 py-3 text-center">
-                                  <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${item.status === 'In Stock' ? 'bg-emerald-100 text-emerald-700' : item.status === 'Low' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
-                                    {item.status}
-                                  </span>
-                                </td>
-                                <td className="p-4 py-3 text-right sticky right-0 bg-transparent backdrop-blur-md">
-                                  <div className="flex items-center justify-end gap-2">
-                                    <button onClick={() => { setMaterialForm(item); setIsMaterialModalOpen(true); }} className="w-8 h-8 rounded-lg bg-zinc-50 text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 flex items-center justify-center transition-colors">
-                                      <Edit2 size={14} strokeWidth={2.5} />
-                                    </button>
-                                    <button onClick={() => toggleMaterialStatus(item)} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${item.is_active !== false ? 'bg-zinc-50 text-zinc-400 hover:text-rose-600 hover:bg-rose-50' : 'bg-rose-50 text-rose-600 hover:text-rose-700 hover:bg-rose-100'}`}>
-                                      {item.is_active !== false ? <Trash2 size={14} strokeWidth={2.5} /> : <RefreshCcw size={14} strokeWidth={2.5} />}
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-
-                      {inventoryTab === 'reconciliation' && (
-                        <table className="w-full text-left border-collapse">
-                          <thead className="bg-zinc-50 text-[10px] uppercase font-bold text-zinc-500 tracking-wider sticky top-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-                            <tr>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold">Item Name</th>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold">Category</th>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold text-right">Opening Stock</th>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold text-right text-indigo-600">Bought (+)</th>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold text-right">Closing Stock</th>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold text-right text-orange-600">Utilized Qty</th>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold text-right">Utilized Value</th>
-                            </tr>
-                          </thead>
-                          <tbody className="text-xs font-medium text-zinc-700">
-                            {reconciliationData.map(item => (
-                              <tr key={item.id} className="border-b border-zinc-50 hover:bg-zinc-50/50 transition-colors">
-                                <td className="p-4 py-3">
-                                  <div className="font-bold text-zinc-900">{item.name}</div>
-                                  <div className="text-[9px] text-zinc-400 uppercase tracking-widest">{item.uom}</div>
-                                </td>
-                                <td className="p-4 py-3">{item.category}</td>
-                                <td className="p-4 py-3 text-right">{item.opening_stock}</td>
-                                <td className="p-4 py-3 font-bold text-indigo-600 text-right">{item.bought_today > 0 ? `+${item.bought_today}` : '-'}</td>
-                                <td className="p-4 py-3 text-right">{item.eod_closing_stock !== null ? item.eod_closing_stock : <span className="text-zinc-400 italic">Pending EOD</span>}</td>
-                                <td className="p-4 py-3 font-bold text-orange-600 text-right">{item.eod_utilized_qty !== null ? item.eod_utilized_qty : '-'}</td>
-                                <td className="p-4 py-3 font-bold text-zinc-900 text-right">₹{item.eod_utilized_value !== null ? item.eod_utilized_value.toLocaleString() : '0'}</td>
-                              </tr>
-                            ))}
-                            {reconciliationData.length === 0 && (
-                              <tr><td colSpan={7} className="text-center p-8 text-zinc-400 italic">No active reconciliation data available.</td></tr>
-                            )}
-                          </tbody>
-                        </table>
-                      )}
-
-                      {inventoryTab === 'procurement' && (
-                        <table className="w-full text-left border-collapse">
-                          <thead className="bg-zinc-50 text-[10px] uppercase font-bold text-zinc-500 tracking-wider sticky top-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-                            <tr>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold">Date</th>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold">Vendor/Supplier</th>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold">Invoice #</th>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold">Category</th>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold">Amount Spent</th>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold text-center">Payment</th>
-                            </tr>
-                          </thead>
-                          <tbody className="text-xs font-medium text-zinc-700">
-                            {procurementLogs.map(item => (
-                              <tr key={item.id} className="border-b border-zinc-50 hover:bg-zinc-50/50 transition-colors">
-                                <td className="p-4 py-3 text-zinc-500 font-semibold">{new Date(item.date).toLocaleDateString()}</td>
-                                <td className="p-4 py-3 font-bold text-zinc-900">{item.vendor}</td>
-                                <td className="p-4 py-3 font-mono text-[10px] bg-zinc-100 px-2 py-1 rounded inline-block mt-1.5">{item.invoice_number}</td>
-                                <td className="p-4 py-3">{item.category}</td>
-                                <td className="p-4 py-3 font-black text-rose-600">₹{parseFloat(item.amount).toLocaleString()}</td>
-                                <td className="p-4 py-3 text-center">
-                                  <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${item.status === 'Paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                                    {item.status}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-
-                      {inventoryTab === 'wastage' && (
-                        <table className="w-full text-left border-collapse">
-                          <thead className="bg-zinc-50 text-[10px] uppercase font-bold text-zinc-500 tracking-wider sticky top-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-                            <tr>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold">Date</th>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold">Item</th>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold">Quantity Lost</th>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold">Reason</th>
-                              <th className="p-4 py-3 border-b border-zinc-100 font-bold text-right">Financial Loss</th>
-                            </tr>
-                          </thead>
-                          <tbody className="text-xs font-medium text-zinc-700">
-                            {wastageLogs.map(item => (
-                              <tr key={item.id} className="border-b border-zinc-50 hover:bg-zinc-50/50 transition-colors">
-                                <td className="p-4 py-3 text-zinc-500 font-semibold">{new Date(item.date).toLocaleDateString()}</td>
-                                <td className="p-4 py-3 font-bold text-zinc-900">{item.item_name}</td>
-                                <td className="p-4 py-3 font-bold">{item.quantity}</td>
-                                <td className="p-4 py-3">
-                                  <span className="bg-zinc-100 px-2.5 py-1 rounded-md text-[10px] font-bold text-zinc-600">
-                                    {item.reason}
-                                  </span>
-                                </td>
-                                <td className="p-4 py-3 font-black text-rose-600 text-right">₹{parseFloat(item.loss_amount).toLocaleString()}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              {/* TAB: BILLING & SETTLEMENTS */}
-              {activeTab === 'billing' && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex gap-6 h-[600px]">
-
-                  {/* Left Pane: Active Checks (30%) */}
-                  <div className="w-[30%] bg-white rounded-3xl p-5 border border-zinc-200/80 shadow-sm flex flex-col h-full relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#D4A373]/10 to-transparent rounded-full -translate-y-16 translate-x-16 pointer-events-none" />
-                    <div className="flex items-center p-1 bg-zinc-100 rounded-xl mb-5 relative z-10">
-                      <button onClick={() => setBillingViewTab('active')} className={`flex-1 text-[11px] uppercase tracking-wider font-bold py-2 rounded-lg transition-all ${billingViewTab === 'active' ? 'bg-white shadow-sm text-[#D4A373]' : 'text-zinc-500 hover:text-zinc-700'}`}>Active Checks</button>
-                      <button onClick={() => setBillingViewTab('history')} className={`flex-1 text-[11px] uppercase tracking-wider font-bold py-2 rounded-lg transition-all ${billingViewTab === 'history' ? 'bg-white shadow-sm text-blue-500' : 'text-zinc-500 hover:text-zinc-700'}`}>History</button>
-                    </div>
-                    <div className="flex flex-col gap-3 overflow-y-auto dd-scrollbar flex-1 pr-2 relative z-10">
-                      {billingViewTab === 'active' ? (() => {
-                        const checksMap = new Map();
-                        tables.filter(t => t.status === 'Occupied').forEach(t => checksMap.set(t.table_number, { table_number: t.table_number, time: t.time }));
-                        activeKOTs.forEach(k => {
-                          if (k.status !== 'Settled') {
-                            if (!checksMap.has(k.table)) checksMap.set(k.table, { table_number: k.table, time: k.time });
+                          if (activeChecks.length === 0) {
+                            return (
+                              <div className="text-center py-10 opacity-60">
+                                <div className="w-16 h-16 rounded-full bg-zinc-100 flex items-center justify-center mx-auto mb-3">
+                                  <Receipt size={24} className="text-zinc-400" />
+                                </div>
+                                <p className="text-zinc-500 font-bold text-[11px] uppercase tracking-wider">No active tables</p>
+                              </div>
+                            );
                           }
-                        });
-                        const activeChecks = Array.from(checksMap.values());
-                        
-                        if (activeChecks.length === 0) {
-                          return (
+
+                          return activeChecks.map(t => {
+                            const tUnbilled = activeKOTs.filter(k => k.table === t.table_number && k.status !== 'Settled');
+                            let tTotal = 0;
+                            tUnbilled.forEach(k => {
+                              try {
+                                const p = typeof k.items === 'string' ? JSON.parse(k.items) : k.items;
+                                if (Array.isArray(p)) {
+                                  p.forEach(i => tTotal += Number(i.price || 0) * Number(i.qty || 1));
+                                } else { throw new Error('Not an array'); }
+                              } catch (e) {
+                                // If it's a manual text order, we can't determine the price easily
+                                tTotal += 0;
+                              }
+                            });
+                            const firstOrderTime = tUnbilled.length > 0 ? tUnbilled[tUnbilled.length - 1].time : (t.time || '');
+                            const isSelected = billingForm.table_number === t.table_number;
+
+                            return (
+                              <div key={t.table_number} onClick={() => handleSelectBillingTable(t.table_number)} className={`p-4 rounded-2xl cursor-pointer transition-all duration-300 relative overflow-hidden group ${isSelected ? 'border-transparent shadow-lg shadow-[#D4A373]/20 scale-[1.02]' : 'border border-zinc-200 hover:border-[#D4A373]/30 hover:shadow-md bg-white'}`}>
+                                {isSelected && <div className="absolute inset-0 bg-gradient-to-br from-[#D4A373] to-[#b3855a] opacity-10" />}
+                                {isSelected && <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#D4A373]" />}
+                                <div className="flex justify-between items-center mb-1 relative z-10">
+                                  <span className={`font-black text-lg ${isSelected ? 'text-[#D4A373]' : 'text-zinc-800'}`}>{t.table_number}</span>
+                                  <span className={`text-[11px] font-black px-2.5 py-1 rounded-md ${isSelected ? 'bg-[#D4A373] text-white' : 'bg-zinc-100 text-zinc-600 group-hover:bg-[#D4A373]/10 group-hover:text-[#D4A373]'}`}>₹{(tTotal * 1.05).toFixed(2)}</span>
+                                </div>
+                                <div className={`text-[11px] font-bold relative z-10 flex items-center gap-1 ${isSelected ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                                  <Clock size={12} />
+                                  Seated at {firstOrderTime || 'Recently'}
+                                </div>
+                              </div>
+                            );
+                          });
+                        })() : (
+                          billingHistory.length === 0 ? (
                             <div className="text-center py-10 opacity-60">
                               <div className="w-16 h-16 rounded-full bg-zinc-100 flex items-center justify-center mx-auto mb-3">
                                 <Receipt size={24} className="text-zinc-400" />
                               </div>
-                              <p className="text-zinc-500 font-bold text-[11px] uppercase tracking-wider">No active tables</p>
+                              <p className="text-zinc-500 font-bold text-[11px] uppercase tracking-wider">No history found</p>
                             </div>
-                          );
-                        }
-                        
-                        return activeChecks.map(t => {
-                          const tUnbilled = activeKOTs.filter(k => k.table === t.table_number && k.status !== 'Settled');
-                        let tTotal = 0;
-                        tUnbilled.forEach(k => {
-                          try {
-                            const p = typeof k.items === 'string' ? JSON.parse(k.items) : k.items;
-                            if (Array.isArray(p)) {
-                              p.forEach(i => tTotal += Number(i.price || 0) * Number(i.qty || 1));
-                            } else { throw new Error('Not an array'); }
-                          } catch (e) {
-                            // If it's a manual text order, we can't determine the price easily
-                            tTotal += 0;
-                          }
-                        });
-                        const firstOrderTime = tUnbilled.length > 0 ? tUnbilled[tUnbilled.length - 1].time : (t.time || '');
-                        const isSelected = billingForm.table_number === t.table_number;
+                          ) : billingHistory.map(b => (
+                            <div key={b.id} onClick={() => setSelectedHistoryBill(b)} className={`p-4 rounded-2xl cursor-pointer transition-all duration-300 relative overflow-hidden group ${selectedHistoryBill?.id === b.id ? 'border-transparent shadow-lg shadow-blue-500/20 scale-[1.02]' : 'border border-zinc-200 hover:border-blue-500/30 hover:shadow-md bg-white'}`}>
+                              {selectedHistoryBill?.id === b.id && <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-indigo-600 opacity-5" />}
+                              {selectedHistoryBill?.id === b.id && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500" />}
+                              <div className="flex justify-between items-center mb-1 relative z-10">
+                                <span className={`font-black text-lg ${selectedHistoryBill?.id === b.id ? 'text-blue-600' : 'text-zinc-800'}`}>{b.table_number}</span>
+                                <span className={`text-[11px] font-black px-2.5 py-1 rounded-md ${selectedHistoryBill?.id === b.id ? 'bg-blue-500 text-white' : 'bg-zinc-100 text-zinc-600 group-hover:bg-blue-500/10 group-hover:text-blue-500'}`}>₹{Number(b.total_amount).toFixed(2)}</span>
+                              </div>
+                              <div className={`text-[11px] font-bold relative z-10 flex items-center justify-between ${selectedHistoryBill?.id === b.id ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                                <span className="flex items-center gap-1"><Clock size={12} /> {new Date(b.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                <span className="uppercase text-[9px] px-1.5 py-0.5 rounded bg-zinc-100">{b.payment_method}</span>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
 
-                        return (
-                          <div key={t.table_number} onClick={() => handleSelectBillingTable(t.table_number)} className={`p-4 rounded-2xl cursor-pointer transition-all duration-300 relative overflow-hidden group ${isSelected ? 'border-transparent shadow-lg shadow-[#D4A373]/20 scale-[1.02]' : 'border border-zinc-200 hover:border-[#D4A373]/30 hover:shadow-md bg-white'}`}>
-                            {isSelected && <div className="absolute inset-0 bg-gradient-to-br from-[#D4A373] to-[#b3855a] opacity-10" />}
-                            {isSelected && <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#D4A373]" />}
-                            <div className="flex justify-between items-center mb-1 relative z-10">
-                              <span className={`font-black text-lg ${isSelected ? 'text-[#D4A373]' : 'text-zinc-800'}`}>{t.table_number}</span>
-                              <span className={`text-[11px] font-black px-2.5 py-1 rounded-md ${isSelected ? 'bg-[#D4A373] text-white' : 'bg-zinc-100 text-zinc-600 group-hover:bg-[#D4A373]/10 group-hover:text-[#D4A373]'}`}>₹{(tTotal * 1.05).toFixed(2)}</span>
+                    {/* Right Canvas: Live Invoice (70%) */}
+                    <div className="w-[70%] bg-white rounded-3xl border border-zinc-200/80 shadow-sm h-full flex flex-col overflow-hidden relative">
+                      {billingViewTab === 'history' ? (
+                        !selectedHistoryBill ? (
+                          <div className="flex-1 flex flex-col items-center justify-center text-center bg-zinc-50/50">
+                            <div className="w-24 h-24 rounded-full bg-white shadow-sm border border-zinc-100 flex items-center justify-center mb-5">
+                              <Receipt size={40} strokeWidth={1.5} className="text-zinc-300" />
                             </div>
-                            <div className={`text-[11px] font-bold relative z-10 flex items-center gap-1 ${isSelected ? 'text-zinc-600' : 'text-zinc-400'}`}>
-                              <Clock size={12} />
-                              Seated at {firstOrderTime || 'Recently'}
-                            </div>
+                            <p className="text-sm font-black text-zinc-400 tracking-[0.2em]">SELECT AN INVOICE TO VIEW</p>
                           </div>
-                        );
-                      });
-                      })() : (
-                        billingHistory.length === 0 ? (
-                           <div className="text-center py-10 opacity-60">
-                             <div className="w-16 h-16 rounded-full bg-zinc-100 flex items-center justify-center mx-auto mb-3">
-                               <Receipt size={24} className="text-zinc-400" />
-                             </div>
-                             <p className="text-zinc-500 font-bold text-[11px] uppercase tracking-wider">No history found</p>
-                           </div>
-                        ) : billingHistory.map(b => (
-                          <div key={b.id} onClick={() => setSelectedHistoryBill(b)} className={`p-4 rounded-2xl cursor-pointer transition-all duration-300 relative overflow-hidden group ${selectedHistoryBill?.id === b.id ? 'border-transparent shadow-lg shadow-blue-500/20 scale-[1.02]' : 'border border-zinc-200 hover:border-blue-500/30 hover:shadow-md bg-white'}`}>
-                            {selectedHistoryBill?.id === b.id && <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-indigo-600 opacity-5" />}
-                            {selectedHistoryBill?.id === b.id && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500" />}
-                            <div className="flex justify-between items-center mb-1 relative z-10">
-                              <span className={`font-black text-lg ${selectedHistoryBill?.id === b.id ? 'text-blue-600' : 'text-zinc-800'}`}>{b.table_number}</span>
-                              <span className={`text-[11px] font-black px-2.5 py-1 rounded-md ${selectedHistoryBill?.id === b.id ? 'bg-blue-500 text-white' : 'bg-zinc-100 text-zinc-600 group-hover:bg-blue-500/10 group-hover:text-blue-500'}`}>₹{Number(b.total_amount).toFixed(2)}</span>
-                            </div>
-                            <div className={`text-[11px] font-bold relative z-10 flex items-center justify-between ${selectedHistoryBill?.id === b.id ? 'text-zinc-600' : 'text-zinc-400'}`}>
-                              <span className="flex items-center gap-1"><Clock size={12} /> {new Date(b.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                              <span className="uppercase text-[9px] px-1.5 py-0.5 rounded bg-zinc-100">{b.payment_method}</span>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                  </div>
-                  </div>
+                        ) : (
+                          (() => {
+                            const kots = selectedHistoryBill.kots || [];
+                            const itemMap = {};
+                            kots.forEach(kot => {
+                              try {
+                                const parsed = typeof kot.items === 'string' ? JSON.parse(kot.items) : kot.items;
+                                if (Array.isArray(parsed)) {
+                                  parsed.forEach(item => {
+                                    if (itemMap[item.item]) {
+                                      itemMap[item.item].qty += Number(item.qty || 1);
+                                    } else {
+                                      itemMap[item.item] = { ...item, qty: Number(item.qty || 1), price: Number(item.price || 0) };
+                                    }
+                                  });
+                                } else { throw new Error('Not an array'); }
+                              } catch (e) {
+                                const text = String(kot.items);
+                                if (itemMap[text]) {
+                                  itemMap[text].qty += 1;
+                                } else {
+                                  itemMap[text] = { item: `[Manual Entry] ${text}`, qty: 1, price: 0, isManual: true };
+                                }
+                              }
+                            });
+                            const aggregatedItems = Object.values(itemMap);
+                            const grandTotal = Number(selectedHistoryBill.total_amount);
+                            const histSubtotal = aggregatedItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
+                            const totalTaxRate = hotelSettings?.taxes ? hotelSettings.taxes.reduce((sum, tax) => sum + (tax.rate / 100), 0) : 0.05;
+                            const tax = histSubtotal * totalTaxRate;
 
-                  {/* Right Canvas: Live Invoice (70%) */}
-                  <div className="w-[70%] bg-white rounded-3xl border border-zinc-200/80 shadow-sm h-full flex flex-col overflow-hidden relative">
-                    {billingViewTab === 'history' ? (
-                      !selectedHistoryBill ? (
+                            return (
+                              <div className="flex flex-col h-full relative w-full">
+                                <div className="px-8 py-5 border-b border-zinc-100 flex justify-between items-center bg-white shrink-0 z-10">
+                                  <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500">
+                                      <Receipt size={24} strokeWidth={2.5} />
+                                    </div>
+                                    <div>
+                                      <h2 className="text-2xl font-black text-zinc-900 tracking-tight leading-none mb-1">{selectedHistoryBill.table_number}</h2>
+                                      <div className="inline-flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider bg-zinc-100 border border-zinc-200/50 text-zinc-500 px-2 py-0.5 rounded shadow-sm">
+                                        <CheckCircle2 size={10} strokeWidth={2.5} /> Settled
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="text-right flex items-center gap-3">
+                                    <button onClick={(e) => handlePrintReceipt(e, { ...selectedHistoryBill, items: aggregatedItems, subtotal: histSubtotal, tax, discount: 0, total_amount: grandTotal })} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition-colors shadow-sm">
+                                      <Printer size={16} /> Print Receipt
+                                    </button>
+                                    <button onClick={(e) => handleEmailReceipt(e, { ...selectedHistoryBill, items: aggregatedItems, subtotal: histSubtotal, tax, discount: 0, total_amount: grandTotal })} disabled={isEmailing} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition-colors shadow-sm disabled:opacity-50">
+                                      {isEmailing ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />} Email
+                                    </button>
+                                    <div>
+                                      <h3 className="text-lg font-black text-zinc-800 tracking-wider bg-zinc-100 px-3 py-1 rounded-lg inline-block mb-1">
+                                        {selectedHistoryBill.id.split('-')[0].toUpperCase()}
+                                      </h3>
+                                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{new Date(selectedHistoryBill.created_at).toLocaleDateString()} &bull; {new Date(selectedHistoryBill.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex flex-1 overflow-hidden bg-zinc-100/50 justify-center items-start pt-8 pb-8 dd-scrollbar overflow-y-auto">
+                                  <div className="shadow-2xl border border-zinc-200">
+                                    <DiningReceipt receiptData={{ ...selectedHistoryBill, items: aggregatedItems, subtotal: histSubtotal, tax, discount: 0, total_amount: grandTotal }} hotelSettings={hotelSettings} />
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()
+                        )
+                      ) : !billingForm.table_number ? (
                         <div className="flex-1 flex flex-col items-center justify-center text-center bg-zinc-50/50">
                           <div className="w-24 h-24 rounded-full bg-white shadow-sm border border-zinc-100 flex items-center justify-center mb-5">
                             <Receipt size={40} strokeWidth={1.5} className="text-zinc-300" />
                           </div>
-                          <p className="text-sm font-black text-zinc-400 tracking-[0.2em]">SELECT AN INVOICE TO VIEW</p>
+                          <p className="text-sm font-black text-zinc-400 tracking-[0.2em]">SELECT A TABLE TO INVOICE</p>
                         </div>
                       ) : (
                         (() => {
-                          const kots = selectedHistoryBill.kots || [];
+                          const unbilled = activeKOTs.filter(k => k.table === billingForm.table_number && k.status !== 'Settled');
                           const itemMap = {};
-                          kots.forEach(kot => {
+                          unbilled.forEach(kot => {
                             try {
                               const parsed = typeof kot.items === 'string' ? JSON.parse(kot.items) : kot.items;
                               if (Array.isArray(parsed)) {
@@ -1818,392 +1900,321 @@ export default function DiningDashboard() {
                               }
                             }
                           });
-                          const aggregatedItems = Object.values(itemMap);
-                          const grandTotal = Number(selectedHistoryBill.total_amount);
-                          const histSubtotal = aggregatedItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
-                          const tax = histSubtotal * 0.05;
-                          
+                          const aggregatedItems = Object.values(itemMap).map(item => {
+                            const removed = removedItemsCount[item.item] || 0;
+                            return { ...item, qty: Math.max(0, item.qty - removed) };
+                          }).filter(item => item.qty > 0);
+
+                          const subtotal = aggregatedItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
+                          const discountAmount = subtotal * (discountPercent / 100);
+                          const afterDiscount = subtotal - discountAmount;
+                          const taxesToApply = hotelSettings?.taxes || [];
+                          const calculatedTaxes = taxesToApply.map(tax => ({
+                            name: tax.name,
+                            rate: tax.rate,
+                            amount: afterDiscount * (tax.rate / 100)
+                          }));
+                          const totalTaxAmount = calculatedTaxes.reduce((sum, t) => sum + t.amount, 0);
+                          const serviceChargeAmount = applyServiceCharge ? (afterDiscount * 0.10) : 0;
+                          const grandTotal = afterDiscount + serviceChargeAmount + totalTaxAmount;
+                          const invoiceNo = `INV-${Math.floor(Date.now() / 1000).toString().slice(-4)}`;
+
                           return (
                             <div className="flex flex-col h-full relative w-full">
+                              {/* Header */}
                               <div className="px-8 py-5 border-b border-zinc-100 flex justify-between items-center bg-white shrink-0 z-10">
                                 <div className="flex items-center gap-4">
-                                  <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500">
+                                  <div className="w-12 h-12 rounded-xl bg-[#D4A373]/10 flex items-center justify-center text-[#D4A373]">
                                     <Receipt size={24} strokeWidth={2.5} />
                                   </div>
                                   <div>
-                                    <h2 className="text-2xl font-black text-zinc-900 tracking-tight leading-none mb-1">{selectedHistoryBill.table_number}</h2>
-                                    <div className="inline-flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider bg-zinc-100 border border-zinc-200/50 text-zinc-500 px-2 py-0.5 rounded shadow-sm">
-                                      <CheckCircle2 size={10} strokeWidth={2.5} /> Settled
+                                    <h2 className="text-2xl font-black text-zinc-900 tracking-tight leading-none mb-1">{billingForm.table_number}</h2>
+                                    <div className="inline-flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider bg-orange-50 border border-orange-200/50 text-orange-600 px-2 py-0.5 rounded shadow-sm">
+                                      <Flame size={10} strokeWidth={2.5} />
+                                      {unbilled.length} Active KOT{unbilled.length !== 1 ? 's' : ''}
                                     </div>
                                   </div>
                                 </div>
-                                <div className="text-right flex items-center gap-3">
-                                  <button onClick={(e) => handlePrintReceipt(e, { ...selectedHistoryBill, items: aggregatedItems, subtotal: histSubtotal, tax, discount: 0, total_amount: grandTotal })} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition-colors shadow-sm">
-                                    <Printer size={16} /> Print Receipt
-                                  </button>
-                                  <button onClick={(e) => handleEmailReceipt(e, { ...selectedHistoryBill, items: aggregatedItems, subtotal: histSubtotal, tax, discount: 0, total_amount: grandTotal })} disabled={isEmailing} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition-colors shadow-sm disabled:opacity-50">
-                                    {isEmailing ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />} Email
-                                  </button>
-                                  <div>
-                                    <h3 className="text-lg font-black text-zinc-800 tracking-wider bg-zinc-100 px-3 py-1 rounded-lg inline-block mb-1">
-                                      {selectedHistoryBill.id.split('-')[0].toUpperCase()}
-                                    </h3>
-                                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{new Date(selectedHistoryBill.created_at).toLocaleDateString()} &bull; {new Date(selectedHistoryBill.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                <div className="text-right">
+                                  <h3 className="text-lg font-black text-zinc-800 tracking-wider bg-zinc-100 px-3 py-1 rounded-lg inline-block mb-1">{invoiceNo}</h3>
+                                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{new Date().toLocaleDateString()} &bull; {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-1 overflow-hidden bg-white">
+                                {/* Ledger */}
+                                <div className="flex-1 overflow-y-auto dd-scrollbar p-8 border-r border-zinc-100 relative">
+                                  {/* Watermark */}
+                                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03]">
+                                    <Receipt size={200} />
+                                  </div>
+                                  <table className="w-full text-left border-collapse relative z-10">
+                                    <thead>
+                                      <tr className="text-[10px] font-black text-zinc-400 uppercase tracking-widest border-b-2 border-zinc-100">
+                                        <th className="pb-4 w-14">Qty</th>
+                                        <th className="pb-4">Item Details</th>
+                                        <th className="pb-4 text-right">Rate</th>
+                                        <th className="pb-4 text-right">Amount</th>
+                                        <th className="pb-4 w-10"></th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="text-[13px] font-bold text-zinc-800">
+                                      {aggregatedItems.map((item, idx) => (
+                                        <tr key={idx} className="border-b border-zinc-100/70 group hover:bg-zinc-50/80 transition-colors">
+                                          <td className="py-4">
+                                            <span className="bg-zinc-100 text-zinc-600 px-2.5 py-1 rounded-md text-xs">{item.qty}x</span>
+                                          </td>
+                                          <td className="py-4 font-black text-zinc-900">{item.item}</td>
+                                          <td className="py-4 text-right text-zinc-400">₹{item.price.toFixed(2)}</td>
+                                          <td className="py-4 text-right font-black text-[#D4A373]">₹{(item.price * item.qty).toFixed(2)}</td>
+                                          <td className="py-4 text-right">
+                                            <button type="button" onClick={() => setRemovedItemsCount(prev => ({ ...prev, [item.item]: (prev[item.item] || 0) + 1 }))} className="w-7 h-7 rounded-full bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all focus:outline-none" title="Remove 1 qty">
+                                              <Minus size={14} strokeWidth={3} />
+                                            </button>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                      {aggregatedItems.length === 0 && (
+                                        <tr>
+                                          <td colSpan="5" className="py-16 text-center text-zinc-300 font-bold">No items to bill. Add items to KOT first.</td>
+                                        </tr>
+                                      )}
+                                    </tbody>
+                                  </table>
+                                </div>
+
+                                {/* Financial Math */}
+                                <div className="w-[38%] bg-zinc-50 p-8 flex flex-col shrink-0 overflow-y-auto dd-scrollbar">
+                                  <div className="space-y-4 text-[11px] font-black text-zinc-500 mb-8 uppercase tracking-wider">
+                                    <div className="flex justify-between items-center text-zinc-800 text-sm">
+                                      <span>Subtotal</span>
+                                      <span className="font-black">₹{subtotal.toFixed(2)}</span>
+                                    </div>
+
+                                    {/* Discount Toggle */}
+                                    <div className="flex justify-between items-center pt-3 border-t border-zinc-200/60">
+                                      <span className="flex items-center gap-2 cursor-pointer text-indigo-600 hover:text-indigo-800 transition-colors" onClick={() => setDiscountPercent(discountPercent === 10 ? 0 : 10)}>
+                                        <div className={`w-8 h-4.5 rounded-full transition-colors relative ${discountPercent > 0 ? 'bg-indigo-600' : 'bg-zinc-300'}`}>
+                                          <div className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-all ${discountPercent > 0 ? 'left-[18px]' : 'left-0.5'}`} />
+                                        </div>
+                                        VIP Discount (10%)
+                                      </span>
+                                      {discountPercent > 0 ? <span className="text-rose-500 font-black">-₹{discountAmount.toFixed(2)}</span> : <span>-₹0.00</span>}
+                                    </div>
+
+                                    {/* Service Charge Toggle */}
+                                    <div className="flex justify-between items-center pt-2">
+                                      <span className="flex items-center gap-2 cursor-pointer text-sky-600 hover:text-sky-800 transition-colors" onClick={() => setApplyServiceCharge(!applyServiceCharge)}>
+                                        <div className={`w-8 h-4.5 rounded-full transition-colors relative ${applyServiceCharge ? 'bg-sky-500' : 'bg-zinc-300'}`}>
+                                          <div className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-all ${applyServiceCharge ? 'left-[18px]' : 'left-0.5'}`} />
+                                        </div>
+                                        Service Charge (10%)
+                                      </span>
+                                      {applyServiceCharge ? <span className="text-zinc-800 font-black">₹{serviceChargeAmount.toFixed(2)}</span> : <span>₹0.00</span>}
+                                    </div>
+
+                                      {calculatedTaxes.map((tax, idx) => (
+                                        <div key={idx} className="flex justify-between items-center pt-2">
+                                          <span>{tax.name} ({tax.rate}%)</span>
+                                          <span className="text-zinc-800 font-black">₹{tax.amount.toFixed(2)}</span>
+                                        </div>
+                                      ))}
+                                  </div>
+
+                                  <div className="pt-6 border-t-2 border-dashed border-zinc-300">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-1">Total Payable</p>
+                                    <h1 className="text-4xl leading-none font-black text-emerald-600 tracking-tighter">₹{grandTotal.toFixed(2)}</h1>
                                   </div>
                                 </div>
                               </div>
-                              <div className="flex flex-1 overflow-hidden bg-zinc-100/50 justify-center items-start pt-8 pb-8 dd-scrollbar overflow-y-auto">
-                                <div className="shadow-2xl border border-zinc-200">
-                                  <DiningReceipt receiptData={{...selectedHistoryBill, items: aggregatedItems, subtotal: histSubtotal, tax, discount: 0, total_amount: grandTotal}} hotelSettings={hotelSettings} />
+
+                              {/* Payment Terminal Footer */}
+                              <div className="p-6 bg-white border-t border-zinc-100 shrink-0 z-20 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.05)]">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-3">Select Payment Method</p>
+                                <div className="grid grid-cols-4 gap-3 mb-5">
+                                  {['Cash', 'Card', 'UPI'].map(method => (
+                                    <button key={method} type="button" onClick={() => setBillingForm(prev => ({ ...prev, payment_method: method, is_room_charge: false, booking_id: '' }))} className={`py-3.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all duration-300 ${billingForm.payment_method === method && !billingForm.is_room_charge ? 'bg-[#D4A373] text-white shadow-lg shadow-[#D4A373]/30 scale-[1.02]' : 'bg-zinc-50 border border-zinc-200 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 hover:border-zinc-300'}`}>
+                                      <span className={`mr-2 ${billingForm.payment_method === method && !billingForm.is_room_charge ? 'opacity-100' : 'opacity-60'}`}>
+                                        {method === 'Cash' && '💵'}
+                                        {method === 'Card' && '💳'}
+                                        {method === 'UPI' && '📱'}
+                                      </span>
+                                      {method}
+                                    </button>
+                                  ))}
+
+                                  <button type="button" onClick={() => setBillingForm(prev => ({ ...prev, is_room_charge: true, payment_method: 'Room Charge' }))} className={`py-3.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all duration-300 ${billingForm.is_room_charge ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 scale-[1.02]' : 'bg-zinc-50 border border-zinc-200 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 hover:border-zinc-300'}`}>
+                                    <span className={`mr-2 ${billingForm.is_room_charge ? 'opacity-100' : 'opacity-60'}`}>🚪</span> Room
+                                  </button>
+                                </div>
+
+                                <AnimatePresence>
+                                  {billingForm.is_room_charge && (
+                                    <motion.div initial={{ opacity: 0, height: 0, marginBottom: 0 }} animate={{ opacity: 1, height: 'auto', marginBottom: 20 }} exit={{ opacity: 0, height: 0, marginBottom: 0 }} className="overflow-hidden">
+                                      <select value={billingForm.booking_id} onChange={e => {
+                                        const g = inHouseGuests.find(x => String(x.booking_id) === e.target.value);
+                                        setBillingForm(prev => ({ ...prev, booking_id: e.target.value, room_number: g?.room_number || '' }));
+                                      }} className="w-full bg-indigo-50/50 border border-indigo-100 text-indigo-900 text-sm font-bold py-3.5 px-5 rounded-xl focus:ring-2 focus:ring-indigo-500 appearance-none outline-none transition-colors">
+                                        <option value="">👉 Select Checked-In Guest 👈</option>
+                                        {inHouseGuests.map(g => (
+                                          <option key={g.booking_id} value={g.booking_id}>{g.guest_name} — Room {g.room_number} (Booking #{g.booking_id})</option>
+                                        ))}
+                                      </select>
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+
+                                <div className="flex gap-2 mt-4">
+                                  <button onClick={(e) => handlePrintReceipt(e, { ...billingForm, items: aggregatedItems, subtotal, discount: discountAmount, tax: totalTaxAmount, calculatedTaxes, total_amount: grandTotal, invoiceNo, table: billingForm.table_number, id: invoiceNo })} className="flex-[0.5] bg-zinc-100 group text-zinc-700 font-black text-[13px] py-4 rounded-xl hover:bg-zinc-200 transition-all duration-300 flex justify-center items-center gap-2 shadow-sm uppercase tracking-widest">
+                                    <Printer size={16} /> Print
+                                  </button>
+                                  <button onClick={(e) => handleEmailReceipt(e, { ...billingForm, items: aggregatedItems, subtotal, discount: discountAmount, tax: totalTaxAmount, calculatedTaxes, total_amount: grandTotal, invoiceNo, table: billingForm.table_number, id: invoiceNo })} disabled={isEmailing} className="flex-[0.5] bg-zinc-100 group text-zinc-700 font-black text-[13px] py-4 rounded-xl hover:bg-zinc-200 transition-all duration-300 flex justify-center items-center gap-2 shadow-sm uppercase tracking-widest disabled:opacity-50">
+                                    {isEmailing ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} strokeWidth={3} />} EMAIL
+                                  </button>
+                                  <button onClick={(e) => handleSettleBill(e, grandTotal.toFixed(2))} disabled={(billingForm.is_room_charge && !billingForm.booking_id) || grandTotal === 0} className="flex-[1.5] bg-zinc-900 group text-white font-black text-[13px] py-4 rounded-xl hover:bg-[#D4A373] hover:scale-[1.01] transition-all duration-300 flex justify-center items-center gap-2 disabled:opacity-50 disabled:scale-100 disabled:bg-zinc-300 disabled:cursor-not-allowed shadow-xl shadow-zinc-900/20 uppercase tracking-widest">
+                                    <CheckCircle2 size={18} strokeWidth={3} className={grandTotal > 0 && (!billingForm.is_room_charge || billingForm.booking_id) ? "text-[#D4A373] group-hover:text-white transition-colors" : "text-white"} />
+                                    {billingForm.is_room_charge ? 'CHARGE TO ROOM & FREE TABLE' : 'SETTLE BILL & FREE TABLE'}
+                                  </button>
                                 </div>
                               </div>
                             </div>
                           );
                         })()
-                      )
-                    ) : !billingForm.table_number ? (
-                      <div className="flex-1 flex flex-col items-center justify-center text-center bg-zinc-50/50">
-                        <div className="w-24 h-24 rounded-full bg-white shadow-sm border border-zinc-100 flex items-center justify-center mb-5">
-                          <Receipt size={40} strokeWidth={1.5} className="text-zinc-300" />
-                        </div>
-                        <p className="text-sm font-black text-zinc-400 tracking-[0.2em]">SELECT A TABLE TO INVOICE</p>
-                      </div>
-                    ) : (
-                      (() => {
-                        const unbilled = activeKOTs.filter(k => k.table === billingForm.table_number && k.status !== 'Settled');
-                        const itemMap = {};
-                        unbilled.forEach(kot => {
-                          try {
-                            const parsed = typeof kot.items === 'string' ? JSON.parse(kot.items) : kot.items;
-                            if (Array.isArray(parsed)) {
-                              parsed.forEach(item => {
-                                if (itemMap[item.item]) {
-                                  itemMap[item.item].qty += Number(item.qty || 1);
-                                } else {
-                                  itemMap[item.item] = { ...item, qty: Number(item.qty || 1), price: Number(item.price || 0) };
-                                }
-                              });
-                            } else { throw new Error('Not an array'); }
-                          } catch (e) {
-                            const text = String(kot.items);
-                            if (itemMap[text]) {
-                              itemMap[text].qty += 1;
-                            } else {
-                              itemMap[text] = { item: `[Manual Entry] ${text}`, qty: 1, price: 0, isManual: true };
-                            }
-                          }
-                        });
-                        const aggregatedItems = Object.values(itemMap).map(item => {
-                          const removed = removedItemsCount[item.item] || 0;
-                          return { ...item, qty: Math.max(0, item.qty - removed) };
-                        }).filter(item => item.qty > 0);
+                      )}
+                    </div>
+                  </motion.div>
+                )}
 
-                        const subtotal = aggregatedItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
-                        const discountAmount = subtotal * (discountPercent / 100);
-                        const afterDiscount = subtotal - discountAmount;
-                        const serviceChargeAmount = applyServiceCharge ? (afterDiscount * 0.10) : 0;
-                        const cgst = afterDiscount * 0.025;
-                        const sgst = afterDiscount * 0.025;
-                        const grandTotal = afterDiscount + serviceChargeAmount + cgst + sgst;
-                        const invoiceNo = `INV-${Math.floor(Date.now() / 1000).toString().slice(-4)}`;
+                {/* TAB: HR HUB */}
+                {activeTab === 'hr_hub' && accessLevel === 'MANAGER' && (
+                  <DepartmentHRModule departmentName="DINING" />
+                )}
 
-                        return (
-                          <div className="flex flex-col h-full relative w-full">
-                            {/* Header */}
-                            <div className="px-8 py-5 border-b border-zinc-100 flex justify-between items-center bg-white shrink-0 z-10">
-                              <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-xl bg-[#D4A373]/10 flex items-center justify-center text-[#D4A373]">
-                                  <Receipt size={24} strokeWidth={2.5} />
-                                </div>
-                                <div>
-                                  <h2 className="text-2xl font-black text-zinc-900 tracking-tight leading-none mb-1">{billingForm.table_number}</h2>
-                                  <div className="inline-flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider bg-orange-50 border border-orange-200/50 text-orange-600 px-2 py-0.5 rounded shadow-sm">
-                                    <Flame size={10} strokeWidth={2.5} />
-                                    {unbilled.length} Active KOT{unbilled.length !== 1 ? 's' : ''}
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <h3 className="text-lg font-black text-zinc-800 tracking-wider bg-zinc-100 px-3 py-1 rounded-lg inline-block mb-1">{invoiceNo}</h3>
-                                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{new Date().toLocaleDateString()} &bull; {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                              </div>
-                            </div>
-
-                            <div className="flex flex-1 overflow-hidden bg-white">
-                              {/* Ledger */}
-                              <div className="flex-1 overflow-y-auto dd-scrollbar p-8 border-r border-zinc-100 relative">
-                                {/* Watermark */}
-                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03]">
-                                  <Receipt size={200} />
-                                </div>
-                                <table className="w-full text-left border-collapse relative z-10">
-                                  <thead>
-                                    <tr className="text-[10px] font-black text-zinc-400 uppercase tracking-widest border-b-2 border-zinc-100">
-                                      <th className="pb-4 w-14">Qty</th>
-                                      <th className="pb-4">Item Details</th>
-                                      <th className="pb-4 text-right">Rate</th>
-                                      <th className="pb-4 text-right">Amount</th>
-                                      <th className="pb-4 w-10"></th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="text-[13px] font-bold text-zinc-800">
-                                    {aggregatedItems.map((item, idx) => (
-                                      <tr key={idx} className="border-b border-zinc-100/70 group hover:bg-zinc-50/80 transition-colors">
-                                        <td className="py-4">
-                                          <span className="bg-zinc-100 text-zinc-600 px-2.5 py-1 rounded-md text-xs">{item.qty}x</span>
-                                        </td>
-                                        <td className="py-4 font-black text-zinc-900">{item.item}</td>
-                                        <td className="py-4 text-right text-zinc-400">₹{item.price.toFixed(2)}</td>
-                                        <td className="py-4 text-right font-black text-[#D4A373]">₹{(item.price * item.qty).toFixed(2)}</td>
-                                        <td className="py-4 text-right">
-                                          <button type="button" onClick={() => setRemovedItemsCount(prev => ({ ...prev, [item.item]: (prev[item.item] || 0) + 1 }))} className="w-7 h-7 rounded-full bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all focus:outline-none" title="Remove 1 qty">
-                                            <Minus size={14} strokeWidth={3} />
-                                          </button>
-                                        </td>
-                                      </tr>
-                                    ))}
-                                    {aggregatedItems.length === 0 && (
-                                      <tr>
-                                        <td colSpan="5" className="py-16 text-center text-zinc-300 font-bold">No items to bill. Add items to KOT first.</td>
-                                      </tr>
-                                    )}
-                                  </tbody>
-                                </table>
-                              </div>
-
-                              {/* Financial Math */}
-                              <div className="w-[38%] bg-zinc-50 p-8 flex flex-col shrink-0 overflow-y-auto dd-scrollbar">
-                                <div className="space-y-4 text-[11px] font-black text-zinc-500 mb-8 uppercase tracking-wider">
-                                  <div className="flex justify-between items-center text-zinc-800 text-sm">
-                                    <span>Subtotal</span>
-                                    <span className="font-black">₹{subtotal.toFixed(2)}</span>
-                                  </div>
-
-                                  {/* Discount Toggle */}
-                                  <div className="flex justify-between items-center pt-3 border-t border-zinc-200/60">
-                                    <span className="flex items-center gap-2 cursor-pointer text-indigo-600 hover:text-indigo-800 transition-colors" onClick={() => setDiscountPercent(discountPercent === 10 ? 0 : 10)}>
-                                      <div className={`w-8 h-4.5 rounded-full transition-colors relative ${discountPercent > 0 ? 'bg-indigo-600' : 'bg-zinc-300'}`}>
-                                        <div className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-all ${discountPercent > 0 ? 'left-[18px]' : 'left-0.5'}`} />
-                                      </div>
-                                      VIP Discount (10%)
-                                    </span>
-                                    {discountPercent > 0 ? <span className="text-rose-500 font-black">-₹{discountAmount.toFixed(2)}</span> : <span>-₹0.00</span>}
-                                  </div>
-
-                                  {/* Service Charge Toggle */}
-                                  <div className="flex justify-between items-center pt-2">
-                                    <span className="flex items-center gap-2 cursor-pointer text-sky-600 hover:text-sky-800 transition-colors" onClick={() => setApplyServiceCharge(!applyServiceCharge)}>
-                                      <div className={`w-8 h-4.5 rounded-full transition-colors relative ${applyServiceCharge ? 'bg-sky-500' : 'bg-zinc-300'}`}>
-                                        <div className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-all ${applyServiceCharge ? 'left-[18px]' : 'left-0.5'}`} />
-                                      </div>
-                                      Service Charge (10%)
-                                    </span>
-                                    {applyServiceCharge ? <span className="text-zinc-800 font-black">₹{serviceChargeAmount.toFixed(2)}</span> : <span>₹0.00</span>}
-                                  </div>
-
-                                  <div className="flex justify-between items-center pt-2">
-                                    <span>CGST (2.5%)</span>
-                                    <span className="text-zinc-800 font-black">₹{cgst.toFixed(2)}</span>
-                                  </div>
-                                  <div className="flex justify-between items-center pt-2">
-                                    <span>SGST (2.5%)</span>
-                                    <span className="text-zinc-800 font-black">₹{sgst.toFixed(2)}</span>
-                                  </div>
-                                </div>
-
-                                <div className="pt-6 border-t-2 border-dashed border-zinc-300">
-                                  <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-1">Total Payable</p>
-                                  <h1 className="text-4xl leading-none font-black text-emerald-600 tracking-tighter">₹{grandTotal.toFixed(2)}</h1>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Payment Terminal Footer */}
-                            <div className="p-6 bg-white border-t border-zinc-100 shrink-0 z-20 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.05)]">
-                              <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-3">Select Payment Method</p>
-                              <div className="grid grid-cols-4 gap-3 mb-5">
-                                {['Cash', 'Card', 'UPI'].map(method => (
-                                  <button key={method} type="button" onClick={() => setBillingForm(prev => ({ ...prev, payment_method: method, is_room_charge: false, booking_id: '' }))} className={`py-3.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all duration-300 ${billingForm.payment_method === method && !billingForm.is_room_charge ? 'bg-[#D4A373] text-white shadow-lg shadow-[#D4A373]/30 scale-[1.02]' : 'bg-zinc-50 border border-zinc-200 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 hover:border-zinc-300'}`}>
-                                    <span className={`mr-2 ${billingForm.payment_method === method && !billingForm.is_room_charge ? 'opacity-100' : 'opacity-60'}`}>
-                                      {method === 'Cash' && '💵'}
-                                      {method === 'Card' && '💳'}
-                                      {method === 'UPI' && '📱'}
-                                    </span>
-                                    {method}
-                                  </button>
-                                ))}
-
-                                <button type="button" onClick={() => setBillingForm(prev => ({ ...prev, is_room_charge: true, payment_method: 'Room Charge' }))} className={`py-3.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all duration-300 ${billingForm.is_room_charge ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 scale-[1.02]' : 'bg-zinc-50 border border-zinc-200 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 hover:border-zinc-300'}`}>
-                                  <span className={`mr-2 ${billingForm.is_room_charge ? 'opacity-100' : 'opacity-60'}`}>🚪</span> Room
-                                </button>
-                              </div>
-
-                              <AnimatePresence>
-                                {billingForm.is_room_charge && (
-                                  <motion.div initial={{ opacity: 0, height: 0, marginBottom: 0 }} animate={{ opacity: 1, height: 'auto', marginBottom: 20 }} exit={{ opacity: 0, height: 0, marginBottom: 0 }} className="overflow-hidden">
-                                    <select value={billingForm.booking_id} onChange={e => {
-                                      const g = inHouseGuests.find(x => x.booking_id === e.target.value);
-                                      setBillingForm(prev => ({ ...prev, booking_id: e.target.value, room_number: g?.room_number || '' }));
-                                    }} className="w-full bg-indigo-50/50 border border-indigo-100 text-indigo-900 text-sm font-bold py-3.5 px-5 rounded-xl focus:ring-2 focus:ring-indigo-500 appearance-none outline-none transition-colors">
-                                      <option value="">👉 Select Checked-In Guest 👈</option>
-                                      {inHouseGuests.map(g => (
-                                        <option key={g.booking_id} value={g.booking_id}>{g.guest_name} — Room {g.room_number}</option>
-                                      ))}
-                                    </select>
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>
-
-                              <div className="flex gap-2 mt-4">
-                                <button onClick={(e) => handlePrintReceipt(e, { ...billingForm, items: aggregatedItems, subtotal, discount: discountAmount, tax: cgst + sgst, total_amount: grandTotal, invoiceNo, table: billingForm.table_number, id: invoiceNo })} className="flex-[0.5] bg-zinc-100 group text-zinc-700 font-black text-[13px] py-4 rounded-xl hover:bg-zinc-200 transition-all duration-300 flex justify-center items-center gap-2 shadow-sm uppercase tracking-widest">
-                                  <Printer size={18} strokeWidth={3} /> PRINT
-                                </button>
-                                <button onClick={(e) => handleEmailReceipt(e, { ...billingForm, items: aggregatedItems, subtotal, discount: discountAmount, tax: cgst + sgst, total_amount: grandTotal, invoiceNo, table: billingForm.table_number, id: invoiceNo })} disabled={isEmailing} className="flex-[0.5] bg-zinc-100 group text-zinc-700 font-black text-[13px] py-4 rounded-xl hover:bg-zinc-200 transition-all duration-300 flex justify-center items-center gap-2 shadow-sm uppercase tracking-widest disabled:opacity-50">
-                                  {isEmailing ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} strokeWidth={3} />} EMAIL
-                                </button>
-                                <button onClick={(e) => handleSettleBill(e, grandTotal.toFixed(2))} disabled={(billingForm.is_room_charge && !billingForm.booking_id) || grandTotal === 0} className="flex-[1.5] bg-zinc-900 group text-white font-black text-[13px] py-4 rounded-xl hover:bg-[#D4A373] hover:scale-[1.01] transition-all duration-300 flex justify-center items-center gap-2 disabled:opacity-50 disabled:scale-100 disabled:bg-zinc-300 disabled:cursor-not-allowed shadow-xl shadow-zinc-900/20 uppercase tracking-widest">
-                                  <CheckCircle2 size={18} strokeWidth={3} className={grandTotal > 0 && (!billingForm.is_room_charge || billingForm.booking_id) ? "text-[#D4A373] group-hover:text-white transition-colors" : "text-white"} /> SETTLE BILL & FREE TABLE
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })()
-                    )}
+                {/* TAB: DIRECTORY */}
+                {activeTab === 'directory' && (
+                  <div className="h-[800px] overflow-hidden rounded-[2rem] shadow-2xl shadow-indigo-900/5">
+                    <StaffDirectoryModule />
                   </div>
-                </motion.div>
-              )}
+                )}
 
-              {/* TAB: HR HUB */}
-              {activeTab === 'hr_hub' && accessLevel === 'MANAGER' && (
-                <DepartmentHRModule departmentName="DINING" />
-              )}
-
-              {/* TAB: DIRECTORY */}
-              {activeTab === 'directory' && (
-                <div className="h-[800px] overflow-hidden rounded-[2rem] shadow-2xl shadow-indigo-900/5">
-                  <StaffDirectoryModule />
-                </div>
-              )}
-
-            </div>
+              </div>
+            )}
+          </AnimatePresence>
+        </div>
+        {/* WASTAGE MODAL */}
+        <AnimatePresence>
+          {isWastageModalOpen && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center dd-glass-backdrop p-4" onClick={() => setIsWastageModalOpen(false)}>
+              <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={e => e.stopPropagation()} className="w-full max-w-md dd-glass-modal rounded-3xl p-7">
+                <div className="flex justify-between items-center mb-6"><div><h2 className="text-lg font-serif font-bold text-zinc-900">Record Wastage</h2></div><button onClick={() => setIsWastageModalOpen(false)}><X size={20} className="text-zinc-500" /></button></div>
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  const formData = new FormData(e.target);
+                  const data = Object.fromEntries(formData);
+                  try {
+                    const res = await fetch('http://localhost:3000/api/dining/wastage', {
+                      method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
+                      body: JSON.stringify(data)
+                    });
+                    if (res?.ok) { setIsWastageModalOpen(false); fetchDiningData(); }
+                  } catch (error) { console.error('Wastage error', error); }
+                }} className="space-y-4">
+                  <div><label className="block text-xs font-bold text-zinc-700 mb-1">Date</label><input required name="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                  <div><label className="block text-xs font-bold text-zinc-700 mb-1">Item Name</label><input required name="item_name" type="text" placeholder="e.g. Tomatoes" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div><label className="block text-xs font-bold text-zinc-700 mb-1">Quantity (e.g. 2kg)</label><input required name="quantity" type="text" placeholder="Quantity" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                    <div><label className="block text-xs font-bold text-zinc-700 mb-1">Loss Value (₹)</label><input required name="loss_amount" type="number" step="0.01" placeholder="Amount" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                  </div>
+                  <div><label className="block text-xs font-bold text-zinc-700 mb-1">Reason</label><input required name="reason" type="text" placeholder="e.g. Spoiled" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                  <button type="submit" className="w-full mt-2 bg-rose-600 text-white font-bold text-sm py-3 rounded-xl hover:bg-rose-700 transition-colors">Record Wastage</button>
+                </form>
+              </motion.div>
+            </motion.div>
           )}
         </AnimatePresence>
-      </div>
-      {/* WASTAGE MODAL */}
-      <AnimatePresence>
-        {isWastageModalOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center dd-glass-backdrop p-4" onClick={() => setIsWastageModalOpen(false)}>
-            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={e => e.stopPropagation()} className="w-full max-w-md dd-glass-modal rounded-3xl p-7">
-              <div className="flex justify-between items-center mb-6"><div><h2 className="text-lg font-serif font-bold text-zinc-900">Record Wastage</h2></div><button onClick={() => setIsWastageModalOpen(false)}><X size={20} className="text-zinc-500" /></button></div>
-              <form onSubmit={async (e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target);
-                const data = Object.fromEntries(formData);
-                try {
-                  const res = await fetch('http://localhost:3000/api/dining/wastage', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
-                    body: JSON.stringify(data)
-                  });
-                  if (res?.ok) { setIsWastageModalOpen(false); fetchDiningData(); }
-                } catch (error) { console.error('Wastage error', error); }
-              }} className="space-y-4">
-                <div><label className="block text-xs font-bold text-zinc-700 mb-1">Date</label><input required name="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
-                <div><label className="block text-xs font-bold text-zinc-700 mb-1">Item Name</label><input required name="item_name" type="text" placeholder="e.g. Tomatoes" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div><label className="block text-xs font-bold text-zinc-700 mb-1">Quantity (e.g. 2kg)</label><input required name="quantity" type="text" placeholder="Quantity" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
-                  <div><label className="block text-xs font-bold text-zinc-700 mb-1">Loss Value (₹)</label><input required name="loss_amount" type="number" step="0.01" placeholder="Amount" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
-                </div>
-                <div><label className="block text-xs font-bold text-zinc-700 mb-1">Reason</label><input required name="reason" type="text" placeholder="e.g. Spoiled" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
-                <button type="submit" className="w-full mt-2 bg-rose-600 text-white font-bold text-sm py-3 rounded-xl hover:bg-rose-700 transition-colors">Record Wastage</button>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
-      {/* MATERIAL MODAL */}
-      <AnimatePresence>
-        {isMaterialModalOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center dd-glass-backdrop p-4" onClick={() => setIsMaterialModalOpen(false)}>
-            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={e => e.stopPropagation()} className="w-full max-w-md dd-glass-modal rounded-3xl p-7">
-              <div className="flex justify-between items-center mb-6"><div><h2 className="text-lg font-serif font-bold text-zinc-900">{materialForm.id ? 'Edit Material' : 'New Material'}</h2></div><button onClick={() => setIsMaterialModalOpen(false)}><X size={20} className="text-zinc-500" /></button></div>
-              <form onSubmit={async (e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target);
-                const data = Object.fromEntries(formData);
-                data.id = materialForm.id;
-                data.is_active = true;
-                try {
-                  const res = await fetch('http://localhost:3000/api/dining/inventory', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
-                    body: JSON.stringify(data)
-                  });
-                  if (res?.ok) { setIsMaterialModalOpen(false); fetchDiningData(); }
-                } catch (error) { console.error('Material error', error); }
-              }} className="space-y-4">
-                <div><label className="block text-xs font-bold text-zinc-700 mb-1">Item Name</label><input required name="name" defaultValue={materialForm.name} type="text" placeholder="e.g. Flour" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
-                <div><label className="block text-xs font-bold text-zinc-700 mb-1">Category</label><input required name="category" defaultValue={materialForm.category} type="text" placeholder="e.g. Dry Goods" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div><label className="block text-xs font-bold text-zinc-700 mb-1">UOM</label><input required name="uom" defaultValue={materialForm.uom} type="text" placeholder="kg, L, etc" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
-                  <div><label className="block text-xs font-bold text-zinc-700 mb-1">Par Level</label><input required name="par_level" defaultValue={materialForm.par_level} type="number" placeholder="Level" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
-                  <div><label className="block text-xs font-bold text-zinc-700 mb-1">Unit Cost</label><input required name="unit_cost" defaultValue={materialForm.unit_cost} type="number" step="0.01" placeholder="₹" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
-                </div>
-                <button type="submit" className="w-full mt-2 bg-indigo-600 text-white font-bold text-sm py-3 rounded-xl hover:bg-indigo-700 transition-colors">Save Material</button>
-              </form>
+        {/* MATERIAL MODAL */}
+        <AnimatePresence>
+          {isMaterialModalOpen && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center dd-glass-backdrop p-4" onClick={() => setIsMaterialModalOpen(false)}>
+              <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={e => e.stopPropagation()} className="w-full max-w-md dd-glass-modal rounded-3xl p-7">
+                <div className="flex justify-between items-center mb-6"><div><h2 className="text-lg font-serif font-bold text-zinc-900">{materialForm.id ? 'Edit Material' : 'New Material'}</h2></div><button onClick={() => setIsMaterialModalOpen(false)}><X size={20} className="text-zinc-500" /></button></div>
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  const formData = new FormData(e.target);
+                  const data = Object.fromEntries(formData);
+                  data.id = materialForm.id;
+                  data.is_active = true;
+                  try {
+                    const res = await fetch('http://localhost:3000/api/dining/inventory', {
+                      method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
+                      body: JSON.stringify(data)
+                    });
+                    if (res?.ok) { setIsMaterialModalOpen(false); fetchDiningData(); }
+                  } catch (error) { console.error('Material error', error); }
+                }} className="space-y-4">
+                  <div><label className="block text-xs font-bold text-zinc-700 mb-1">Item Name</label><input required name="name" defaultValue={materialForm.name} type="text" placeholder="e.g. Flour" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                  <div><label className="block text-xs font-bold text-zinc-700 mb-1">Category</label><input required name="category" defaultValue={materialForm.category} type="text" placeholder="e.g. Dry Goods" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div><label className="block text-xs font-bold text-zinc-700 mb-1">UOM</label><input required name="uom" defaultValue={materialForm.uom} type="text" placeholder="kg, L, etc" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                    <div><label className="block text-xs font-bold text-zinc-700 mb-1">Par Level</label><input required name="par_level" defaultValue={materialForm.par_level} type="number" placeholder="Level" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                    <div><label className="block text-xs font-bold text-zinc-700 mb-1">Unit Cost</label><input required name="unit_cost" defaultValue={materialForm.unit_cost} type="number" step="0.01" placeholder="₹" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                  </div>
+                  <button type="submit" className="w-full mt-2 bg-indigo-600 text-white font-bold text-sm py-3 rounded-xl hover:bg-indigo-700 transition-colors">Save Material</button>
+                </form>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
 
-      {/* DELIVERY MODAL */}
-      <AnimatePresence>
-        {isDeliveryModalOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center dd-glass-backdrop p-4" onClick={() => setIsDeliveryModalOpen(false)}>
-            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={e => e.stopPropagation()} className="w-full max-w-md dd-glass-modal rounded-3xl p-7">
-              <div className="flex justify-between items-center mb-6"><div><h2 className="text-lg font-serif font-bold text-zinc-900">Log Delivery</h2></div><button onClick={() => setIsDeliveryModalOpen(false)}><X size={20} className="text-zinc-500" /></button></div>
-              <form onSubmit={async (e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target);
-                const data = Object.fromEntries(formData);
-                try {
-                  const res = await fetch('http://localhost:3000/api/dining/procurement', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
-                    body: JSON.stringify(data)
-                  });
-                  if (res?.ok) { setIsDeliveryModalOpen(false); fetchDiningData(); }
-                } catch (error) { console.error('Delivery error', error); }
-              }} className="space-y-4">
-                <div><label className="block text-xs font-bold text-zinc-700 mb-1">Date</label><input required name="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
-                <div><label className="block text-xs font-bold text-zinc-700 mb-1">Vendor Name</label><input required name="vendor" type="text" placeholder="Vendor" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div><label className="block text-xs font-bold text-zinc-700 mb-1">Invoice #</label><input required name="invoice_number" type="text" placeholder="INV-123" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
-                  <div><label className="block text-xs font-bold text-zinc-700 mb-1">Category</label><input required name="category" type="text" placeholder="e.g. Vegetables" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
-                </div>
-                <div><label className="block text-xs font-bold text-zinc-700 mb-1">Amount (₹)</label><input required name="amount" type="number" step="0.01" placeholder="Amount" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
-                <button type="submit" className="w-full mt-2 bg-zinc-900 text-white font-bold text-sm py-3 rounded-xl hover:bg-black transition-colors">Log Delivery</button>
-              </form>
+        {/* DELIVERY MODAL */}
+        <AnimatePresence>
+          {isDeliveryModalOpen && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center dd-glass-backdrop p-4" onClick={() => setIsDeliveryModalOpen(false)}>
+              <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={e => e.stopPropagation()} className="w-full max-w-md dd-glass-modal rounded-3xl p-7">
+                <div className="flex justify-between items-center mb-6"><div><h2 className="text-lg font-serif font-bold text-zinc-900">Log Delivery</h2></div><button onClick={() => setIsDeliveryModalOpen(false)}><X size={20} className="text-zinc-500" /></button></div>
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  const formData = new FormData(e.target);
+                  const data = Object.fromEntries(formData);
+                  try {
+                    const res = await fetch('http://localhost:3000/api/dining/procurement', {
+                      method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
+                      body: JSON.stringify(data)
+                    });
+                    if (res?.ok) { setIsDeliveryModalOpen(false); fetchDiningData(); }
+                  } catch (error) { console.error('Delivery error', error); }
+                }} className="space-y-4">
+                  <div><label className="block text-xs font-bold text-zinc-700 mb-1">Date</label><input required name="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                  <div><label className="block text-xs font-bold text-zinc-700 mb-1">Vendor Name</label><input required name="vendor" type="text" placeholder="Vendor" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div><label className="block text-xs font-bold text-zinc-700 mb-1">Invoice #</label><input required name="invoice_number" type="text" placeholder="INV-123" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                    <div><label className="block text-xs font-bold text-zinc-700 mb-1">Category</label><input required name="category" type="text" placeholder="e.g. Vegetables" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                  </div>
+                  <div><label className="block text-xs font-bold text-zinc-700 mb-1">Amount (₹)</label><input required name="amount" type="number" step="0.01" placeholder="Amount" className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm" /></div>
+                  <button type="submit" className="w-full mt-2 bg-zinc-900 text-white font-bold text-sm py-3 rounded-xl hover:bg-black transition-colors">Log Delivery</button>
+                </form>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
 
-      {/* KOT MODAL */}
-      <AnimatePresence>
-        {isKOTModalOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-55 flex items-center justify-center dd-glass-backdrop p-4" onClick={() => setIsKOTModalOpen(false)}>
-            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={e => e.stopPropagation()} className="w-full max-w-md dd-glass-modal rounded-3xl p-7">
-              <div className="flex justify-between items-center mb-6"><div><h2 className="text-lg font-serif font-bold text-zinc-900">Punch KOT</h2></div><button onClick={() => setIsKOTModalOpen(false)}><X size={20} className="text-zinc-500" /></button></div>
-              <form onSubmit={handleAddKOT} className="space-y-4">
-                <div><label className="block text-[10px] font-bold uppercase text-zinc-400 mb-1">Table / Room</label><input required placeholder="e.g. Table 5 or Room 102" value={kotForm.table} onChange={e => setKotForm({ ...kotForm, table: e.target.value })} className="dd-input" /></div>
-                <div><label className="block text-[10px] font-bold uppercase text-zinc-400 mb-1">Order Items</label><textarea required rows={4} placeholder="e.g. 2x Butter Chicken, 1x Naan" value={kotForm.items} onChange={e => setKotForm({ ...kotForm, items: e.target.value })} className="dd-input resize-none" /></div>
-                <button type="submit" className="w-full bg-[#D4A373] hover:bg-[#D4A373] text-white font-bold py-3 rounded-xl uppercase tracking-wider text-xs transition-colors">Send to Kitchen</button>
-              </form>
+        {/* KOT MODAL */}
+        <AnimatePresence>
+          {isKOTModalOpen && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-55 flex items-center justify-center dd-glass-backdrop p-4" onClick={() => setIsKOTModalOpen(false)}>
+              <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={e => e.stopPropagation()} className="w-full max-w-md dd-glass-modal rounded-3xl p-7">
+                <div className="flex justify-between items-center mb-6"><div><h2 className="text-lg font-serif font-bold text-zinc-900">Punch KOT</h2></div><button onClick={() => setIsKOTModalOpen(false)}><X size={20} className="text-zinc-500" /></button></div>
+                <form onSubmit={handleAddKOT} className="space-y-4">
+                  <div><label className="block text-[10px] font-bold uppercase text-zinc-400 mb-1">Table / Room</label><input required placeholder="e.g. Table 5 or Room 102" value={kotForm.table} onChange={e => setKotForm({ ...kotForm, table: e.target.value })} className="dd-input" /></div>
+                  <div><label className="block text-[10px] font-bold uppercase text-zinc-400 mb-1">Order Items</label><textarea required rows={4} placeholder="e.g. 2x Butter Chicken, 1x Naan" value={kotForm.items} onChange={e => setKotForm({ ...kotForm, items: e.target.value })} className="dd-input resize-none" /></div>
+                  <button type="submit" className="w-full bg-[#D4A373] hover:bg-[#D4A373] text-white font-bold py-3 rounded-xl uppercase tracking-wider text-xs transition-colors">Send to Kitchen</button>
+                </form>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      
+          )}
+        </AnimatePresence>
+
       </div>
       {/* Hidden Print Components */}
       <div className="hidden print:block">

@@ -382,6 +382,7 @@ export default function HousekeepingDashboard() {
         finalUrl = `${finalUrl}${separator}hotel_id=${currentHotelId}`;
       }
       const res = await fetch(finalUrl, {
+        cache: 'no-store',
         ...options,
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -457,6 +458,11 @@ export default function HousekeepingDashboard() {
   useEffect(() => {
     loadBoard();
     loadAllRooms();
+    const interval = setInterval(() => {
+      loadBoard(false);
+      loadAllRooms();
+    }, 15000);
+    return () => clearInterval(interval);
   }, [loadBoard, loadAllRooms]);
 
   // ─── Action Handlers ──────────────────────────────────────

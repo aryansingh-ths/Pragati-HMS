@@ -393,7 +393,7 @@ function BookingPaceChart({ currentPace = [], lastYearPace = [] }) {
     ...lastYearPace.map(d => d.velocity),
     10
   );
-  
+
   const getCoords = (data, maxDay) => {
     return data.map((d) => {
       const x = padX + ((d.day - 1) / (maxDay - 1)) * (width - padX * 2);
@@ -413,7 +413,7 @@ function BookingPaceChart({ currentPace = [], lastYearPace = [] }) {
   const currPath = getPath(currCoords);
   const lastPath = getPath(lastCoords);
 
-  const currArea = currCoords.length ? `${currPath} L${currCoords[currCoords.length-1].x} ${height - padY} L${currCoords[0].x} ${height - padY} Z` : '';
+  const currArea = currCoords.length ? `${currPath} L${currCoords[currCoords.length - 1].x} ${height - padY} L${currCoords[0].x} ${height - padY} Z` : '';
 
   // Get active hover data
   const currHover = currCoords.find(c => c.day === hoverDay);
@@ -478,10 +478,10 @@ function BookingPaceChart({ currentPace = [], lastYearPace = [] }) {
         />
 
         {/* Current Year Points and Hover Rects */}
-        {Array.from({length: 31}, (_, i) => i + 1).map(day => {
+        {Array.from({ length: 31 }, (_, i) => i + 1).map(day => {
           const x = padX + ((day - 1) / 30) * (width - padX * 2);
           const cP = currCoords.find(c => c.day === day);
-          
+
           return (
             <g key={day}>
               <rect
@@ -501,7 +501,7 @@ function BookingPaceChart({ currentPace = [], lastYearPace = [] }) {
                   strokeWidth="1.5"
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
-                  transition={{ delay: 0.3 + (day/31), type: 'spring', stiffness: 400 }}
+                  transition={{ delay: 0.3 + (day / 31), type: 'spring', stiffness: 400 }}
                   style={{ pointerEvents: 'none' }}
                 />
               )}
@@ -509,7 +509,7 @@ function BookingPaceChart({ currentPace = [], lastYearPace = [] }) {
           );
         })}
       </svg>
-      
+
       {/* Tooltip */}
       <AnimatePresence>
         {hoverDay && (
@@ -686,7 +686,7 @@ export default function AdminDashboard() {
   const [showAddPropertyModal, setShowAddPropertyModal] = useState(false);
   const [showInvoiceSettingsModal, setShowInvoiceSettingsModal] = useState(false);
   const [selectedHotelForInvoice, setSelectedHotelForInvoice] = useState(null);
-  const [invoiceSettingsForm, setInvoiceSettingsForm] = useState({ name: '', address: '', logo_url: '', gst_no: '', contact_no: '' });
+  const [invoiceSettingsForm, setInvoiceSettingsForm] = useState({ name: '', address: '', logo_url: '', gst_no: '', contact_no: '', taxes: [] });
   const [showAddAdminModal, setShowAddAdminModal] = useState(false);
   const [addPropertyForm, setAddPropertyForm] = useState({ name: '', location: '' });
   const [addAdminForm, setAddAdminForm] = useState({ name: '', email: '', password: '', role: 'ADMIN', hotel_id: '' });
@@ -965,7 +965,7 @@ export default function AdminDashboard() {
   const handleAddRoomClass = async (e) => {
     e.preventDefault();
     if (!newRoomClassForm.name.trim()) return alert("❌ Room class name cannot be empty.");
-    
+
     const res = await fetchWithAuth('http://localhost:3000/api/Admin/room-types', {
       method: 'POST', body: JSON.stringify(newRoomClassForm)
     });
@@ -1270,9 +1270,9 @@ export default function AdminDashboard() {
     try {
       const res = await fetch(`http://localhost:3000/api/super-admin/hotels/${selectedHotelForInvoice}/settings`, {
         method: 'PATCH',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` 
+          'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}`
         },
         body: JSON.stringify(invoiceSettingsForm),
       });
@@ -2601,13 +2601,13 @@ export default function AdminDashboard() {
                                             {item.guest_name}
                                             <span className="text-zinc-400 font-normal mx-1.5">·</span>
                                             <span className="text-zinc-500 font-normal">
-                                                {formatActivityAction(item.action)}
-                                                {item.action === 'CHECKED_OUT' && item.check_in_date && (
-                                                  <span className="text-[10px] text-zinc-400 italic ml-1">
-                                                    (Checked in: {new Date(item.check_in_date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })})
-                                                  </span>
-                                                )}
-                                              </span>
+                                              {formatActivityAction(item.action)}
+                                              {item.action === 'CHECKED_OUT' && item.check_in_date && (
+                                                <span className="text-[10px] text-zinc-400 italic ml-1">
+                                                  (Checked in: {new Date(item.check_in_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })})
+                                                </span>
+                                              )}
+                                            </span>
                                           </p>
                                           <p className="text-[9px] text-zinc-400">
                                             Room {item.room_number} ({item.room_type})
@@ -2719,9 +2719,9 @@ export default function AdminDashboard() {
                         <p className="relative text-[10px] text-zinc-400 uppercase tracking-wider font-bold mb-4">Month-on-Month pace curve (This Year vs Last Year)</p>
 
                         <div className="relative h-56 flex items-end px-2 pt-2">
-                          <BookingPaceChart 
-                            currentPace={analyticsData?.pace?.current || []} 
-                            lastYearPace={analyticsData?.pace?.lastYear || []} 
+                          <BookingPaceChart
+                            currentPace={analyticsData?.pace?.current || []}
+                            lastYearPace={analyticsData?.pace?.lastYear || []}
                           />
                         </div>
                       </motion.div>
@@ -4907,32 +4907,9 @@ export default function AdminDashboard() {
                           <div className="flex-1 overflow-y-auto fd-sidebar-scroll p-6">
 
                             <div className="space-y-6">
-                              {/* Special Access Toggles */}
-                              <div className="bg-white/50 border border-zinc-100 rounded-2xl p-5 shadow-sm space-y-4">
-                                <h4 className="text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-2">Special Permissions</h4>
-                                {[
-                                  { key: 'can_process_refunds', title: 'Refund Approval Access', desc: 'Allow user to approve and process refunds' },
-                                  { key: 'can_apply_discounts', title: 'Discount Approval Access', desc: 'Allow user to override rates and grant discounts' },
-                                  { key: 'can_overbook', title: 'Overbooking Access', desc: 'Allow user to overbook room capacities manually' }
-                                ].map(perm => (
-                                  <div key={perm.key} className="flex items-center justify-between pb-3 border-b border-zinc-100/60 last:border-0 last:pb-0">
-                                    <div>
-                                      <p className="text-sm font-bold text-zinc-800">{perm.title}</p>
-                                      <p className="text-[9px] font-medium text-zinc-400">{perm.desc}</p>
-                                    </div>
-                                    <button
-                                      onClick={() => handleUpdateStaffProfile(perm.key, !selectedStaff[perm.key])}
-                                      className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${selectedStaff[perm.key] ? 'bg-indigo-500' : 'bg-zinc-200'}`}
-                                    >
-                                      <motion.div
-                                        animate={{ x: selectedStaff[perm.key] ? 24 : 2 }}
-                                        className="absolute top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-white shadow-sm"
-                                      />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
 
+
+                              {/* 
                               <form onSubmit={handleSaveSalaryConfig} className="space-y-5">
                                 <div>
                                   <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-2">Monthly Base Salary (₹)</label>
@@ -5014,6 +4991,7 @@ export default function AdminDashboard() {
                                   );
                                 })()}
                               </div>
+                              */ }
                             </div>
                           </div>
 
@@ -5302,7 +5280,7 @@ export default function AdminDashboard() {
                     {[
                       { key: 'properties', label: 'Properties', icon: <Building2 size={14} /> },
                       { key: 'staff', label: 'Staff & Admins', icon: <Users size={14} /> },
-                      { key: 'permissions', label: 'Permissions', icon: <ShieldAlert size={14} /> },
+                      // { key: 'permissions', label: 'Permissions', icon: <ShieldAlert size={14} /> },
                     ].map(tab => (
                       <button
                         key={tab.key}
@@ -5389,7 +5367,8 @@ export default function AdminDashboard() {
                                           address: hotel.address || '',
                                           logo_url: hotel.logo_url || '',
                                           gst_no: hotel.gst_no || '',
-                                          contact_no: hotel.contact_no || ''
+                                          contact_no: hotel.contact_no || '',
+                                          taxes: hotel.taxes || []
                                         });
                                         setShowInvoiceSettingsModal(true);
                                       }}
@@ -5524,8 +5503,8 @@ export default function AdminDashboard() {
                                               disabled={user.role === 'SUPER_ADMIN'}
                                               className="text-[10px] font-bold uppercase tracking-wider bg-amber-50 border border-amber-200 text-amber-600 hover:bg-amber-100 rounded-lg px-3 py-1.5 outline-none transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                                             >
-                                                RESET PASS
-                                              </button>
+                                              RESET PASS
+                                            </button>
 
                                             {user.role !== 'SUPER_ADMIN' && (
                                               <button
@@ -5550,7 +5529,7 @@ export default function AdminDashboard() {
                   )}
 
                   {/* ═══ SUB-TAB: PERMISSIONS ═══ */}
-                  {managementSubTab === 'permissions' && (
+                  {/* {managementSubTab === 'permissions' && (
                     <div className="space-y-6">
                       <div className="bg-white rounded-[2rem] border border-zinc-200 p-8 shadow-sm">
                         <div className="mb-8">
@@ -5623,7 +5602,7 @@ export default function AdminDashboard() {
                         )}
                       </div>
                     </div>
-                  )}
+                  )} */}
 
                   {/* ═══ INVOICE SETTINGS MODAL ═══ */}
                   <AnimatePresence>
@@ -5634,7 +5613,7 @@ export default function AdminDashboard() {
                           initial={{ opacity: 0, scale: 0.95, y: 10 }}
                           animate={{ opacity: 1, scale: 1, y: 0 }}
                           exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                          className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden relative z-10 border border-zinc-200"
+                          className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden relative z-10 border border-zinc-200 flex flex-col max-h-[90vh]"
                         >
                           <div className="bg-gradient-to-r from-indigo-600 to-indigo-500 p-6 flex justify-between items-center text-white">
                             <div>
@@ -5645,7 +5624,7 @@ export default function AdminDashboard() {
                               <X size={16} />
                             </button>
                           </div>
-                          <form onSubmit={handleSaveInvoiceSettings} className="p-6 space-y-4">
+                          <form onSubmit={handleSaveInvoiceSettings} className="p-6 space-y-4 overflow-y-auto flex-1">
                             <div>
                               <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5">Property Name</label>
                               <input required type="text" value={invoiceSettingsForm.name} onChange={e => setInvoiceSettingsForm({ ...invoiceSettingsForm, name: e.target.value })} className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-2.5 text-sm font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" />
@@ -5679,6 +5658,44 @@ export default function AdminDashboard() {
                                   reader.readAsDataURL(file);
                                 }
                               }} className="w-full text-xs text-zinc-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition-all cursor-pointer" />
+                            </div>
+                            <div className="border-t border-zinc-100 pt-4 mt-4">
+                              <div className="flex justify-between items-center mb-3">
+                                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Property Taxes</label>
+                                <button type="button" onClick={() => setInvoiceSettingsForm({ ...invoiceSettingsForm, taxes: [...(invoiceSettingsForm.taxes || []), { name: '', rate: 0, type: 'PERCENTAGE' }] })} className="text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg transition-colors flex items-center gap-1">
+                                  <Plus size={12} /> Add Tax
+                                </button>
+                              </div>
+                              <div className="space-y-2 max-h-32 overflow-y-auto pr-1">
+                                {(invoiceSettingsForm.taxes || []).map((tax, idx) => (
+                                  <div key={idx} className="flex gap-2 items-center">
+                                    <input type="text" placeholder="Tax Name (e.g. GST)" value={tax.name} onChange={(e) => {
+                                      const newTaxes = [...invoiceSettingsForm.taxes];
+                                      newTaxes[idx].name = e.target.value;
+                                      setInvoiceSettingsForm({ ...invoiceSettingsForm, taxes: newTaxes });
+                                    }} className="flex-1 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-xs font-bold text-zinc-800 focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                                    <div className="relative w-24">
+                                      <input type="number" step="0.01" placeholder="Rate" value={tax.rate} onChange={(e) => {
+                                        const newTaxes = [...invoiceSettingsForm.taxes];
+                                        newTaxes[idx].rate = parseFloat(e.target.value) || 0;
+                                        setInvoiceSettingsForm({ ...invoiceSettingsForm, taxes: newTaxes });
+                                      }} className="w-full bg-zinc-50 border border-zinc-200 rounded-xl pl-3 pr-6 py-2 text-xs font-bold text-zinc-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-right" />
+                                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-400">%</span>
+                                    </div>
+                                    <button type="button" onClick={() => {
+                                      const newTaxes = invoiceSettingsForm.taxes.filter((_, i) => i !== idx);
+                                      setInvoiceSettingsForm({ ...invoiceSettingsForm, taxes: newTaxes });
+                                    }} className="w-8 h-8 rounded-xl bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-100 transition-colors flex-shrink-0">
+                                      <X size={14} />
+                                    </button>
+                                  </div>
+                                ))}
+                                {(!invoiceSettingsForm.taxes || invoiceSettingsForm.taxes.length === 0) && (
+                                  <div className="text-center py-4 bg-zinc-50 rounded-xl border border-dashed border-zinc-200">
+                                    <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">No taxes configured</p>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                             <div className="flex gap-3 pt-4">
                               <button type="button" onClick={() => setShowInvoiceSettingsModal(false)} className="flex-1 py-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-500 hover:bg-zinc-50 transition-colors">Cancel</button>
