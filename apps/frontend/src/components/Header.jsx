@@ -124,6 +124,7 @@ export default function Header({
     const token = sessionStorage.getItem('hms_token');
     if (!token) return null;
     return fetch(url, {
+      cache: 'no-store',
       ...options,
       headers: {
         'Content-Type': 'application/json',

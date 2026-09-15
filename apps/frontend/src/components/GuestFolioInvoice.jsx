@@ -49,22 +49,54 @@ const GuestFolioInvoice = ({ invoiceData, hotelSettings }) => {
           <tr className="border-b border-gray-200">
             <td className="py-3 px-4 text-sm">Room Charges ({invoiceData.room_type || 'Room'}) {invoiceData.actual_days ? `x ${invoiceData.actual_days} Day(s)` : ''}</td>
             <td className="py-3 px-4 text-sm text-right">
-              {invoiceData.base_total 
-                ? Number(invoiceData.base_total).toLocaleString('en-IN', { maximumFractionDigits: 2 }) 
+              {invoiceData.base_total
+                ? Number(invoiceData.base_total).toLocaleString('en-IN', { maximumFractionDigits: 2 })
                 : Number(invoiceData.total_price || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
             </td>
           </tr>
-          {invoiceData.gst_amount !== undefined && (
-            <tr className="border-b border-gray-200">
-              <td className="py-3 px-4 text-sm">GST (18%)</td>
-              <td className="py-3 px-4 text-sm text-right">{Number(invoiceData.gst_amount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
+          {invoiceData.calculatedTaxes && invoiceData.calculatedTaxes.map((tax, idx) => (
+            <tr key={idx} className="border-b border-gray-200">
+              <td className="py-3 px-4 text-sm">{tax.name} ({tax.rate}%)</td>
+              <td className="py-3 px-4 text-sm text-right">{Number(tax.amount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
+            </tr>
+          ))}
+          {invoiceData.room_total !== undefined && invoiceData.extra_charges?.length > 0 && (
+            <tr className="border-b-2 border-gray-300 bg-gray-50">
+              <td className="py-2 px-4 text-sm font-semibold">Room Subtotal</td>
+              <td className="py-2 px-4 text-sm text-right font-semibold">{Number(invoiceData.room_total).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
             </tr>
           )}
-          {invoiceData.service_charge !== undefined && (
-            <tr className="border-b border-gray-200">
-              <td className="py-3 px-4 text-sm">Service Charge (10%)</td>
-              <td className="py-3 px-4 text-sm text-right">{Number(invoiceData.service_charge).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
-            </tr>
+          {/* Extra Charges (Dining / Room Service) */}
+          {invoiceData.extra_charges?.length > 0 && (
+            <>
+              <tr className="bg-gray-100">
+                <td colSpan="2" className="py-2 px-4 text-sm font-bold uppercase tracking-wider">Restaurant / Extra Charges</td>
+              </tr>
+              {invoiceData.extra_charges.map((charge, idx) => (
+                <React.Fragment key={charge.id || idx}>
+                  <tr className="border-b border-gray-200">
+                    <td className="py-2 px-4 text-sm font-medium">
+                      {charge.type}{charge.table_number ? ` (Table ${charge.table_number})` : ''}
+                    </td>
+                    <td className="py-2 px-4 text-sm text-right font-medium">{Number(charge.amount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
+                  </tr>
+                  {charge.items?.length > 0 && charge.items.map((item, i) => (
+                    <tr key={i} className="border-b border-gray-100">
+                      <td className="py-1 px-4 pl-8 text-xs text-gray-500">
+                        {item.name} × {item.qty}
+                      </td>
+                      <td className="py-1 px-4 text-xs text-right text-gray-500">
+                        {(item.price * item.qty).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  ))}
+                </React.Fragment>
+              ))}
+              <tr className="border-b-2 border-gray-300 bg-gray-50">
+                <td className="py-2 px-4 text-sm font-semibold">Extra Charges Subtotal</td>
+                <td className="py-2 px-4 text-sm text-right font-semibold">{Number(invoiceData.extra_charges_total || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
+              </tr>
+            </>
           )}
         </tbody>
       </table>
@@ -75,7 +107,7 @@ const GuestFolioInvoice = ({ invoiceData, hotelSettings }) => {
           <div className="flex justify-between py-1 border-t-2 border-gray-800 font-bold text-lg">
             <span>Grand Total:</span>
             <span>₹{
-              invoiceData.final_total 
+              invoiceData.final_total
                 ? Number(invoiceData.final_total).toLocaleString('en-IN', { maximumFractionDigits: 2 })
                 : Number(invoiceData.total_price || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })
             }</span>

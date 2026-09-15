@@ -358,7 +358,7 @@ export default function FinanceDashboard() {
   }, [dismissedBroadcasts]);
 
   const fetchBroadcasts = React.useCallback(async () => {
-const fetch = scopedFetch;
+    const fetch = scopedFetch;
     try {
       const token = sessionStorage.getItem('hms_token');
       const res = await scopedFetch(`http://localhost:3000/api/broadcasts`, { headers: { 'Authorization': `Bearer ${token}` } });
@@ -385,6 +385,8 @@ const fetch = scopedFetch;
   const [apiReconciliations, setApiReconciliations] = useState([]);
   const [apiLedger, setApiLedger] = useState([]);
   const [apiStatements, setApiStatements] = useState(null);
+  const [revenuePeriod, setRevenuePeriod] = useState('monthly');
+  const [revenueDate, setRevenueDate] = useState(new Date().toISOString().split('T')[0]);
   const [apiBudgets, setApiBudgets] = useState([]);
   const [apiPayroll, setApiPayroll] = useState([]);
   const [apiDeposits, setApiDeposits] = useState([]);
@@ -397,14 +399,13 @@ const fetch = scopedFetch;
         const token = sessionStorage.getItem('hms_token');
         const headers = { 'Authorization': `Bearer ${token}` };
 
-        const [overviewRes, expensesRes, invoicesRes, payablesRes, reconRes, ledgerRes, stmtRes, budgetRes, cashRegisterRes, payrollRes] = await Promise.all([
+        const [overviewRes, expensesRes, invoicesRes, payablesRes, reconRes, ledgerRes, budgetRes, cashRegisterRes, payrollRes] = await Promise.all([
           scopedFetch('http://localhost:3000/api/finance/overview', { headers }),
           scopedFetch('http://localhost:3000/api/finance/expenses', { headers }),
           scopedFetch('http://localhost:3000/api/finance/invoices', { headers }),
           scopedFetch('http://localhost:3000/api/finance/payables', { headers }),
           scopedFetch('http://localhost:3000/api/finance/reconciliations', { headers }),
           scopedFetch('http://localhost:3000/api/finance/ledger', { headers }),
-          scopedFetch('http://localhost:3000/api/finance/statements', { headers }),
           scopedFetch('http://localhost:3000/api/finance/budgets', { headers }),
           scopedFetch('http://localhost:3000/api/finance/cash-register', { headers }),
           scopedFetch('http://localhost:3000/api/finance/payroll', { headers })
@@ -434,10 +435,6 @@ const fetch = scopedFetch;
           const { data } = await ledgerRes.json();
           setApiLedger(data.ledger);
         }
-        if (stmtRes.ok) {
-          const { data } = await stmtRes.json();
-          setApiStatements(data);
-        }
         if (budgetRes.ok) {
           const data = await budgetRes.json();
           setApiBudgets(data.budgets || []);
@@ -456,6 +453,23 @@ const fetch = scopedFetch;
     };
     fetchFinanceData();
   }, []);
+
+  React.useEffect(() => {
+    const fetchStatements = async () => {
+      try {
+        const token = sessionStorage.getItem('hms_token');
+        const headers = { 'Authorization': `Bearer ${token}` };
+        const stmtRes = await scopedFetch(`http://localhost:3000/api/finance/statements?period=${revenuePeriod}&date=${revenueDate}`, { headers });
+        if (stmtRes.ok) {
+          const { data } = await stmtRes.json();
+          setApiStatements(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch statements:', err);
+      }
+    };
+    fetchStatements();
+  }, [revenuePeriod, revenueDate]);
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
   const [reconSearch, setReconSearch] = useState('');
   const [entryForm, setEntryForm] = useState({ account: '', type: 'Debit', amount: '', narration: '' });
@@ -683,7 +697,7 @@ const fetch = scopedFetch;
     (e.vendor?.toLowerCase().includes(expenseSearch.toLowerCase()) || e.id?.toLowerCase().includes(expenseSearch.toLowerCase()))
   );
 
-  
+
   const updateExpenseStatus = async (realId, newStatus) => {
     if (!realId) return;
     try {
@@ -1122,8 +1136,7 @@ const fetch = scopedFetch;
                   <button
                     key={item.key}
                     onClick={() => setActiveTab(item.key)}
-                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${
-                      activeTab === item.key
+                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === item.key
                         ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
                         : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
                       }`}
@@ -1189,9 +1202,6 @@ const fetch = scopedFetch;
               <RefreshCw size={15} />
             </button>
 
-            <button className="bg-zinc-900 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#D4A373] transition-colors flex items-center gap-2 shadow-sm">
-              <Download size={14} /> Export
-            </button>
 
             {/* Profile Avatar Widget */}
             {(() => {
@@ -1201,7 +1211,7 @@ const fetch = scopedFetch;
               try {
                 const user = JSON.parse(sessionStorage.getItem('hms_user'));
                 if (user && user.designation) designation = user.designation;
-              } catch(e) {}
+              } catch (e) { }
               return (
                 <motion.button
                   whileHover={{ y: -2 }}
@@ -1476,7 +1486,7 @@ const fetch = scopedFetch;
                           </div>
                           <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Spend by Category</h3>
                         </div>
-                        <button onClick={() => setIsBudgetModalOpen(true)} className="text-[10px] font-bold text-zinc-500 hover:text-zinc-900 uppercase tracking-wider flex items-center gap-1"><Settings size={12}/> Manage</button>
+                        <button onClick={() => setIsBudgetModalOpen(true)} className="text-[10px] font-bold text-zinc-500 hover:text-zinc-900 uppercase tracking-wider flex items-center gap-1"><Settings size={12} /> Manage</button>
                       </div>
                       <div className="relative">
                         <BarRankChart data={expenseCategories.map(c => ({ label: c.label, value: c.spent, color: c.color, icon: c.icon }))} />
@@ -1693,42 +1703,69 @@ const fetch = scopedFetch;
               {activeTab === 'statements' && (
                 <motion.div key="statements" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                        <div className="bg-white rounded-[1.5rem] p-5 border border-zinc-200/60" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 14px 30px -18px rgba(5,150,105,0.2)' }}>
-                          <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Total Revenue</p>
-                          <p className="text-2xl font-black text-[#D4A373]">₹{totalRevenuePnl.toLocaleString('en-IN')}</p>
-                        </div>
-                        <div className="bg-white rounded-[1.5rem] p-5 border border-zinc-200/60" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 14px 30px -18px rgba(225,29,72,0.2)' }}>
-                          <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Total Expenses</p>
-                          <p className="text-2xl font-black text-rose-600">₹{totalPnlExpenses.toLocaleString('en-IN')}</p>
-                        </div>
-                        <div className="bg-white rounded-[1.5rem] p-5 border border-zinc-200/60" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 14px 30px -18px rgba(79,70,229,0.2)' }}>
-                          <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Net Profit</p>
-                          <p className="text-2xl font-black text-zinc-900">₹{netProfit.toLocaleString('en-IN')} <span className="text-xs font-bold text-[#D4A373]">({totalRevenuePnl > 0 ? ((netProfit / totalRevenuePnl) * 100).toFixed(1) : 0}% margin)</span></p>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 gap-6">
-                        <motion.div whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                          className="relative overflow-hidden bg-gradient-to-br from-white via-white to-zinc-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
-                          <div className="relative flex items-center gap-2 mb-4">
-                            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#D4A373] to-[#D4A373] flex items-center justify-center shadow-md shadow-[#D4A373]/20"><BedDouble size={14} className="text-white" /></div>
-                            <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Revenue by Department</h3>
-                          </div>
-                          <div className="relative flex flex-col sm:flex-row items-center justify-around gap-6">
-                            <DonutChart data={revenueByDept} centerLabel="Revenue" />
-                            <div className="grid grid-cols-1 gap-y-2.5">
-                              {revenueByDept.map((d, i) => (
-                                <div key={i} className="flex items-center gap-2">
-                                  <span className="w-2.5 h-2.5 rounded-full shrink-0 ring-2 ring-white shadow-sm" style={{ backgroundColor: d.color }} />
-                                  <span className="text-[11px] text-zinc-500 font-semibold truncate max-w-[120px]">{d.label}</span>
-                                  <span className="text-xs font-black text-zinc-900 ml-auto">₹{d.value.toLocaleString('en-IN')}</span>
-                                </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                    <div className="bg-white rounded-[1.5rem] p-5 border border-zinc-200/60" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 14px 30px -18px rgba(5,150,105,0.2)' }}>
+                      <div className="flex justify-between items-center mb-2">
+                        <p className="text-xs font-bold uppercase tracking-wider text-zinc-500">Total Revenue</p>
+                        <div className="flex gap-2">
+                          {revenuePeriod === 'monthly' && (
+                            <input type="month" value={revenueDate.substring(0, 7)} onChange={(e) => setRevenueDate(e.target.value + '-01')} className="text-xs border border-zinc-200 bg-zinc-50 rounded-md px-2 py-1 outline-none cursor-pointer focus:ring-1 focus:ring-emerald-500 text-zinc-600 font-semibold" />
+                          )}
+                          {revenuePeriod === 'yearly' && (
+                            <select value={revenueDate.substring(0, 4)} onChange={(e) => setRevenueDate(e.target.value + '-01-01')} className="text-xs border border-zinc-200 bg-zinc-50 rounded-md px-2 py-1 outline-none cursor-pointer focus:ring-1 focus:ring-emerald-500 text-zinc-600 font-semibold">
+                              {Array.from({length: 10}, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
+                                <option key={year} value={year}>{year}</option>
                               ))}
-                            </div>
-                          </div>
-                        </motion.div>
+                            </select>
+                          )}
+                          {(revenuePeriod === 'daily' || revenuePeriod === 'weekly') && (
+                            <input type="date" value={revenueDate} onChange={(e) => setRevenueDate(e.target.value)} className="text-xs border border-zinc-200 bg-zinc-50 rounded-md px-2 py-1 outline-none cursor-pointer focus:ring-1 focus:ring-emerald-500 text-zinc-600 font-semibold" />
+                          )}
+                          <select
+                            value={revenuePeriod}
+                            onChange={(e) => setRevenuePeriod(e.target.value)}
+                            className="text-xs border border-zinc-200 bg-zinc-50 rounded-md px-2 py-1 outline-none cursor-pointer focus:ring-1 focus:ring-emerald-500 text-zinc-600 font-semibold hover:bg-zinc-100 transition-colors"
+                          >
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="yearly">Yearly</option>
+                          </select>
+                        </div>
                       </div>
+                      <p className="text-2xl font-black text-[#D4A373]">₹{totalRevenuePnl.toLocaleString('en-IN')}</p>
+                    </div>
+                    <div className="bg-white rounded-[1.5rem] p-5 border border-zinc-200/60" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 14px 30px -18px rgba(225,29,72,0.2)' }}>
+                      <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Total Expenses</p>
+                      <p className="text-2xl font-black text-rose-600">₹{totalPnlExpenses.toLocaleString('en-IN')}</p>
+                    </div>
+                    <div className="bg-white rounded-[1.5rem] p-5 border border-zinc-200/60" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 14px 30px -18px rgba(79,70,229,0.2)' }}>
+                      <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Net Profit</p>
+                      <p className="text-2xl font-black text-zinc-900">₹{netProfit.toLocaleString('en-IN')} <span className="text-xs font-bold text-[#D4A373]">({totalRevenuePnl > 0 ? ((netProfit / totalRevenuePnl) * 100).toFixed(1) : 0}% margin)</span></p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-6">
+                    <motion.div whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 350, damping: 22 }}
+                      className="relative overflow-hidden bg-gradient-to-br from-white via-white to-zinc-50/40 rounded-[2rem] p-6 shadow-sm border border-zinc-200/60">
+                      <div className="relative flex items-center gap-2 mb-4">
+                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#D4A373] to-[#D4A373] flex items-center justify-center shadow-md shadow-[#D4A373]/20"><BedDouble size={14} className="text-white" /></div>
+                        <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wider">Revenue by Department</h3>
+                      </div>
+                      <div className="relative flex flex-col sm:flex-row items-center justify-around gap-6">
+                        <DonutChart data={revenueByDept} centerLabel="Revenue" />
+                        <div className="grid grid-cols-1 gap-y-2.5">
+                          {revenueByDept.map((d, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0 ring-2 ring-white shadow-sm" style={{ backgroundColor: d.color }} />
+                              <span className="text-[11px] text-zinc-500 font-semibold truncate max-w-[120px]">{d.label}</span>
+                              <span className="text-xs font-black text-zinc-900 ml-auto">₹{d.value.toLocaleString('en-IN')}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </motion.div>
+                  </div>
                 </motion.div>
               )}
 
@@ -2676,7 +2713,7 @@ const fetch = scopedFetch;
                       </div>
                       <div className="relative w-32">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-sm font-medium">₹</span>
-                        <input 
+                        <input
                           type="number"
                           defaultValue={b.budget_amount}
                           onBlur={(e) => {
@@ -2697,20 +2734,20 @@ const fetch = scopedFetch;
                 <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100">
                   <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-wider mb-3">Add New Category</h4>
                   <div className="flex gap-3">
-                    <input 
+                    <input
                       type="text"
                       placeholder="Category Name"
                       value={newBudgetForm.department_name}
-                      onChange={e => setNewBudgetForm({...newBudgetForm, department_name: e.target.value})}
+                      onChange={e => setNewBudgetForm({ ...newBudgetForm, department_name: e.target.value })}
                       className="flex-1 bg-white border border-zinc-200 text-sm font-medium text-zinc-900 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                     />
                     <div className="relative w-32">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-sm font-medium">₹</span>
-                      <input 
+                      <input
                         type="number"
                         placeholder="Budget"
                         value={newBudgetForm.budget_amount}
-                        onChange={e => setNewBudgetForm({...newBudgetForm, budget_amount: e.target.value})}
+                        onChange={e => setNewBudgetForm({ ...newBudgetForm, budget_amount: e.target.value })}
                         className="w-full bg-white border border-zinc-200 text-sm font-medium text-zinc-900 rounded-lg pl-7 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                       />
                     </div>

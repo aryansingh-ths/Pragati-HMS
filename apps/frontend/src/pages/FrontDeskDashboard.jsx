@@ -456,7 +456,7 @@ function RoomStatsRings({ roomTypeStats = [] }) {
 export default function FrontDeskDashboard() {
   const navigate = useNavigate();
   const searchRef = useRef(null);
-  
+
   const getAccessLevel = () => {
     let raw = sessionStorage.getItem('hms_access_level');
     if (raw && raw !== 'undefined' && raw !== 'null') return raw;
@@ -519,7 +519,7 @@ export default function FrontDeskDashboard() {
         if (!selectedId) {
           const userStr = sessionStorage.getItem('hms_user');
           if (userStr) {
-            try { selectedId = JSON.parse(userStr).hotelId; } catch (e) {}
+            try { selectedId = JSON.parse(userStr).hotelId; } catch (e) { }
           }
         }
         const currentHotel = hotelsList.find(h => String(h.id) === String(selectedId)) || hotelsList[0] || {};
@@ -540,7 +540,7 @@ export default function FrontDeskDashboard() {
   const handleEmailInvoice = async (stay) => {
     const email = window.prompt("Enter guest email to send invoice:", stay.guest_email || "");
     if (!email) return;
-    
+
     setIsEmailing(true);
     const html = `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -558,6 +558,36 @@ export default function FrontDeskDashboard() {
             <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">Room Charges (${stay.actual_days} days)</td>
             <td style="padding: 10px; text-align: right; border-bottom: 1px solid #e5e7eb;">${stay.base_total.toLocaleString('en-IN')}</td>
           </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">GST (18%)</td>
+            <td style="padding: 10px; text-align: right; border-bottom: 1px solid #e5e7eb;">${(stay.gst_amount || 0).toLocaleString('en-IN')}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">Service Charge (10%)</td>
+            <td style="padding: 10px; text-align: right; border-bottom: 1px solid #e5e7eb;">${(stay.service_charge || 0).toLocaleString('en-IN')}</td>
+          </tr>
+          ${stay.extra_charges?.length > 0 ? `
+          <tr>
+            <td style="padding: 10px; font-weight: bold; border-bottom: 2px solid #d1d5db;">Room Subtotal</td>
+            <td style="padding: 10px; text-align: right; font-weight: bold; border-bottom: 2px solid #d1d5db;">${(stay.room_total || 0).toLocaleString('en-IN')}</td>
+          </tr>
+          <tr style="background-color: #fffbeb;">
+            <td colspan="2" style="padding: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; font-size: 12px; color: #92400e;">Restaurant / Extra Charges</td>
+          </tr>
+          ${stay.extra_charges.map(charge => `
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; font-weight: 500;">
+              ${charge.type}${charge.table_number ? ` (Table ${charge.table_number})` : ''}
+              ${charge.items?.length > 0 ? '<br/>' + charge.items.map(item => `<span style="color: #6b7280; font-size: 12px; margin-left: 10px;">• ${item.name} × ${item.qty}</span>`).join('<br/>') : ''}
+            </td>
+            <td style="padding: 10px; text-align: right; border-bottom: 1px solid #e5e7eb; font-weight: 500;">${Number(charge.amount).toLocaleString('en-IN')}</td>
+          </tr>
+          `).join('')}
+          <tr>
+            <td style="padding: 10px; font-weight: bold; border-bottom: 2px solid #d1d5db;">Extra Charges Subtotal</td>
+            <td style="padding: 10px; text-align: right; font-weight: bold; border-bottom: 2px solid #d1d5db;">${(stay.extra_charges_total || 0).toLocaleString('en-IN')}</td>
+          </tr>
+          ` : ''}
           <tr>
             <td style="padding: 10px; font-weight: bold;">Grand Total</td>
             <td style="padding: 10px; text-align: right; font-weight: bold;">${stay.final_total.toLocaleString('en-IN')}</td>
@@ -709,11 +739,16 @@ export default function FrontDeskDashboard() {
 
   useEffect(() => {
     fetchBroadcasts();
-    const interval = setInterval(fetchBroadcasts, 30000);
+    loadDashboard();
+    
+    // Background polling every 30 seconds to fetch latest stays/bills
+    const interval = setInterval(() => {
+      fetchBroadcasts();
+      loadDashboard(false);
+    }, 30000);
+    
     return () => clearInterval(interval);
-  }, [fetchBroadcasts]);
-
-  useEffect(() => { loadDashboard(); }, [loadDashboard]);
+  }, [fetchBroadcasts, loadDashboard]);
 
   useEffect(() => {
     if (viewMode === 'history') loadAllBookings();
@@ -850,11 +885,47 @@ export default function FrontDeskDashboard() {
     const expectedDays = Math.max(1, Math.round((expectedOut - checkIn) / (1000 * 60 * 60 * 24)));
     const pricePerDay = Number(stay.total_price) / expectedDays;
     const actualDays = Math.max(1, Math.round((today - checkIn) / (1000 * 60 * 60 * 24)));
-    
+
     const baseTotal = actualDays * pricePerDay;
-    const gstAmount = baseTotal * 0.18;
-    const serviceCharge = baseTotal * 0.10;
-    const finalTotal = baseTotal + gstAmount + serviceCharge;
+    const taxesToApply = hotelSettings?.taxes || [];
+    const calculatedTaxes = taxesToApply.map(tax => ({
+      name: tax.name,
+      rate: tax.rate,
+      amount: baseTotal * (tax.rate / 100)
+    }));
+    const totalTaxAmount = calculatedTaxes.reduce((sum, t) => sum + t.amount, 0);
+    const roomTotal = baseTotal + totalTaxAmount;
+
+    // Aggregate pending ledger charges (dining, etc.)
+    const pendingCharges = Array.isArray(stay.pending_ledger_charges) ? stay.pending_ledger_charges : [];
+    const extraCharges = pendingCharges.map(charge => {
+      // Extract itemized food items from dining KOTs
+      let itemizedItems = [];
+      if (charge.dining_details && charge.dining_details.items) {
+        const kotItemsArrays = Array.isArray(charge.dining_details.items) ? charge.dining_details.items : [];
+        kotItemsArrays.forEach(kotItems => {
+          if (Array.isArray(kotItems)) {
+            kotItems.forEach(item => {
+              itemizedItems.push({
+                name: item.item || item.name || item.item_name || 'Item',
+                qty: item.qty || item.quantity || 1,
+                price: item.price || item.rate || 0
+              });
+            });
+          }
+        });
+      }
+      return {
+        id: charge.id,
+        type: charge.transaction_type || 'Extra Charge',
+        amount: Number(charge.amount) || 0,
+        date: charge.created_at,
+        table_number: charge.dining_details?.table_number || null,
+        items: itemizedItems
+      };
+    });
+    const extraChargesTotal = extraCharges.reduce((sum, c) => sum + c.amount, 0);
+    const finalTotal = roomTotal + extraChargesTotal;
 
     return {
       ...stay,
@@ -862,8 +933,11 @@ export default function FrontDeskDashboard() {
       expected_days: expectedDays,
       price_per_day: pricePerDay,
       base_total: baseTotal,
-      gst_amount: gstAmount,
-      service_charge: serviceCharge,
+      calculatedTaxes: calculatedTaxes,
+      total_tax_amount: totalTaxAmount,
+      room_total: roomTotal,
+      extra_charges: extraCharges,
+      extra_charges_total: extraChargesTotal,
       final_total: finalTotal
     };
   };
@@ -874,26 +948,33 @@ export default function FrontDeskDashboard() {
     const expectedOut = new Date(b.check_out_date);
     expectedOut.setHours(0, 0, 0, 0);
     const actualDays = Math.max(1, Math.round((expectedOut - checkIn) / (1000 * 60 * 60 * 24)));
-    
+
     const finalTotal = Number(b.total_price);
-    const baseTotal = finalTotal / 1.28;
-    const gstAmount = baseTotal * 0.18;
-    const serviceCharge = baseTotal * 0.10;
+    const taxesToApply = hotelSettings?.taxes || [];
+    const totalTaxRate = taxesToApply.reduce((sum, tax) => sum + tax.rate, 0);
+    const baseTotal = finalTotal / (1 + (totalTaxRate / 100));
     
+    const calculatedTaxes = taxesToApply.map(tax => ({
+      name: tax.name,
+      rate: tax.rate,
+      amount: baseTotal * (tax.rate / 100)
+    }));
+    const totalTaxAmount = calculatedTaxes.reduce((sum, t) => sum + t.amount, 0);
+
     handlePrintInvoice({
       ...b,
       id: b.booking_id,
       actual_days: actualDays,
       base_total: baseTotal,
-      gst_amount: gstAmount,
-      service_charge: serviceCharge,
+      calculatedTaxes: calculatedTaxes,
+      total_tax_amount: totalTaxAmount,
       final_total: finalTotal
     });
   };
 
   const handleCheckout = async (bookingId, finalTotal) => {
     setIsSubmitting(true);
-    const res = await fetchWithAuth(`${API_BASE}/api/front-desk/bookings/${bookingId}/checkout`, { 
+    const res = await fetchWithAuth(`${API_BASE}/api/front-desk/bookings/${bookingId}/checkout`, {
       method: 'POST',
       body: JSON.stringify({ final_total: finalTotal, payment_method: checkoutMethod })
     });
@@ -1167,38 +1248,38 @@ export default function FrontDeskDashboard() {
         {/* Section: History — pinned footer action, matches admin & Housekeeping convention */}
         {/* Section: History & Managerial */}
         <div className="pt-4 border-t border-zinc-100 shrink-0 space-y-1">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">History & Ledger</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 px-2">History & Ledger</p>
+          <button
+            onClick={() => { setViewMode('history'); loadAllBookings(); }}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'history'
+              ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+              : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
+              }`}
+          >
+            <History size={16} /> Booking History Log
+          </button>
+          {accessLevel === 'MANAGER' && (
             <button
-              onClick={() => { setViewMode('history'); loadAllBookings(); }}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'history'
+              onClick={() => setViewMode('hr_hub')}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'hr_hub'
                 ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
                 : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
                 }`}
             >
-              <History size={16} /> Booking History Log
+              <Users size={16} /> HR Hub
             </button>
-            {accessLevel === 'MANAGER' && (
-              <button
-                onClick={() => setViewMode('hr_hub')}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'hr_hub'
-                  ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
-                  : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
-                  }`}
-              >
-                <Users size={16} /> HR Hub
-              </button>
-            )}
+          )}
 
-            <button
-              onClick={() => setViewMode('directory')}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'directory'
-                ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
-                : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
-                }`}
-            >
-              <Users size={16} /> Info Directory
-            </button>
-          </div>
+          <button
+            onClick={() => setViewMode('directory')}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${viewMode === 'directory'
+              ? 'bg-[#D4A373] text-zinc-900 shadow-md shadow-[#D4A373]/20'
+              : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
+              }`}
+          >
+            <Users size={16} /> Info Directory
+          </button>
+        </div>
 
       </motion.div>
 
@@ -1286,7 +1367,7 @@ export default function FrontDeskDashboard() {
               try {
                 const user = JSON.parse(sessionStorage.getItem('hms_user'));
                 if (user && user.designation) designation = user.designation;
-              } catch(e) {}
+              } catch (e) { }
               return (
                 <motion.button
                   whileHover={{ y: -2 }}
@@ -1313,628 +1394,628 @@ export default function FrontDeskDashboard() {
         </motion.div>
 
         {viewMode !== 'hr_hub' && viewMode !== 'directory' && (<>
-        {/* 4 TOP KPI STATS CARD ROW */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {(() => {
-            const fdKpis = [
-              {
-                filter: 'all',
-                label: 'Total Occupancy',
-                value: <CountUp value={Math.round((inhouseCount / 20) * 100)} suffix="%" />,
-                sub: `Rooms occupied today (${inhouseCount} stays)`,
-                icon: <BedDouble size={16} />,
-                gradient: 'from-sky-50 via-white to-white',
-                ring: 'ring-sky-500/10',
-                activeRing: 'ring-sky-500',
-                glow: 'rgba(14,165,233,0.35)',
-                iconBg: 'bg-[#0EA5E9] text-white shadow-lg shadow-[#0EA5E9]/30',
-                graphic: kpiGraphic(0, '#0ea5e9')
-              },
-              {
-                filter: 'arrivals',
-                label: 'Arrivals Today',
-                value: <CountUp value={arrivalsCount} />,
-                sub: 'Scheduled check-ins',
-                icon: <LogIn size={16} />,
-                gradient: 'from-emerald-50 via-white to-white',
-                ring: 'ring-emerald-500/10',
-                activeRing: 'ring-emerald-500',
-                glow: 'rgba(16,185,129,0.35)',
-                iconBg: 'bg-[#10B981] text-white shadow-lg shadow-[#10B981]/30',
-                graphic: kpiGraphic(3, '#10b981')
-              },
-              {
-                filter: 'departures',
-                label: 'Departures Today',
-                value: <CountUp value={departuresCount} />,
-                sub: 'Scheduled check-outs',
-                icon: <LogOut size={16} />,
-                gradient: 'from-amber-50 via-white to-white',
-                ring: 'ring-amber-500/10',
-                activeRing: 'ring-amber-500',
-                glow: 'rgba(245,158,11,0.35)',
-                iconBg: 'bg-[#F59E0B] text-white shadow-lg shadow-[#F59E0B]/30',
-                graphic: kpiGraphic(3, '#f59e0b')
-              },
-              {
-                filter: 'pending_checkout',
-                label: 'Overstay Warnings',
-                value: <CountUp value={pendingCheckoutsCount} />,
-                sub: 'Past 11:00 AM limit',
-                icon: <AlertTriangle size={16} />,
-                gradient: 'from-rose-50 via-white to-white',
-                ring: 'ring-rose-500/10',
-                activeRing: 'ring-rose-500',
-                glow: 'rgba(244,63,94,0.35)',
-                iconBg: 'bg-[#F43F5E] text-white shadow-lg shadow-[#F43F5E]/30',
-                graphic: kpiGraphic(2, '#f43f5e')
-              }
-            ];
+          {/* 4 TOP KPI STATS CARD ROW */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {(() => {
+              const fdKpis = [
+                {
+                  filter: 'all',
+                  label: 'Total Occupancy',
+                  value: <CountUp value={Math.round((inhouseCount / 20) * 100)} suffix="%" />,
+                  sub: `Rooms occupied today (${inhouseCount} stays)`,
+                  icon: <BedDouble size={16} />,
+                  gradient: 'from-sky-50 via-white to-white',
+                  ring: 'ring-sky-500/10',
+                  activeRing: 'ring-sky-500',
+                  glow: 'rgba(14,165,233,0.35)',
+                  iconBg: 'bg-[#0EA5E9] text-white shadow-lg shadow-[#0EA5E9]/30',
+                  graphic: kpiGraphic(0, '#0ea5e9')
+                },
+                {
+                  filter: 'arrivals',
+                  label: 'Arrivals Today',
+                  value: <CountUp value={arrivalsCount} />,
+                  sub: 'Scheduled check-ins',
+                  icon: <LogIn size={16} />,
+                  gradient: 'from-emerald-50 via-white to-white',
+                  ring: 'ring-emerald-500/10',
+                  activeRing: 'ring-emerald-500',
+                  glow: 'rgba(16,185,129,0.35)',
+                  iconBg: 'bg-[#10B981] text-white shadow-lg shadow-[#10B981]/30',
+                  graphic: kpiGraphic(3, '#10b981')
+                },
+                {
+                  filter: 'departures',
+                  label: 'Departures Today',
+                  value: <CountUp value={departuresCount} />,
+                  sub: 'Scheduled check-outs',
+                  icon: <LogOut size={16} />,
+                  gradient: 'from-amber-50 via-white to-white',
+                  ring: 'ring-amber-500/10',
+                  activeRing: 'ring-amber-500',
+                  glow: 'rgba(245,158,11,0.35)',
+                  iconBg: 'bg-[#F59E0B] text-white shadow-lg shadow-[#F59E0B]/30',
+                  graphic: kpiGraphic(3, '#f59e0b')
+                },
+                {
+                  filter: 'pending_checkout',
+                  label: 'Overstay Warnings',
+                  value: <CountUp value={pendingCheckoutsCount} />,
+                  sub: 'Past 11:00 AM limit',
+                  icon: <AlertTriangle size={16} />,
+                  gradient: 'from-rose-50 via-white to-white',
+                  ring: 'ring-rose-500/10',
+                  activeRing: 'ring-rose-500',
+                  glow: 'rgba(244,63,94,0.35)',
+                  iconBg: 'bg-[#F43F5E] text-white shadow-lg shadow-[#F43F5E]/30',
+                  graphic: kpiGraphic(2, '#f43f5e')
+                }
+              ];
 
-            return fdKpis.map((kpi, i) => {
-              const isActive = activeFilter === kpi.filter && viewMode === 'active';
-              return (
-                <motion.div
-                  key={i}
-                  onClick={() => { setViewMode('active'); setActiveFilter(kpi.filter); }}
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.08, type: 'spring', stiffness: 200, damping: 20 }}
-                  whileHover={{ y: -8, scale: 1.02 }}
-                  style={{ '--kpi-glow': kpi.glow }}
-                  className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between border border-zinc-200/70 bg-gradient-to-br ${kpi.gradient} shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_24px_-16px_rgba(0,0,0,0.15)] transition-shadow duration-500 hover:shadow-[0_20px_45px_-18px_var(--kpi-glow)] cursor-pointer ${isActive ? `ring-2 ring-inset ${kpi.activeRing}` : `ring-1 ring-inset ${kpi.ring}`}`}
-                >
-                  {/* decorative glow blob */}
-                  <div
-                    className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
-                    style={{ background: kpi.glow }}
-                  />
-                  <div className="relative flex-1 min-w-0">
-                    <div className="flex items-start justify-between mb-4">
+              return fdKpis.map((kpi, i) => {
+                const isActive = activeFilter === kpi.filter && viewMode === 'active';
+                return (
+                  <motion.div
+                    key={i}
+                    onClick={() => { setViewMode('active'); setActiveFilter(kpi.filter); }}
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.08, type: 'spring', stiffness: 200, damping: 20 }}
+                    whileHover={{ y: -8, scale: 1.02 }}
+                    style={{ '--kpi-glow': kpi.glow }}
+                    className={`relative rounded-[2rem] p-6 overflow-hidden group select-none flex items-center justify-between border border-zinc-200/70 bg-gradient-to-br ${kpi.gradient} shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_24px_-16px_rgba(0,0,0,0.15)] transition-shadow duration-500 hover:shadow-[0_20px_45px_-18px_var(--kpi-glow)] cursor-pointer ${isActive ? `ring-2 ring-inset ${kpi.activeRing}` : `ring-1 ring-inset ${kpi.ring}`}`}
+                  >
+                    {/* decorative glow blob */}
+                    <div
+                      className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
+                      style={{ background: kpi.glow }}
+                    />
+                    <div className="relative flex-1 min-w-0">
+                      <div className="flex items-start justify-between mb-4">
+                        <motion.div
+                          whileHover={{ rotate: -8, scale: 1.1 }}
+                          transition={{ type: 'spring', stiffness: 400, damping: 14 }}
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${kpi.iconBg}`}
+                        >
+                          {kpi.icon}
+                        </motion.div>
+                      </div>
                       <motion.div
-                        whileHover={{ rotate: -8, scale: 1.1 }}
-                        transition={{ type: 'spring', stiffness: 400, damping: 14 }}
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${kpi.iconBg}`}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: i * 0.08 + 0.2 }}
+                        className="text-3xl font-black text-zinc-900 tracking-tight leading-none mb-1.5"
                       >
-                        {kpi.icon}
+                        {kpi.value}
                       </motion.div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 leading-none">{kpi.label}</p>
+                      <p className="text-[10px] text-zinc-400 mt-1">{kpi.sub}</p>
                     </div>
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: i * 0.08 + 0.2 }}
-                      className="text-3xl font-black text-zinc-900 tracking-tight leading-none mb-1.5"
-                    >
-                      {kpi.value}
-                    </motion.div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 leading-none">{kpi.label}</p>
-                    <p className="text-[10px] text-zinc-400 mt-1">{kpi.sub}</p>
-                  </div>
-                  <div className="relative shrink-0 ml-4">{kpi.graphic}</div>
-                </motion.div>
-              );
-            });
-          })()}
-        </div>
+                    <div className="relative shrink-0 ml-4">{kpi.graphic}</div>
+                  </motion.div>
+                );
+              });
+            })()}
+          </div>
 
-        {/* WALK-IN BOOKING QUICK PANEL — light gradient, no black/purple */}
-        <motion.div
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15, duration: 0.45 }}
-          className="fd-glow-border-wrap rounded-[2rem] p-[2px]"
-          style={{ background: 'linear-gradient(120deg, #D4A373, #B3835B, #D4A373)', backgroundSize: '200% 200%', animation: 'fd-brand-shimmer 8s ease-in-out infinite' }}
-        >
-          <div className="relative overflow-hidden bg-gradient-to-r from-[#D4A373] via-[#D4A373] to-[#B3835B] text-white rounded-[calc(2rem-2px)] p-6 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="absolute inset-0 bg-[radial-gradient(420px_200px_at_15%_0%,rgba(255,255,255,0.18),transparent_60%)] pointer-events-none" />
-            <div className="relative flex items-center gap-4">
-              <motion.div
-                animate={{ scale: [1, 1.12, 1], rotate: [0, -6, 6, 0] }}
-                transition={{ repeat: Infinity, duration: 2.6, ease: 'easeInOut' }}
-                className="hidden sm:flex w-11 h-11 rounded-xl bg-white/20 backdrop-blur-sm items-center justify-center shrink-0 shadow-lg"
-              >
-                <Zap size={18} className="text-white" />
-              </motion.div>
-              <div>
-                <h3 className="text-base font-black tracking-tight">Walk-In Reservation Quick Desk</h3>
-                <p className="text-xs text-white/80 mt-0.5 leading-normal">
-                  Instantly check in walk-in guests, assign rooms, and generate direct billing invoices.
-                </p>
+          {/* WALK-IN BOOKING QUICK PANEL — light gradient, no black/purple */}
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15, duration: 0.45 }}
+            className="fd-glow-border-wrap rounded-[2rem] p-[2px]"
+            style={{ background: 'linear-gradient(120deg, #D4A373, #B3835B, #D4A373)', backgroundSize: '200% 200%', animation: 'fd-brand-shimmer 8s ease-in-out infinite' }}
+          >
+            <div className="relative overflow-hidden bg-gradient-to-r from-[#D4A373] via-[#D4A373] to-[#B3835B] text-white rounded-[calc(2rem-2px)] p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="absolute inset-0 bg-[radial-gradient(420px_200px_at_15%_0%,rgba(255,255,255,0.18),transparent_60%)] pointer-events-none" />
+              <div className="relative flex items-center gap-4">
+                <motion.div
+                  animate={{ scale: [1, 1.12, 1], rotate: [0, -6, 6, 0] }}
+                  transition={{ repeat: Infinity, duration: 2.6, ease: 'easeInOut' }}
+                  className="hidden sm:flex w-11 h-11 rounded-xl bg-white/20 backdrop-blur-sm items-center justify-center shrink-0 shadow-lg"
+                >
+                  <Zap size={18} className="text-white" />
+                </motion.div>
+                <div>
+                  <h3 className="text-base font-black tracking-tight">Walk-In Reservation Quick Desk</h3>
+                  <p className="text-xs text-white/80 mt-0.5 leading-normal">
+                    Instantly check in walk-in guests, assign rooms, and generate direct billing invoices.
+                  </p>
+                </div>
+              </div>
+              <div className="relative flex items-center gap-3 shrink-0 w-full md:w-auto justify-end">
+                <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/15 border border-white/20 text-xs text-white font-bold backdrop-blur-sm">
+                  <CheckCircle2 size={13} className="text-emerald-200" />
+                  <CountUp value={parseInt(availableCount) || 0} /> Rooms Vacant
+                </span>
+                <RippleButton
+                  onClick={openWalkIn}
+                  whileHover={{ scale: 1.05, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="bg-white text-[#B3835B] font-bold text-xs px-5 py-3 rounded-xl transition-colors duration-200 shadow-lg w-full sm:w-auto hover:bg-amber-50"
+                >
+                  New Walk-In Booking
+                </RippleButton>
               </div>
             </div>
-            <div className="relative flex items-center gap-3 shrink-0 w-full md:w-auto justify-end">
-              <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/15 border border-white/20 text-xs text-white font-bold backdrop-blur-sm">
-                <CheckCircle2 size={13} className="text-emerald-200" />
-                <CountUp value={parseInt(availableCount) || 0} /> Rooms Vacant
-              </span>
-              <RippleButton
-                onClick={openWalkIn}
-                whileHover={{ scale: 1.05, y: -2 }}
-                whileTap={{ scale: 0.95 }}
-                className="bg-white text-[#B3835B] font-bold text-xs px-5 py-3 rounded-xl transition-colors duration-200 shadow-lg w-full sm:w-auto hover:bg-amber-50"
-              >
-                New Walk-In Booking
-              </RippleButton>
-            </div>
-          </div>
-        </motion.div>
+          </motion.div>
 
-        {/* WORKSPACE CONTENT GRID: GUEST LIST vs STATS */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+          {/* WORKSPACE CONTENT GRID: GUEST LIST vs STATS */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
 
-          {/* LEFT WIDE AREA: GUEST LIST (col-span-2) */}
-          <div className="xl:col-span-2 flex flex-col gap-6">
-            <AnimatePresence mode="wait">
+            {/* LEFT WIDE AREA: GUEST LIST (col-span-2) */}
+            <div className="xl:col-span-2 flex flex-col gap-6">
+              <AnimatePresence mode="wait">
 
-              {/* VIEW 1: ACTIVE STAYS VIEW */}
-              {viewMode === 'active' && (
-                <motion.div
-                  key="active"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="flex flex-col gap-5 bg-white rounded-[2rem] p-6 shadow-[0px_18px_40px_rgba(56,189,248,0.08)] border border-zinc-100"
-                >
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
-                    <div>
-                      <h3 className="text-lg font-black text-zinc-900">
-                        {activeFilter === 'all' && 'All Active Stays'}
-                        {activeFilter === 'arrivals' && 'Arrivals Scheduled'}
-                        {activeFilter === 'departures' && 'Departures Scheduled'}
-                        {activeFilter === 'inhouse' && 'Guests In-House'}
-                        {activeFilter === 'pending_checkin' && 'Pending Check-ins'}
-                        {activeFilter === 'pending_checkout' && 'Pending Checkouts'}
-                      </h3>
-                      <p className="text-xs text-zinc-400 mt-0.5">Filter active stays from side controls or lookup via name.</p>
-                    </div>
-
-                    {/* Search Field inside Guest list container */}
-                    <div ref={searchRef} className="relative w-full md:w-72">
-                      <div className="relative group">
-                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 transition-all duration-300 group-focus-within:text-[#D4A373] group-focus-within:scale-110" size={16} />
-                        <input
-                          type="text"
-                          placeholder="Search guests or rooms…"
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          onFocus={() => searchResults.length > 0 && setIsSearchOpen(true)}
-                          className="fd-input !pl-10 pr-4"
-                        />
-                        {searchQuery && (
-                          <motion.button
-                            whileHover={{ rotate: 90, scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={() => { setSearchQuery(''); setSearchResults([]); setIsSearchOpen(false); }}
-                            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
-                          >
-                            <X size={14} />
-                          </motion.button>
-                        )}
+                {/* VIEW 1: ACTIVE STAYS VIEW */}
+                {viewMode === 'active' && (
+                  <motion.div
+                    key="active"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="flex flex-col gap-5 bg-white rounded-[2rem] p-6 shadow-[0px_18px_40px_rgba(56,189,248,0.08)] border border-zinc-100"
+                  >
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
+                      <div>
+                        <h3 className="text-lg font-black text-zinc-900">
+                          {activeFilter === 'all' && 'All Active Stays'}
+                          {activeFilter === 'arrivals' && 'Arrivals Scheduled'}
+                          {activeFilter === 'departures' && 'Departures Scheduled'}
+                          {activeFilter === 'inhouse' && 'Guests In-House'}
+                          {activeFilter === 'pending_checkin' && 'Pending Check-ins'}
+                          {activeFilter === 'pending_checkout' && 'Pending Checkouts'}
+                        </h3>
+                        <p className="text-xs text-zinc-400 mt-0.5">Filter active stays from side controls or lookup via name.</p>
                       </div>
 
-                      {/* Dropdown search output */}
-                      <AnimatePresence>
-                        {isSearchOpen && searchResults.length > 0 && (
-                          <motion.div
-                            initial={{ opacity: 0, y: -8 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -8 }}
-                            className="absolute top-full mt-2 w-full fd-search-dropdown rounded-2xl z-40 overflow-hidden shadow-lg p-2"
-                          >
-                            {searchResults.map((guest) => (
-                              <button
-                                key={guest.id}
-                                onClick={() => {
-                                  setIsSearchOpen(false);
-                                  setSearchQuery('');
-                                  if (guest.room_number) {
-                                    setActiveFilter('all');
-                                    setTimeout(() => {
-                                      const el = document.getElementById(`stay-${guest.room_number}`);
-                                      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                      el?.classList.add('ring-2', 'ring-[#D4A373]', 'ring-offset-2');
-                                      setTimeout(() => el?.classList.remove('ring-2', 'ring-[#D4A373]', 'ring-offset-2'), 2000);
-                                    }, 100);
-                                  }
-                                }}
-                                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-amber-50 transition-colors text-left text-xs"
-                              >
-                                <div className="w-8 h-8 rounded-full bg-amber-50 text-[#D4A373] font-bold flex items-center justify-center">
-                                  {guest.name?.charAt(0)}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-bold text-zinc-900 truncate">{guest.name}</p>
-                                  <p className="text-[10px] text-zinc-400 truncate">Room {guest.room_number || 'Inactive'}</p>
-                                </div>
-                              </button>
-                            ))}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  </div>
-
-                  {filteredStays.length === 0 ? (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="border border-dashed border-zinc-200 rounded-2xl p-12 text-center bg-amber-50/20"
-                    >
-                      <motion.div animate={{ y: [0, -6, 0] }} transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}>
-                        <BedDouble size={32} className="text-[#D4A373]/50 mx-auto mb-2" />
-                      </motion.div>
-                      <p className="text-sm font-bold text-zinc-400">No Stays Found</p>
-                      <p className="text-xs text-zinc-400 mt-0.5">Try clearing filters or check in a walk-in reservation.</p>
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      layout
-                      className="grid grid-cols-1 md:grid-cols-2 gap-4"
-                    >
-                      <AnimatePresence mode="popLayout">
-                        {filteredStays.map((stay, idx) => {
-                          const ss = getStatusStyle(stay.booking_status);
-                          const StatusIcon = getStatusIcon(stay.booking_status);
-
-                          return (
-                            <motion.div
-                              key={stay.booking_id}
-                              id={`stay-${stay.room_number}`}
-                              variants={cardVariants}
-                              initial="hidden"
-                              animate="visible"
-                              exit="exit"
-                              layout
-                              style={{ '--accent': ss.accent }}
-                              whileHover={{ y: -5, scale: 1.015, boxShadow: `0px 22px 45px -16px rgba(${ss.accent}, 0.32)` }}
-                              transition={{ type: 'spring', stiffness: 320, damping: 24 }}
-                              className="fd-card bg-white rounded-[1.5rem] border border-zinc-200/60 p-4 shadow-sm relative overflow-hidden"
+                      {/* Search Field inside Guest list container */}
+                      <div ref={searchRef} className="relative w-full md:w-72">
+                        <div className="relative group">
+                          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 transition-all duration-300 group-focus-within:text-[#D4A373] group-focus-within:scale-110" size={16} />
+                          <input
+                            type="text"
+                            placeholder="Search guests or rooms…"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onFocus={() => searchResults.length > 0 && setIsSearchOpen(true)}
+                            className="fd-input !pl-10 pr-4"
+                          />
+                          {searchQuery && (
+                            <motion.button
+                              whileHover={{ rotate: 90, scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={() => { setSearchQuery(''); setSearchResults([]); setIsSearchOpen(false); }}
+                              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
                             >
-                              <div className="flex justify-between items-start gap-2 mb-3">
-                                <div className="flex gap-2.5 items-center min-w-0">
-                                  <motion.div
-                                    whileHover={{ scale: 1.1, rotate: -6 }}
-                                    transition={{ type: 'spring', stiffness: 400, damping: 15 }}
-                                    className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-100 to-amber-50 text-[#B3835B] font-black text-xs flex items-center justify-center shrink-0 shadow-xs ring-2 ring-white"
-                                    style={{ boxShadow: `0 0 0 3px rgba(${ss.accent}, 0.15)` }}
-                                  >
-                                    {stay.guest_name?.charAt(0)}
-                                  </motion.div>
-                                  <div className="min-w-0">
-                                    <h4 className="font-bold text-zinc-900 text-sm truncate">{stay.guest_name}</h4>
-                                    <p className="text-[10px] text-zinc-400 truncate">Rm {stay.room_number} · {stay.room_type}</p>
-                                  </div>
-                                </div>
-                                <span className={`px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border flex items-center gap-1 ${ss.bg} ${ss.text} ${ss.border}`}>
-                                  {stay.booking_status === 'CHECKED_IN' ? (
-                                    <span className="relative flex h-1.5 w-1.5">
-                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-                                    </span>
-                                  ) : (
-                                    <StatusIcon size={9} />
-                                  )}
-                                  {stay.booking_status.replace('_', ' ')}
-                                </span>
-                              </div>
+                              <X size={14} />
+                            </motion.button>
+                          )}
+                        </div>
 
-                              {/* Info grid */}
-                              <div className="relative grid grid-cols-2 gap-2 text-[11px] text-zinc-500 bg-amber-50/40 p-2.5 rounded-xl border border-zinc-200">
-                                <div>
-                                  <span className="block text-[9px] uppercase tracking-wider text-zinc-400">Check-in</span>
-                                  <span className="font-bold text-zinc-800">{safeDateRender(stay.check_in_date)}</span>
-                                </div>
-                                <div>
-                                  <span className="block text-[9px] uppercase tracking-wider text-zinc-400">Check-out</span>
-                                  <span className={`font-bold ${isPendingCheckout(stay) ? 'text-rose-500' : 'text-zinc-800'}`}>
-                                    {safeDateRender(stay.check_out_date)}
-                                    {isPendingCheckout(stay) && ' (Late)'}
+                        {/* Dropdown search output */}
+                        <AnimatePresence>
+                          {isSearchOpen && searchResults.length > 0 && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -8 }}
+                              className="absolute top-full mt-2 w-full fd-search-dropdown rounded-2xl z-40 overflow-hidden shadow-lg p-2"
+                            >
+                              {searchResults.map((guest) => (
+                                <button
+                                  key={guest.id}
+                                  onClick={() => {
+                                    setIsSearchOpen(false);
+                                    setSearchQuery('');
+                                    if (guest.room_number) {
+                                      setActiveFilter('all');
+                                      setTimeout(() => {
+                                        const el = document.getElementById(`stay-${guest.room_number}`);
+                                        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                        el?.classList.add('ring-2', 'ring-[#D4A373]', 'ring-offset-2');
+                                        setTimeout(() => el?.classList.remove('ring-2', 'ring-[#D4A373]', 'ring-offset-2'), 2000);
+                                      }, 100);
+                                    }
+                                  }}
+                                  className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-amber-50 transition-colors text-left text-xs"
+                                >
+                                  <div className="w-8 h-8 rounded-full bg-amber-50 text-[#D4A373] font-bold flex items-center justify-center">
+                                    {guest.name?.charAt(0)}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-bold text-zinc-900 truncate">{guest.name}</p>
+                                    <p className="text-[10px] text-zinc-400 truncate">Room {guest.room_number || 'Inactive'}</p>
+                                  </div>
+                                </button>
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </div>
+
+                    {filteredStays.length === 0 ? (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="border border-dashed border-zinc-200 rounded-2xl p-12 text-center bg-amber-50/20"
+                      >
+                        <motion.div animate={{ y: [0, -6, 0] }} transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}>
+                          <BedDouble size={32} className="text-[#D4A373]/50 mx-auto mb-2" />
+                        </motion.div>
+                        <p className="text-sm font-bold text-zinc-400">No Stays Found</p>
+                        <p className="text-xs text-zinc-400 mt-0.5">Try clearing filters or check in a walk-in reservation.</p>
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        layout
+                        className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                      >
+                        <AnimatePresence mode="popLayout">
+                          {filteredStays.map((stay, idx) => {
+                            const ss = getStatusStyle(stay.booking_status);
+                            const StatusIcon = getStatusIcon(stay.booking_status);
+
+                            return (
+                              <motion.div
+                                key={stay.booking_id}
+                                id={`stay-${stay.room_number}`}
+                                variants={cardVariants}
+                                initial="hidden"
+                                animate="visible"
+                                exit="exit"
+                                layout
+                                style={{ '--accent': ss.accent }}
+                                whileHover={{ y: -5, scale: 1.015, boxShadow: `0px 22px 45px -16px rgba(${ss.accent}, 0.32)` }}
+                                transition={{ type: 'spring', stiffness: 320, damping: 24 }}
+                                className="fd-card bg-white rounded-[1.5rem] border border-zinc-200/60 p-4 shadow-sm relative overflow-hidden"
+                              >
+                                <div className="flex justify-between items-start gap-2 mb-3">
+                                  <div className="flex gap-2.5 items-center min-w-0">
+                                    <motion.div
+                                      whileHover={{ scale: 1.1, rotate: -6 }}
+                                      transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+                                      className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-100 to-amber-50 text-[#B3835B] font-black text-xs flex items-center justify-center shrink-0 shadow-xs ring-2 ring-white"
+                                      style={{ boxShadow: `0 0 0 3px rgba(${ss.accent}, 0.15)` }}
+                                    >
+                                      {stay.guest_name?.charAt(0)}
+                                    </motion.div>
+                                    <div className="min-w-0">
+                                      <h4 className="font-bold text-zinc-900 text-sm truncate">{stay.guest_name}</h4>
+                                      <p className="text-[10px] text-zinc-400 truncate">Rm {stay.room_number} · {stay.room_type}</p>
+                                    </div>
+                                  </div>
+                                  <span className={`px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border flex items-center gap-1 ${ss.bg} ${ss.text} ${ss.border}`}>
+                                    {stay.booking_status === 'CHECKED_IN' ? (
+                                      <span className="relative flex h-1.5 w-1.5">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                                      </span>
+                                    ) : (
+                                      <StatusIcon size={9} />
+                                    )}
+                                    {stay.booking_status.replace('_', ' ')}
                                   </span>
                                 </div>
-                                <div className="col-span-2 pt-1 border-t border-[#D4A373]/30/40 flex justify-between items-center text-xs">
-                                  <span className="font-bold text-zinc-800">Total Charged</span>
-                                  <span className="font-black text-[#D4A373]">₹{parseInt(stay.total_price).toLocaleString('en-IN')}</span>
-                                </div>
-                              </div>
 
-                              {/* Stays actions */}
-                              <div className="relative mt-3 pt-2.5 border-t border-zinc-100 flex justify-end gap-1">
-                                {stay.booking_status === 'CONFIRMED' && (
-                                  <>
+                                {/* Info grid */}
+                                <div className="relative grid grid-cols-2 gap-2 text-[11px] text-zinc-500 bg-amber-50/40 p-2.5 rounded-xl border border-zinc-200">
+                                  <div>
+                                    <span className="block text-[9px] uppercase tracking-wider text-zinc-400">Check-in</span>
+                                    <span className="font-bold text-zinc-800">{safeDateRender(stay.check_in_date)}</span>
+                                  </div>
+                                  <div>
+                                    <span className="block text-[9px] uppercase tracking-wider text-zinc-400">Check-out</span>
+                                    <span className={`font-bold ${isPendingCheckout(stay) ? 'text-rose-500' : 'text-zinc-800'}`}>
+                                      {safeDateRender(stay.check_out_date)}
+                                      {isPendingCheckout(stay) && ' (Late)'}
+                                    </span>
+                                  </div>
+                                  <div className="col-span-2 pt-1 border-t border-[#D4A373]/30/40 flex justify-between items-center text-xs">
+                                    <span className="font-bold text-zinc-800">Total Charged</span>
+                                    <span className="font-black text-[#D4A373]">₹{parseInt(stay.total_price).toLocaleString('en-IN')}</span>
+                                  </div>
+                                </div>
+
+                                {/* Stays actions */}
+                                <div className="relative mt-3 pt-2.5 border-t border-zinc-100 flex justify-end gap-1">
+                                  {stay.booking_status === 'CONFIRMED' && (
+                                    <>
+                                      <motion.button
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.94 }}
+                                        onClick={() => openCheckin(stay)}
+                                        className="group flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-emerald-700 hover:bg-emerald-50 border border-transparent hover:border-emerald-100 transition-colors"
+                                      >
+                                        <span className="fd-icon-btn"><LogIn size={11} /></span> Check In
+                                      </motion.button>
+                                      <motion.button
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.94 }}
+                                        onClick={() => handleCancel(stay.booking_id || stay.id)}
+                                        className="group flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-rose-700 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition-colors"
+                                      >
+                                        <span className="fd-icon-btn"><X size={11} /></span> Cancel
+                                      </motion.button>
+                                    </>
+                                  )}
+                                  {stay.booking_status === 'CHECKED_IN' && (
                                     <motion.button
                                       whileHover={{ scale: 1.05 }}
                                       whileTap={{ scale: 0.94 }}
-                                      onClick={() => openCheckin(stay)}
-                                      className="group flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-emerald-700 hover:bg-emerald-50 border border-transparent hover:border-emerald-100 transition-colors"
+                                      onClick={() => openCheckout(stay)}
+                                      className="group flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition-colors"
                                     >
-                                      <span className="fd-icon-btn"><LogIn size={11} /></span> Check In
+                                      <span className="fd-icon-btn"><DoorOpen size={11} /></span> Check Out
                                     </motion.button>
-                                    <motion.button
-                                      whileHover={{ scale: 1.05 }}
-                                      whileTap={{ scale: 0.94 }}
-                                      onClick={() => handleCancel(stay.booking_id || stay.id)}
-                                      className="group flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-rose-700 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition-colors"
-                                    >
-                                      <span className="fd-icon-btn"><X size={11} /></span> Cancel
-                                    </motion.button>
-                                  </>
-                                )}
-                                {stay.booking_status === 'CHECKED_IN' && (
+                                  )}
                                   <motion.button
                                     whileHover={{ scale: 1.05 }}
                                     whileTap={{ scale: 0.94 }}
-                                    onClick={() => openCheckout(stay)}
-                                    className="group flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition-colors"
+                                    onClick={() => openExtend(stay)}
+                                    className="group flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-zinc-600 hover:bg-amber-50 hover:text-amber-700 border border-transparent hover:border-amber-100 transition-colors"
                                   >
-                                    <span className="fd-icon-btn"><DoorOpen size={11} /></span> Check Out
+                                    <span className="fd-icon-btn"><Clock size={11} /></span> Extend
                                   </motion.button>
-                                )}
-                                <motion.button
-                                  whileHover={{ scale: 1.05 }}
-                                  whileTap={{ scale: 0.94 }}
-                                  onClick={() => openExtend(stay)}
-                                  className="group flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-zinc-600 hover:bg-amber-50 hover:text-amber-700 border border-transparent hover:border-amber-100 transition-colors"
-                                >
-                                  <span className="fd-icon-btn"><Clock size={11} /></span> Extend
-                                </motion.button>
-                                <motion.button
-                                  whileHover={{ scale: 1.05 }}
-                                  whileTap={{ scale: 0.94 }}
-                                  onClick={() => openRoomChange(stay)}
-                                  className="group flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-zinc-600 hover:bg-amber-50 hover:text-[#D4A373] border border-transparent hover:border-sky-100 transition-colors"
-                                >
-                                  <span className="fd-icon-btn"><ArrowRightLeft size={11} /></span> Shift Room
-                                </motion.button>
-                              </div>
-                            </motion.div>
-                          );
-                        })}
-                      </AnimatePresence>
-                    </motion.div>
-                  )}
-                </motion.div>
-              )}
-
-              {/* VIEW 2: HISTORY ARCHIVES VIEW */}
-              {viewMode === 'history' && (
-                <motion.div
-                  key="history"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="flex flex-col gap-5 bg-white rounded-[2rem] p-6 shadow-[0px_18px_40px_rgba(56,189,248,0.08)] border border-zinc-100"
-                >
-                  <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-4">
-                    <div>
-                      <h3 className="text-lg font-black text-zinc-900">Archive Bookings Log</h3>
-                      <p className="text-xs text-zinc-400 mt-0.5">Historical ledger logs and checkouts.</p>
-                    </div>
-
-                    {/* Quick Filters */}
-                    <div className="flex items-center gap-1 bg-amber-50/60 p-0.5 rounded-xl border border-zinc-200">
-                      {['', 'CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT', 'CANCELLED'].map(f => (
-                        <button
-                          key={f}
-                          onClick={() => { setHistoryFilter(f); setHistoryPage(1); }}
-                          className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${historyFilter === f
-                            ? 'bg-[#D4A373] text-white shadow-xs'
-                            : 'text-zinc-500 hover:text-[#B3835B]'
-                            }`}
-                        >
-                          {f || 'All'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="border-b border-zinc-100 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                          <th className="p-3 font-bold">Guest</th>
-                          <th className="p-3 font-bold">Room</th>
-                          <th className="p-3 font-bold">Check-in</th>
-                          <th className="p-3 font-bold">Check-out</th>
-                          <th className="p-3 font-bold">Amount</th>
-                          <th className="p-3 font-bold text-right">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-zinc-50 text-xs">
-                        {(() => {
-                          const startIndex = (historyPage - 1) * historyItemsPerPage;
-                          const paginatedBookings = allBookings.slice(startIndex, startIndex + historyItemsPerPage);
-                          const totalPages = Math.ceil(allBookings.length / historyItemsPerPage);
-
-                          if (allBookings.length === 0) {
-                            return (
-                              <tr>
-                                <td colSpan="6" className="p-8 text-center text-zinc-400 italic">
-                                  No historical bookings matched filters.
-                                </td>
-                              </tr>
+                                  <motion.button
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.94 }}
+                                    onClick={() => openRoomChange(stay)}
+                                    className="group flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-zinc-600 hover:bg-amber-50 hover:text-[#D4A373] border border-transparent hover:border-sky-100 transition-colors"
+                                  >
+                                    <span className="fd-icon-btn"><ArrowRightLeft size={11} /></span> Shift Room
+                                  </motion.button>
+                                </div>
+                              </motion.div>
                             );
-                          }
+                          })}
+                        </AnimatePresence>
+                      </motion.div>
+                    )}
+                  </motion.div>
+                )}
 
-                          return (
-                            <>
-                              {paginatedBookings.map((b) => {
-                                const bs = getStatusStyle(b.booking_status);
-                                return (
-                                  <tr key={b.booking_id} onClick={() => handlePrintHistoricalInvoice(b)} className="cursor-pointer hover:bg-amber-50/40 transition-colors">
-                                    <td className="p-3 font-bold text-zinc-900">
-                                      {b.guest_name}
-                                      <span className="block text-[10px] font-normal text-zinc-400 mt-0.5">{b.guest_email}</span>
-                                    </td>
-                                    <td className="p-3">
-                                      <span className="font-bold text-zinc-800 bg-amber-50 px-1.5 py-0.5 rounded">{b.room_number}</span>
-                                      <span className="text-zinc-400 ml-1.5">{b.room_type}</span>
-                                    </td>
-                                    <td className="p-3 text-zinc-600">{new Date(b.check_in_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
-                                    <td className="p-3 text-zinc-600">{new Date(b.check_out_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
-                                    <td className="p-3 font-bold text-zinc-900">₹{parseInt(b.total_price).toLocaleString('en-IN')}</td>
-                                    <td className="p-3 text-right">
-                                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border ${bs.bg} ${bs.text} ${bs.border}`}>
-                                        <span className={`w-1 h-1 rounded-full ${bs.dot}`} />
-                                        {b.booking_status.replace('_', ' ')}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                              {totalPages > 1 && (
+                {/* VIEW 2: HISTORY ARCHIVES VIEW */}
+                {viewMode === 'history' && (
+                  <motion.div
+                    key="history"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="flex flex-col gap-5 bg-white rounded-[2rem] p-6 shadow-[0px_18px_40px_rgba(56,189,248,0.08)] border border-zinc-100"
+                  >
+                    <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-4">
+                      <div>
+                        <h3 className="text-lg font-black text-zinc-900">Archive Bookings Log</h3>
+                        <p className="text-xs text-zinc-400 mt-0.5">Historical ledger logs and checkouts.</p>
+                      </div>
+
+                      {/* Quick Filters */}
+                      <div className="flex items-center gap-1 bg-amber-50/60 p-0.5 rounded-xl border border-zinc-200">
+                        {['', 'CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT', 'CANCELLED'].map(f => (
+                          <button
+                            key={f}
+                            onClick={() => { setHistoryFilter(f); setHistoryPage(1); }}
+                            className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${historyFilter === f
+                              ? 'bg-[#D4A373] text-white shadow-xs'
+                              : 'text-zinc-500 hover:text-[#B3835B]'
+                              }`}
+                          >
+                            {f || 'All'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-zinc-100 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                            <th className="p-3 font-bold">Guest</th>
+                            <th className="p-3 font-bold">Room</th>
+                            <th className="p-3 font-bold">Check-in</th>
+                            <th className="p-3 font-bold">Check-out</th>
+                            <th className="p-3 font-bold">Amount</th>
+                            <th className="p-3 font-bold text-right">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-50 text-xs">
+                          {(() => {
+                            const startIndex = (historyPage - 1) * historyItemsPerPage;
+                            const paginatedBookings = allBookings.slice(startIndex, startIndex + historyItemsPerPage);
+                            const totalPages = Math.ceil(allBookings.length / historyItemsPerPage);
+
+                            if (allBookings.length === 0) {
+                              return (
                                 <tr>
-                                  <td colSpan="6" className="p-3 border-t border-zinc-200">
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-[10px] text-zinc-400">Showing {startIndex + 1} to {Math.min(startIndex + historyItemsPerPage, allBookings.length)} of {allBookings.length} bookings</span>
-                                      <div className="flex items-center gap-1.5">
-                                        <button
-                                          onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
-                                          disabled={historyPage === 1}
-                                          className="px-2.5 py-1 bg-white border border-zinc-200 text-zinc-700 rounded-lg hover:bg-amber-50 text-[10px] font-bold disabled:opacity-50"
-                                        >
-                                          Prev
-                                        </button>
-                                        <span className="text-[10px] font-bold bg-amber-50 px-2.5 py-1 rounded-lg">{historyPage} / {totalPages}</span>
-                                        <button
-                                          onClick={() => setHistoryPage(p => Math.min(totalPages, p + 1))}
-                                          disabled={historyPage === totalPages}
-                                          className="px-2.5 py-1 bg-white border border-zinc-200 text-zinc-700 rounded-lg hover:bg-amber-50 text-[10px] font-bold disabled:opacity-50"
-                                        >
-                                          Next
-                                        </button>
-                                      </div>
-                                    </div>
+                                  <td colSpan="6" className="p-8 text-center text-zinc-400 italic">
+                                    No historical bookings matched filters.
                                   </td>
                                 </tr>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </tbody>
-                    </table>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                              );
+                            }
 
-            {/* Inventory available rooms list (MOVED TO LEFT COLUMN) */}
-            <motion.div
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.28, duration: 0.4 }}
-              className="bg-white rounded-[2rem] p-6 shadow-[0px_18px_40px_rgba(56,189,248,0.08)] border border-zinc-100 flex flex-col gap-4"
-            >
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider flex items-center gap-2">
-                    <CheckCircle2 size={16} className="text-emerald-500" /> Room Inventory
-                  </h3>
-                  <p className="text-[10px] text-zinc-400 mt-0.5">Vacant rooms available for immediate check-in</p>
-                </div>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={async () => { await loadAvailableRooms(); setModalType('available_rooms'); }}
-                  className="px-4 py-2.5 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 text-xs font-bold transition-colors shadow-sm"
-                >
-                  View Details
-                </motion.button>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2.5 mt-3">
-                {roomTypeStats.length === 0 ? (
-                  <div className="col-span-full flex flex-col items-center justify-center p-6 bg-zinc-50/50 rounded-xl border-2 border-dashed border-zinc-200">
-                    <motion.div animate={{ rotate: [0, -10, 10, -10, 10, 0] }} transition={{ duration: 0.5, delay: 2, repeat: Infinity, repeatDelay: 5 }}>
-                      <BedDouble size={20} className="text-zinc-300 mb-1.5" />
-                    </motion.div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Inventory Exhausted</p>
-                    <p className="text-[9px] text-zinc-400 mt-0.5">No vacant rooms available for immediate check-in</p>
-                  </div>
-                ) : (
-                  roomTypeStats.map((stat, idx) => (
-                    <motion.div
-                      key={idx}
-                      onClick={async () => { await loadAvailableRooms(); setModalType('available_rooms'); }}
-                      whileHover={{ y: -2, scale: 1.03 }}
-                      whileTap={{ scale: 0.98 }}
-                      className="relative overflow-hidden rounded-xl p-2.5 group cursor-pointer border bg-white shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between"
-                      style={{ borderColor: `${stat.color}30` }}
-                    >
-                      {/* Decorative colored glow blob */}
-                      <div className="absolute -top-6 -right-6 w-16 h-16 rounded-full blur-lg opacity-20 group-hover:opacity-40 transition-opacity duration-500 pointer-events-none" style={{ backgroundColor: stat.color }} />
-                      
-                      <div className="relative z-10 flex items-center justify-between gap-1 mb-1.5">
-                        <span className="text-[9px] font-black uppercase tracking-widest truncate" style={{ color: stat.color }}>
-                          {stat.name}
-                        </span>
-                        <BedDouble size={10} style={{ color: stat.color }} className="shrink-0 opacity-70" />
-                      </div>
-
-                      <div className="relative z-10 flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-zinc-500">Vacant</span>
-                        <div className="flex items-center gap-1.5 bg-white px-1.5 py-0.5 rounded shadow-xs" style={{ border: `1px solid ${stat.color}30` }}>
-                           <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: stat.color }} />
-                           <span className="text-sm font-black leading-none text-zinc-900">{stat.vacant}</span>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))
-                )}
-              </div>
-            </motion.div>
-
-          </div>
-
-          {/* RIGHT SIDEBAR PANEL: CONCENTRIC ROOM CHART & DETAILS */}
-          <div className="flex flex-col gap-6">
-
-            {/* Concentric Progress Rings */}
-            <motion.div
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2, duration: 0.4 }}
-              className="bg-white rounded-[2rem] p-6 shadow-[0px_18px_40px_rgba(56,189,248,0.08)] border border-zinc-100 flex flex-col items-center"
-            >
-              <div className="w-full text-left mb-4">
-                <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider flex items-center gap-2">
-                  <Building2 size={16} className="text-[#D4A373]" /> Occupancy breakdown
-                </h3>
-                <p className="text-[10px] text-zinc-400 mt-0.5">Real-time room occupancy rates by type</p>
-              </div>
-
-              {/* Chart */}
-              <RoomStatsRings
-                roomTypeStats={roomTypeStats}
-              />
-
-              {/* Legend with matching colors */}
-              <div className="w-full mt-4 flex flex-col gap-2 border-t border-zinc-100 pt-4">
-                {roomTypeStats.map((stat, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: stat.color }} />
-                      <span className="font-medium text-zinc-600">{stat.name}</span>
+                            return (
+                              <>
+                                {paginatedBookings.map((b) => {
+                                  const bs = getStatusStyle(b.booking_status);
+                                  return (
+                                    <tr key={b.booking_id} onClick={() => handlePrintHistoricalInvoice(b)} className="cursor-pointer hover:bg-amber-50/40 transition-colors">
+                                      <td className="p-3 font-bold text-zinc-900">
+                                        {b.guest_name}
+                                        <span className="block text-[10px] font-normal text-zinc-400 mt-0.5">{b.guest_email}</span>
+                                      </td>
+                                      <td className="p-3">
+                                        <span className="font-bold text-zinc-800 bg-amber-50 px-1.5 py-0.5 rounded">{b.room_number}</span>
+                                        <span className="text-zinc-400 ml-1.5">{b.room_type}</span>
+                                      </td>
+                                      <td className="p-3 text-zinc-600">{new Date(b.check_in_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                                      <td className="p-3 text-zinc-600">{new Date(b.check_out_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                                      <td className="p-3 font-bold text-zinc-900">₹{parseInt(b.total_price).toLocaleString('en-IN')}</td>
+                                      <td className="p-3 text-right">
+                                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border ${bs.bg} ${bs.text} ${bs.border}`}>
+                                          <span className={`w-1 h-1 rounded-full ${bs.dot}`} />
+                                          {b.booking_status.replace('_', ' ')}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                                {totalPages > 1 && (
+                                  <tr>
+                                    <td colSpan="6" className="p-3 border-t border-zinc-200">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[10px] text-zinc-400">Showing {startIndex + 1} to {Math.min(startIndex + historyItemsPerPage, allBookings.length)} of {allBookings.length} bookings</span>
+                                        <div className="flex items-center gap-1.5">
+                                          <button
+                                            onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                                            disabled={historyPage === 1}
+                                            className="px-2.5 py-1 bg-white border border-zinc-200 text-zinc-700 rounded-lg hover:bg-amber-50 text-[10px] font-bold disabled:opacity-50"
+                                          >
+                                            Prev
+                                          </button>
+                                          <span className="text-[10px] font-bold bg-amber-50 px-2.5 py-1 rounded-lg">{historyPage} / {totalPages}</span>
+                                          <button
+                                            onClick={() => setHistoryPage(p => Math.min(totalPages, p + 1))}
+                                            disabled={historyPage === totalPages}
+                                            className="px-2.5 py-1 bg-white border border-zinc-200 text-zinc-700 rounded-lg hover:bg-amber-50 text-[10px] font-bold disabled:opacity-50"
+                                          >
+                                            Next
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </tbody>
+                      </table>
                     </div>
-                    <span className="font-bold text-zinc-900">{stat.occupied} / {stat.total}</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Inventory available rooms list (MOVED TO LEFT COLUMN) */}
+              <motion.div
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.28, duration: 0.4 }}
+                className="bg-white rounded-[2rem] p-6 shadow-[0px_18px_40px_rgba(56,189,248,0.08)] border border-zinc-100 flex flex-col gap-4"
+              >
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider flex items-center gap-2">
+                      <CheckCircle2 size={16} className="text-emerald-500" /> Room Inventory
+                    </h3>
+                    <p className="text-[10px] text-zinc-400 mt-0.5">Vacant rooms available for immediate check-in</p>
                   </div>
-                ))}
-              </div>
-            </motion.div>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={async () => { await loadAvailableRooms(); setModalType('available_rooms'); }}
+                    className="px-4 py-2.5 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 text-xs font-bold transition-colors shadow-sm"
+                  >
+                    View Details
+                  </motion.button>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2.5 mt-3">
+                  {roomTypeStats.length === 0 ? (
+                    <div className="col-span-full flex flex-col items-center justify-center p-6 bg-zinc-50/50 rounded-xl border-2 border-dashed border-zinc-200">
+                      <motion.div animate={{ rotate: [0, -10, 10, -10, 10, 0] }} transition={{ duration: 0.5, delay: 2, repeat: Infinity, repeatDelay: 5 }}>
+                        <BedDouble size={20} className="text-zinc-300 mb-1.5" />
+                      </motion.div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Inventory Exhausted</p>
+                      <p className="text-[9px] text-zinc-400 mt-0.5">No vacant rooms available for immediate check-in</p>
+                    </div>
+                  ) : (
+                    roomTypeStats.map((stat, idx) => (
+                      <motion.div
+                        key={idx}
+                        onClick={async () => { await loadAvailableRooms(); setModalType('available_rooms'); }}
+                        whileHover={{ y: -2, scale: 1.03 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="relative overflow-hidden rounded-xl p-2.5 group cursor-pointer border bg-white shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between"
+                        style={{ borderColor: `${stat.color}30` }}
+                      >
+                        {/* Decorative colored glow blob */}
+                        <div className="absolute -top-6 -right-6 w-16 h-16 rounded-full blur-lg opacity-20 group-hover:opacity-40 transition-opacity duration-500 pointer-events-none" style={{ backgroundColor: stat.color }} />
+
+                        <div className="relative z-10 flex items-center justify-between gap-1 mb-1.5">
+                          <span className="text-[9px] font-black uppercase tracking-widest truncate" style={{ color: stat.color }}>
+                            {stat.name}
+                          </span>
+                          <BedDouble size={10} style={{ color: stat.color }} className="shrink-0 opacity-70" />
+                        </div>
+
+                        <div className="relative z-10 flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-zinc-500">Vacant</span>
+                          <div className="flex items-center gap-1.5 bg-white px-1.5 py-0.5 rounded shadow-xs" style={{ border: `1px solid ${stat.color}30` }}>
+                            <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: stat.color }} />
+                            <span className="text-sm font-black leading-none text-zinc-900">{stat.vacant}</span>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))
+                  )}
+                </div>
+              </motion.div>
+
+            </div>
+
+            {/* RIGHT SIDEBAR PANEL: CONCENTRIC ROOM CHART & DETAILS */}
+            <div className="flex flex-col gap-6">
+
+              {/* Concentric Progress Rings */}
+              <motion.div
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2, duration: 0.4 }}
+                className="bg-white rounded-[2rem] p-6 shadow-[0px_18px_40px_rgba(56,189,248,0.08)] border border-zinc-100 flex flex-col items-center"
+              >
+                <div className="w-full text-left mb-4">
+                  <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider flex items-center gap-2">
+                    <Building2 size={16} className="text-[#D4A373]" /> Occupancy breakdown
+                  </h3>
+                  <p className="text-[10px] text-zinc-400 mt-0.5">Real-time room occupancy rates by type</p>
+                </div>
+
+                {/* Chart */}
+                <RoomStatsRings
+                  roomTypeStats={roomTypeStats}
+                />
+
+                {/* Legend with matching colors */}
+                <div className="w-full mt-4 flex flex-col gap-2 border-t border-zinc-100 pt-4">
+                  {roomTypeStats.map((stat, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: stat.color }} />
+                        <span className="font-medium text-zinc-600">{stat.name}</span>
+                      </div>
+                      <span className="font-bold text-zinc-900">{stat.occupied} / {stat.total}</span>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+
+            </div>
 
           </div>
-
-        </div>
         </>)}
 
-          {viewMode === 'hr_hub' && accessLevel === 'MANAGER' && (
-             <DepartmentHRModule departmentName="FRONT_DESK" />
-          )}
+        {viewMode === 'hr_hub' && accessLevel === 'MANAGER' && (
+          <DepartmentHRModule departmentName="FRONT_DESK" />
+        )}
 
-          {viewMode === 'directory' && (
-            <div className="h-[800px] overflow-hidden rounded-[2rem] shadow-2xl shadow-indigo-900/5">
-              <StaffDirectoryModule />
-            </div>
-          )}
+        {viewMode === 'directory' && (
+          <div className="h-[800px] overflow-hidden rounded-[2rem] shadow-2xl shadow-indigo-900/5">
+            <StaffDirectoryModule />
+          </div>
+        )}
 
       </div>
 
@@ -2039,71 +2120,144 @@ export default function FrontDeskDashboard() {
               {modalType === 'checkout' && selectedStay && (() => {
                 const checkoutDetails = calculateCheckoutDetails(selectedStay);
                 return (
-                <div className="space-y-5">
-                  <div className="bg-rose-50/80 border border-rose-200 rounded-2xl p-5 space-y-3">
-                    <div className="flex items-center gap-2 text-sm font-bold text-rose-700">
-                      <AlertTriangle size={16} /> Guest Departure Confirmation
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 text-xs">
-                      <div><p className="text-zinc-500 font-medium">Guest</p><p className="font-bold text-zinc-800 mt-0.5">{checkoutDetails.guest_name}</p></div>
-                      <div><p className="text-zinc-500 font-medium">Room</p><p className="font-bold text-zinc-800 mt-0.5">{checkoutDetails.room_number} ({checkoutDetails.room_type})</p></div>
-                      <div>
-                        <p className="text-zinc-500 font-medium">Total Billed</p>
-                        <p className="font-bold text-zinc-800 mt-0.5">₹{checkoutDetails.final_total.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</p>
+                  <div className="space-y-5">
+                    <div className="bg-rose-50/80 border border-rose-200 rounded-2xl p-5 space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-bold text-rose-700">
+                        <AlertTriangle size={16} /> Guest Departure Confirmation
                       </div>
-                      <div>
-                        <p className="text-zinc-500 font-medium">Stay Duration</p>
-                        <p className="font-bold text-zinc-800 mt-0.5">{checkoutDetails.actual_days} Day(s) (Expected: {checkoutDetails.expected_days})</p>
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div><p className="text-zinc-500 font-medium">Guest</p><p className="font-bold text-zinc-800 mt-0.5">{checkoutDetails.guest_name}</p></div>
+                        <div><p className="text-zinc-500 font-medium">Room</p><p className="font-bold text-zinc-800 mt-0.5">{checkoutDetails.room_number} ({checkoutDetails.room_type})</p></div>
+                        <div>
+                          <p className="text-zinc-500 font-medium">Total Billed</p>
+                          <p className="font-bold text-zinc-800 mt-0.5">₹{checkoutDetails.final_total.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</p>
+                        </div>
+                        <div>
+                          <p className="text-zinc-500 font-medium">Stay Duration</p>
+                          <p className="font-bold text-zinc-800 mt-0.5">{checkoutDetails.actual_days} Day(s) (Expected: {checkoutDetails.expected_days})</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <p className="text-xs text-zinc-500">This will mark the booking as <strong>CHECKED OUT</strong> and set Room {checkoutDetails.room_number} to <strong>DIRTY</strong> for housekeeping.</p>
-                  <div className="flex items-center gap-3 bg-zinc-50 border border-zinc-200 rounded-xl p-3">
-                    <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider shrink-0">Pay Method</label>
-                    <select
-                      value={checkoutMethod}
-                      onChange={(e) => setCheckoutMethod(e.target.value)}
-                      className="flex-1 bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm font-bold text-zinc-800 outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-400/20"
-                    >
-                      <option value="Cash">Cash</option>
-                      <option value="Credit Card">Credit Card</option>
-                      <option value="UPI">UPI</option>
-                      <option value="Bank Transfer">Bank Transfer</option>
-                    </select>
-                  </div>
 
-                  <RippleButton
-                    onClick={() => handleCheckout(checkoutDetails.booking_id, checkoutDetails.final_total)}
-                    disabled={isSubmitting}
-                    whileHover={{ scale: 1.015, y: -1 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="w-full bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-lg shadow-rose-500/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <DoorOpen size={16} />}
-                    {isSubmitting ? 'Processing…' : 'Confirm Check-Out'}
-                  </RippleButton>
-                  
-                  <div className="flex gap-3">
+                    {/* ── Detailed Billing Breakdown ── */}
+                    <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden">
+                      <div className="bg-zinc-50 px-4 py-2.5 border-b border-zinc-200">
+                        <p className="text-[11px] font-black text-zinc-600 uppercase tracking-widest">Invoice Breakdown</p>
+                      </div>
+                      <div className="divide-y divide-zinc-100">
+                        {/* Room Charges */}
+                        <div className="px-4 py-3 flex justify-between items-center">
+                          <div>
+                            <p className="text-xs font-bold text-zinc-800">Room Charges ({checkoutDetails.room_type}) × {checkoutDetails.actual_days} Day(s)</p>
+                            <p className="text-[10px] text-zinc-400 mt-0.5">₹{checkoutDetails.price_per_day?.toLocaleString('en-IN', { maximumFractionDigits: 2 })} / night</p>
+                          </div>
+                          <p className="text-xs font-bold text-zinc-800">₹{checkoutDetails.base_total?.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</p>
+                        </div>
+                        {checkoutDetails.calculatedTaxes && checkoutDetails.calculatedTaxes.map((tax, idx) => (
+                          <div key={idx} className="px-4 py-2 flex justify-between items-center bg-zinc-50/50">
+                            <p className="text-[11px] text-zinc-500">{tax.name} ({tax.rate}%)</p>
+                            <p className="text-[11px] font-semibold text-zinc-600">₹{tax.amount?.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</p>
+                          </div>
+                        ))}
+                        <div className="px-4 py-2.5 flex justify-between items-center">
+                          <p className="text-xs font-bold text-zinc-700">Room Subtotal</p>
+                          <p className="text-xs font-black text-zinc-800">₹{checkoutDetails.room_total?.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</p>
+                        </div>
+
+                        {/* Extra Charges (Dining, etc.) */}
+                        {checkoutDetails.extra_charges?.length > 0 && (
+                          <>
+                            <div className="bg-amber-50/80 px-4 py-2.5 border-t border-amber-200">
+                              <p className="text-[11px] font-black text-amber-700 uppercase tracking-widest flex items-center gap-1.5">
+                                🍽️ Pending Restaurant / Extra Charges
+                              </p>
+                            </div>
+                            {checkoutDetails.extra_charges.map((charge, idx) => (
+                              <div key={charge.id || idx} className="px-4 py-3">
+                                <div className="flex justify-between items-start">
+                                  <div className="flex-1">
+                                    <p className="text-xs font-bold text-amber-800">
+                                      {charge.type}{charge.table_number ? ` (Table ${charge.table_number})` : ''}
+                                    </p>
+                                    {charge.items.length > 0 && (
+                                      <div className="mt-1.5 space-y-0.5">
+                                        {charge.items.map((item, i) => (
+                                          <p key={i} className="text-[10px] text-zinc-500 pl-2 border-l-2 border-amber-200">
+                                            {item.name} × {item.qty} — ₹{(item.price * item.qty).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                                          </p>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {charge.date && (
+                                      <p className="text-[9px] text-zinc-400 mt-1">{new Date(charge.date).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                                    )}
+                                  </div>
+                                  <p className="text-xs font-bold text-amber-800 shrink-0 ml-3">₹{charge.amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</p>
+                                </div>
+                              </div>
+                            ))}
+                            <div className="px-4 py-2.5 flex justify-between items-center bg-amber-50/50">
+                              <p className="text-xs font-bold text-amber-700">Extra Charges Subtotal</p>
+                              <p className="text-xs font-black text-amber-800">₹{checkoutDetails.extra_charges_total?.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</p>
+                            </div>
+                          </>
+                        )}
+
+                        {/* Grand Total */}
+                        <div className="px-4 py-3 bg-zinc-900 flex justify-between items-center">
+                          <p className="text-sm font-black text-white uppercase tracking-wider">Grand Total</p>
+                          <p className="text-sm font-black text-emerald-400">₹{checkoutDetails.final_total?.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-zinc-500">This will mark the booking as <strong>CHECKED OUT</strong> and set Room {checkoutDetails.room_number} to <strong>DIRTY</strong> for housekeeping.{checkoutDetails.extra_charges?.length > 0 ? ' All pending restaurant charges will be settled.' : ''}</p>
+                    <div className="flex items-center gap-3 bg-zinc-50 border border-zinc-200 rounded-xl p-3">
+                      <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider shrink-0">Pay Method</label>
+                      <select
+                        value={checkoutMethod}
+                        onChange={(e) => setCheckoutMethod(e.target.value)}
+                        className="flex-1 bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm font-bold text-zinc-800 outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-400/20"
+                      >
+                        <option value="Cash">Cash</option>
+                        <option value="Credit Card">Credit Card</option>
+                        <option value="UPI">UPI</option>
+                        <option value="Bank Transfer">Bank Transfer</option>
+                      </select>
+                    </div>
+
                     <RippleButton
-                      onClick={() => handlePrintInvoice(checkoutDetails)}
+                      onClick={() => handleCheckout(checkoutDetails.booking_id, checkoutDetails.final_total)}
+                      disabled={isSubmitting}
                       whileHover={{ scale: 1.015, y: -1 }}
                       whileTap={{ scale: 0.98 }}
-                      className="flex-1 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-sm py-3.5 rounded-xl transition-all flex items-center justify-center gap-2"
+                      className="w-full bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-lg shadow-rose-500/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
-                      <FileText size={16} /> Print
+                      {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <DoorOpen size={16} />}
+                      {isSubmitting ? 'Processing…' : 'Confirm Check-Out'}
                     </RippleButton>
-                    <RippleButton
-                      onClick={() => handleEmailInvoice(checkoutDetails)}
-                      disabled={isEmailing}
-                      whileHover={{ scale: 1.015, y: -1 }}
-                      whileTap={{ scale: 0.98 }}
-                      className="flex-1 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-sm py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      {isEmailing ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />} 
-                      {isEmailing ? 'Sending...' : 'Email Invoice'}
-                    </RippleButton>
+
+                    <div className="flex gap-3">
+                      <RippleButton
+                        onClick={() => handlePrintInvoice(checkoutDetails)}
+                        whileHover={{ scale: 1.015, y: -1 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="flex-1 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-sm py-3.5 rounded-xl transition-all flex items-center justify-center gap-2"
+                      >
+                        <FileText size={16} /> Print
+                      </RippleButton>
+                      <RippleButton
+                        onClick={() => handleEmailInvoice(checkoutDetails)}
+                        disabled={isEmailing}
+                        whileHover={{ scale: 1.015, y: -1 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="flex-1 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-sm py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        {isEmailing ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />}
+                        {isEmailing ? 'Sending...' : 'Email Invoice'}
+                      </RippleButton>
+                    </div>
                   </div>
-                </div>
                 );
               })()}
 

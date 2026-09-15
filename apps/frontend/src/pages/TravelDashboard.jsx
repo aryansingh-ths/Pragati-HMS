@@ -540,10 +540,6 @@ const fetch = scopedFetch;
               <RefreshCw size={15} />
             </button>
 
-            <button className="bg-zinc-900 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#D4A373] transition-colors flex items-center gap-2 shadow-sm">
-              <Download size={14} /> Export
-            </button>
-
             {/* Profile Avatar Widget */}
             {(() => {
               const staffName = sessionStorage.getItem('hms_name') || 'Staff';

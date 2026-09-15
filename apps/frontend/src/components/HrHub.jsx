@@ -599,32 +599,8 @@ export default function HrHub({ isManagerView = false, managerDepartment = 'ALL'
                           <div className="flex-1 overflow-y-auto fd-sidebar-scroll p-6">
 
                             <div className="space-y-6">
-                              {/* Special Access Toggles */}
-                              <div className="bg-white/50 border border-zinc-100 rounded-2xl p-5 shadow-sm space-y-4">
-                                <h4 className="text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-2">Special Permissions</h4>
-                                {[
-                                  { key: 'can_process_refunds', title: 'Refund Approval Access', desc: 'Allow user to approve and process refunds' },
-                                  { key: 'can_apply_discounts', title: 'Discount Approval Access', desc: 'Allow user to override rates and grant discounts' },
-                                  { key: 'can_overbook', title: 'Overbooking Access', desc: 'Allow user to overbook room capacities manually' }
-                                ].map(perm => (
-                                  <div key={perm.key} className="flex items-center justify-between pb-3 border-b border-zinc-100/60 last:border-0 last:pb-0">
-                                    <div>
-                                      <p className="text-sm font-bold text-zinc-800">{perm.title}</p>
-                                      <p className="text-[9px] font-medium text-zinc-400">{perm.desc}</p>
-                                    </div>
-                                    <button 
-                                      onClick={() => handleUpdateHrHubPermission(perm.key, selectedStaff[perm.key])}
-                                      className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${selectedStaff[perm.key] ? 'bg-indigo-500' : 'bg-zinc-200'}`}
-                                    >
-                                      <motion.div 
-                                        animate={{ x: selectedStaff[perm.key] ? 24 : 2 }}
-                                        className="absolute top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-white shadow-sm"
-                                      />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
 
+                              {/* 
                               <form onSubmit={handleSaveSalaryConfig} className="space-y-5">
                                 <div>
                                   <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-2">Monthly Base Salary (₹)</label>
@@ -706,6 +682,7 @@ export default function HrHub({ isManagerView = false, managerDepartment = 'ALL'
                                   );
                                 })()}
                               </div>
+                              */}
                             </div>
                           </div>
 

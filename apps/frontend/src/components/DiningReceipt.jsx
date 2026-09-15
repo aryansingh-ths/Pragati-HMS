@@ -50,11 +50,18 @@ const DiningReceipt = ({ receiptData, hotelSettings }) => {
       <div className="text-xs space-y-1">
         <p className="flex justify-between"><span>Subtotal:</span> <span>{Number(receiptData.subtotal || receiptData.total_amount || 0).toFixed(2)}</span></p>
         {receiptData.discount > 0 && (
-           <p className="flex justify-between"><span>Discount:</span> <span>-{Number(receiptData.discount).toFixed(2)}</span></p>
+          <p className="flex justify-between"><span>Discount:</span> <span>-{Number(receiptData.discount).toFixed(2)}</span></p>
         )}
-        {receiptData.tax > 0 && (
-           <p className="flex justify-between"><span>Tax:</span> <span>{Number(receiptData.tax).toFixed(2)}</span></p>
-        )}
+        {receiptData.calculatedTaxes && receiptData.calculatedTaxes.length > 0 ? (
+          receiptData.calculatedTaxes.map((tax, idx) => (
+            <p key={idx} className="flex justify-between">
+              <span>{tax.name} ({tax.rate}%):</span>
+              <span>{Number(tax.amount).toFixed(2)}</span>
+            </p>
+          ))
+        ) : receiptData.tax > 0 ? (
+          <p className="flex justify-between"><span>Tax:</span> <span>{Number(receiptData.tax).toFixed(2)}</span></p>
+        ) : null}
         <div className="border-t border-dashed border-black my-1"></div>
         <p className="flex justify-between font-bold text-sm">
           <span>TOTAL:</span>
