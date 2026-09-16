@@ -9,7 +9,7 @@ export default function StaffDashboard({ token }) {
 
   const fetchRooms = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/rooms');
+      const response = await fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/rooms');
       const json = await response.json();
       setRooms(json.data.rooms);
     } catch (err) {
@@ -23,7 +23,7 @@ export default function StaffDashboard({ token }) {
 
   const updateStatus = async (roomId, newStatus) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/rooms/${roomId}/status`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/rooms/${roomId}/status`, {
         method: 'PATCH',
         headers: { 
           'Content-Type': 'application/json',

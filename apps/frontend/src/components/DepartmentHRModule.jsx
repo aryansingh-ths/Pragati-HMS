@@ -23,9 +23,9 @@ export default function DepartmentHRModule({ departmentName }) {
       const headers = { 'Authorization': `Bearer ${token}` };
       
       const [staffRes, attRes, leavesRes] = await Promise.all([
-        fetch(`http://localhost:3000/api/hr/department/${departmentName}/staff`, { headers }),
-        fetch(`http://localhost:3000/api/hr/department/${departmentName}/attendance`, { headers }),
-        fetch(`http://localhost:3000/api/hr/department/${departmentName}/leaves`, { headers })
+        fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/hr/department/${departmentName}/staff`, { headers }),
+        fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/hr/department/${departmentName}/attendance`, { headers }),
+        fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/hr/department/${departmentName}/leaves`, { headers })
       ]);
       
       if (staffRes.ok) setStaff(await staffRes.json());
@@ -45,7 +45,7 @@ export default function DepartmentHRModule({ departmentName }) {
   const handleLeaveAction = async (id, status) => {
     try {
       const token = sessionStorage.getItem('hms_token');
-      const res = await fetch(`http://localhost:3000/api/hr/leaves/${id}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/hr/leaves/${id}`, {
         method: 'PATCH',
         headers: { 
           'Content-Type': 'application/json',

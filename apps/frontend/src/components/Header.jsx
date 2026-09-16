@@ -27,7 +27,7 @@ export default function Header({
   useEffect(() => {
     const fetchHotels = async () => {
       try {
-        const res = await fetch('http://localhost:3000/api/hotels'); // open endpoint
+        const res = await fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/hotels'); // open endpoint
         const data = await res.json();
         if (data.status === 'success') {
           setHotels(data.data);
@@ -138,7 +138,7 @@ export default function Header({
     try {
       const token = sessionStorage.getItem('hms_token');
       if (token) {
-        await fetch('http://localhost:3000/api/auth/logout', {
+        await fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/auth/logout', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`

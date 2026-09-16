@@ -10,7 +10,7 @@ export default function SystemLocked({ onUnlock }) {
   useEffect(() => {
     const pollTimer = setInterval(async () => {
       try {
-        const res = await fetch('http://localhost:3000/api/license/status');
+        const res = await fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/license/status');
         const data = await res.json();
         if (data.status === 'active' && data.token) {
           clearInterval(pollTimer);
@@ -27,7 +27,7 @@ export default function SystemLocked({ onUnlock }) {
   const handleRequestActivation = async () => {
     setRequestStatus('requesting');
     try {
-      const res = await fetch('http://localhost:3000/api/license/request', {
+      const res = await fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/license/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requestedExpiryDate: requestedDate })

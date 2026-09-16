@@ -361,7 +361,7 @@ export default function FinanceDashboard() {
     const fetch = scopedFetch;
     try {
       const token = sessionStorage.getItem('hms_token');
-      const res = await scopedFetch(`http://localhost:3000/api/broadcasts`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await scopedFetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/broadcasts`, { headers: { 'Authorization': `Bearer ${token}` } });
       if (res?.ok) {
         const data = await res.json();
         setBroadcasts(data.data.broadcasts || []);
@@ -400,15 +400,15 @@ export default function FinanceDashboard() {
         const headers = { 'Authorization': `Bearer ${token}` };
 
         const [overviewRes, expensesRes, invoicesRes, payablesRes, reconRes, ledgerRes, budgetRes, cashRegisterRes, payrollRes] = await Promise.all([
-          scopedFetch('http://localhost:3000/api/finance/overview', { headers }),
-          scopedFetch('http://localhost:3000/api/finance/expenses', { headers }),
-          scopedFetch('http://localhost:3000/api/finance/invoices', { headers }),
-          scopedFetch('http://localhost:3000/api/finance/payables', { headers }),
-          scopedFetch('http://localhost:3000/api/finance/reconciliations', { headers }),
-          scopedFetch('http://localhost:3000/api/finance/ledger', { headers }),
-          scopedFetch('http://localhost:3000/api/finance/budgets', { headers }),
-          scopedFetch('http://localhost:3000/api/finance/cash-register', { headers }),
-          scopedFetch('http://localhost:3000/api/finance/payroll', { headers })
+          scopedFetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/finance/overview', { headers }),
+          scopedFetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/finance/expenses', { headers }),
+          scopedFetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/finance/invoices', { headers }),
+          scopedFetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/finance/payables', { headers }),
+          scopedFetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/finance/reconciliations', { headers }),
+          scopedFetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/finance/ledger', { headers }),
+          scopedFetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/finance/budgets', { headers }),
+          scopedFetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/finance/cash-register', { headers }),
+          scopedFetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/finance/payroll', { headers })
         ]);
 
         if (overviewRes.ok) {
@@ -459,7 +459,7 @@ export default function FinanceDashboard() {
       try {
         const token = sessionStorage.getItem('hms_token');
         const headers = { 'Authorization': `Bearer ${token}` };
-        const stmtRes = await scopedFetch(`http://localhost:3000/api/finance/statements?period=${revenuePeriod}&date=${revenueDate}`, { headers });
+        const stmtRes = await scopedFetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/finance/statements?period=${revenuePeriod}&date=${revenueDate}`, { headers });
         if (stmtRes.ok) {
           const { data } = await stmtRes.json();
           setApiStatements(data);
@@ -495,7 +495,7 @@ export default function FinanceDashboard() {
 
   const handleCreateBudget = async () => {
     if (!newBudgetForm.department_name || !newBudgetForm.budget_amount) return;
-    const res = await scopedFetch('http://localhost:3000/api/finance/budgets', {
+    const res = await scopedFetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/finance/budgets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
       body: JSON.stringify({ ...newBudgetForm, type: 'Expense' })
@@ -508,7 +508,7 @@ export default function FinanceDashboard() {
   };
 
   const handleUpdateBudget = async (id, newAmount) => {
-    const res = await scopedFetch(`http://localhost:3000/api/finance/budgets/${id}`, {
+    const res = await scopedFetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/finance/budgets/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
       body: JSON.stringify({ budget_amount: newAmount })
@@ -520,7 +520,7 @@ export default function FinanceDashboard() {
   };
 
   const handleDeleteBudget = async (id) => {
-    const res = await scopedFetch(`http://localhost:3000/api/finance/budgets/${id}`, {
+    const res = await scopedFetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/finance/budgets/${id}`, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` }
     });
@@ -554,6 +554,10 @@ export default function FinanceDashboard() {
   // --- Cash Register ---
   const [isCashModalOpen, setIsCashModalOpen] = useState(false);
   const [cashForm, setCashForm] = useState({ actual_amount: '', notes: '' });
+
+  // --- All Transactions ---
+  const [isAllTxnsModalOpen, setIsAllTxnsModalOpen] = useState(false);
+  const [allTxns, setAllTxns] = useState([]);
 
   const refresh = () => {
     setIsLoading(true);
@@ -720,7 +724,7 @@ export default function FinanceDashboard() {
 
     try {
       const token = sessionStorage.getItem('hms_token');
-      const res = await scopedFetch('http://localhost:3000/api/finance/expenses', {
+      const res = await scopedFetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/finance/expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(expenseForm)
@@ -800,7 +804,7 @@ export default function FinanceDashboard() {
 
     try {
       const token = sessionStorage.getItem('hms_token');
-      const res = await scopedFetch('http://localhost:3000/api/finance/invoices', {
+      const res = await scopedFetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/finance/invoices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(invoiceForm)
@@ -852,7 +856,7 @@ export default function FinanceDashboard() {
 
     try {
       const token = sessionStorage.getItem('hms_token');
-      const res = await scopedFetch('http://localhost:3000/api/finance/payables', {
+      const res = await scopedFetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/finance/payables', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(billForm)
@@ -873,12 +877,13 @@ export default function FinanceDashboard() {
   const revRooms = apiStatements?.revenue?.find(r => r.invoice_type === 'Guest Folio')?.total || 0;
   const revCorporate = apiStatements?.revenue?.find(r => r.invoice_type === 'Corporate Account')?.total || 0;
   const revBanquet = apiStatements?.revenue?.find(r => r.invoice_type === 'Banquet')?.total || 0;
+  const revOther = apiStatements?.revenue?.find(r => r.invoice_type === 'Other')?.total || 0;
 
   const revenueByDept = [
     { label: 'Rooms (Guest Folios)', value: Number(revRooms), color: '#059669' },
-    { label: 'Corporate & B2B', value: Number(revCorporate), color: '#f59e0b' },
-    { label: 'Banquets & Events', value: Number(revBanquet), color: '#6366f1' },
-    { label: 'Other', value: 0, color: '#ec4899' },
+    { label: 'Travel Packages', value: Number(revCorporate), color: '#f59e0b' },
+    { label: 'Dining', value: Number(revBanquet), color: '#6366f1' },
+    { label: 'Other', value: Number(revOther), color: '#ec4899' },
   ];
   const totalRevenuePnl = revenueByDept.reduce((s, d) => s + d.value, 0);
 
@@ -955,7 +960,7 @@ export default function FinanceDashboard() {
   const handleUpdateSalary = async (userId, newGross) => {
     try {
       const token = sessionStorage.getItem('hms_token');
-      const res = await scopedFetch(`http://localhost:3000/api/finance/payroll/${userId}`, {
+      const res = await scopedFetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/finance/payroll/${userId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -1001,7 +1006,7 @@ export default function FinanceDashboard() {
 
     try {
       const token = sessionStorage.getItem('hms_token');
-      const res = await scopedFetch('http://localhost:3000/api/finance/cash-register', {
+      const res = await scopedFetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/finance/cash-register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(cashForm)
@@ -1016,6 +1021,22 @@ export default function FinanceDashboard() {
 
     setIsCashModalOpen(false);
     setCashForm({ actual_amount: '', notes: '' });
+  };
+
+  const handleOpenAllTxns = async () => {
+    setIsAllTxnsModalOpen(true);
+    try {
+      const token = sessionStorage.getItem('hms_token');
+      const res = await scopedFetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/finance/transactions', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const { data } = await res.json();
+        setAllTxns(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch all transactions:', err);
+    }
   };
 
   const navGroups = [
@@ -1407,6 +1428,7 @@ export default function FinanceDashboard() {
                   <div className="fd-dealdeck-card rounded-[2rem] overflow-hidden">
                     <div className="p-5 border-b border-zinc-150 flex justify-between items-center bg-white/40">
                       <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm uppercase tracking-wider"><DollarSign size={16} className="text-[#D4A373]" /> Recent Transactions</h3>
+                      <button onClick={handleOpenAllTxns} className="text-xs font-bold text-sky-600 hover:text-sky-700 uppercase tracking-wider">See All</button>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-left border-collapse">
@@ -2610,6 +2632,66 @@ export default function FinanceDashboard() {
           </motion.div>
         )}
         {/* Cash Count Modal */}
+        {isAllTxnsModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 fd-glass-backdrop"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="fd-glass-modal rounded-[2rem] w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col"
+            >
+              <div className="p-6 border-b border-zinc-150 flex justify-between items-center bg-white/40">
+                <div>
+                  <h2 className="text-lg font-black text-zinc-900 tracking-tight leading-none">All Transactions</h2>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 mt-1">Complete financial ledger history</p>
+                </div>
+                <button onClick={() => setIsAllTxnsModalOpen(false)} className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 hover:bg-zinc-200 hover:text-zinc-900 transition-colors">
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-0 fd-scrollbar">
+                <table className="w-full text-left border-collapse">
+                  <thead className="sticky top-0 bg-zinc-50/95 backdrop-blur-sm shadow-sm z-10">
+                    <tr className="border-b border-zinc-150 text-[10px] uppercase tracking-wider text-zinc-400">
+                      <th className="p-4 font-bold">Ref ID</th>
+                      <th className="p-4 font-bold">Guest / Entity</th>
+                      <th className="p-4 font-bold">Method</th>
+                      <th className="p-4 font-bold">Date &amp; Time</th>
+                      <th className="p-4 font-bold text-right">Amount</th>
+                      <th className="p-4 font-bold text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100">
+                    {allTxns.length === 0 ? (
+                      <tr><td colSpan="6" className="p-8 text-center text-zinc-500 font-medium">No transactions found or loading...</td></tr>
+                    ) : allTxns.map((txn, idx) => (
+                      <tr key={idx} className="hover:bg-zinc-50/60 transition-colors">
+                        <td className="p-4 text-xs font-mono text-zinc-500">
+                          {String(txn.id).length > 8 ? `TXN-${String(txn.id).substring(0, 4).toUpperCase()}` : txn.id}
+                        </td>
+                        <td className="p-4 text-sm font-bold text-zinc-900">{txn.guest} <span className="text-[10px] text-zinc-400 font-normal ml-1">({txn.room_number || 'N/A'})</span></td>
+                        <td className="p-4 text-sm text-zinc-600">{txn.payment_method}</td>
+                        <td className="p-4 text-sm text-zinc-600">{new Date(txn.created_at).toLocaleString()}</td>
+                        <td className="p-4 text-sm font-bold text-zinc-900 text-right">₹{Number(txn.amount).toLocaleString('en-IN')}</td>
+                        <td className="p-4 text-right">
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1 ${txn.status === 'Settled' || txn.status === 'SUCCESS' ? 'bg-emerald-50 text-emerald-600' : 'bg-zinc-100 text-zinc-500'}`}>
+                            {txn.status === 'Settled' || txn.status === 'SUCCESS' ? <CheckCircle2 size={12} /> : <Clock size={12} />} {txn.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
         {isCashModalOpen && (
           <motion.div
             initial={{ opacity: 0 }}

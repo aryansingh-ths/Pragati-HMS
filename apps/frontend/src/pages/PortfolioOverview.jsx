@@ -8,7 +8,7 @@ import {
   Loader2, X, RefreshCw, Trash2, Globe, Command, ArrowRight, UserCog
 } from 'lucide-react';
 
-const API_BASE = 'http://localhost:3000';
+const API_BASE = (import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '';
 
 const GlassCard = ({ children, className = '' }) => (
   <div className={`bg-white/70 backdrop-blur-xl border border-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.04)] rounded-3xl overflow-hidden ${className}`}>

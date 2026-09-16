@@ -18,7 +18,7 @@ export default function StaffDirectoryModule() {
     setLoading(true);
     try {
       const token = sessionStorage.getItem('hms_token');
-      const res = await fetch('http://localhost:3000/api/directory', {
+      const res = await fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/directory', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -36,7 +36,7 @@ export default function StaffDirectoryModule() {
     e.preventDefault();
     setIsSaving(true);
     try {
-      const res = await fetch(`http://localhost:3000/api/super-admin/users/${editingUser.id}/profile`, {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/super-admin/users/${editingUser.id}/profile`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -68,7 +68,7 @@ export default function StaffDirectoryModule() {
     if (!window.confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) return;
     
     try {
-      const res = await fetch(`http://localhost:3000/api/super-admin/users/${id}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/super-admin/users/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
