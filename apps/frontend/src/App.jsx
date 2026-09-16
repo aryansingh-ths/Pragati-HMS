@@ -83,7 +83,7 @@ export default function App() {
   useEffect(() => {
     const initSystem = async () => {
       try {
-        const res = await fetch('http://localhost:3000/api/setup/init');
+        const res = await fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/setup/init');
         const data = await res.json();
         setSystemStatus(data.status);
         if (data.expiresAt) {
@@ -101,7 +101,7 @@ export default function App() {
   const fetchRoomClasses = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:3000/api/room-classes');
+      const response = await fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/room-classes');
       const json = await response.json();
       setRoomClasses(json.data.roomClasses);
     } catch (err) {

@@ -234,7 +234,7 @@ export default function SalesExecutiveDashboard() {
 const fetch = scopedFetch;
     try {
       const token = sessionStorage.getItem('hms_token');
-      const res = await scopedFetch(`http://localhost:3000/api/broadcasts`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await scopedFetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/broadcasts`, { headers: { 'Authorization': `Bearer ${token}` } });
       if (res?.ok) {
         const data = await res.json();
         setBroadcasts(data.data.broadcasts || []);
@@ -292,11 +292,11 @@ const fetch = scopedFetch;
 
       // Fetch all dashboard data concurrently
       const [leadsRes, accountsRes, tasksRes, otaRes, modesRes] = await Promise.all([
-        scopedFetch('http://localhost:3000/api/sales/leads', { headers }),
-        scopedFetch('http://localhost:3000/api/sales/accounts', { headers }),
-        scopedFetch('http://localhost:3000/api/sales/tasks', { headers }),
-        scopedFetch('http://localhost:3000/api/sales/ota', { headers }),
-        scopedFetch('http://localhost:3000/api/sales/booking-modes', { headers })
+        scopedFetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/sales/leads', { headers }),
+        scopedFetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/sales/accounts', { headers }),
+        scopedFetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/sales/tasks', { headers }),
+        scopedFetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/sales/ota', { headers }),
+        scopedFetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/sales/booking-modes', { headers })
       ]);
 
       if (leadsRes.ok) {
@@ -375,7 +375,7 @@ const fetch = scopedFetch;
     setIsSubmittingTask(true);
     try {
       const token = sessionStorage.getItem('hms_token');
-      const res = await scopedFetch('http://localhost:3000/api/sales/tasks', {
+      const res = await scopedFetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/sales/tasks', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -404,7 +404,7 @@ const fetch = scopedFetch;
     setIsSubmittingLead(true);
     try {
       const token = sessionStorage.getItem('hms_token');
-      const res = await scopedFetch('http://localhost:3000/api/sales/leads', {
+      const res = await scopedFetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/sales/leads', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -440,14 +440,14 @@ const fetch = scopedFetch;
       const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
 
       // 1. Move lead to 'Contacted' stage
-      await scopedFetch(`http://localhost:3000/api/sales/leads/${lead.id}/stage`, {
+      await scopedFetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/sales/leads/${lead.id}/stage`, {
         method: 'PATCH',
         headers,
         body: JSON.stringify({ stage: 'Contacted' })
       });
 
       // 2. Add as a new Account
-      const accResponse = await scopedFetch(`http://localhost:3000/api/sales/accounts`, {
+      const accResponse = await scopedFetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/sales/accounts`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -878,7 +878,7 @@ const fetch = scopedFetch;
                                   const newStatus = e.target.value;
                                   setOngoingTasks(ongoingTasks.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
                                   try {
-                                    await scopedFetch(`http://localhost:3000/api/sales/tasks/${task.id}/status`, {
+                                    await scopedFetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/sales/tasks/${task.id}/status`, {
                                       method: 'PATCH',
                                       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
                                       body: JSON.stringify({ status: newStatus })

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, X, Megaphone, Building2, AtSign, CheckCheck, Clock, ChevronRight, Zap, AlertTriangle } from 'lucide-react';
 
-const API_BASE = 'http://localhost:3000';
+const API_BASE = (import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '';
 
 export default function NotificationBell({ fetchWithAuth }) {
   const [notifications, setNotifications] = useState([]);

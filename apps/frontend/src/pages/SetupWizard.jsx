@@ -22,7 +22,7 @@ export default function SetupWizard({ onComplete }) {
     
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:3000/api/setup/submit', {
+      const res = await fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/setup/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)

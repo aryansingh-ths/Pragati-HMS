@@ -7,7 +7,7 @@ import { Plane, MapPin, Users, Wallet, Clock, CheckCircle2, AlertTriangle, Refre
 import DepartmentHRModule from '../components/DepartmentHRModule';
 import StaffDirectoryModule from '../components/StaffDirectoryModule';
 
-const API_BASE = 'http://localhost:3000';
+const API_BASE = (import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '';
 const getToken = () => sessionStorage.getItem('hms_token');
 const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` });
 const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
@@ -207,7 +207,7 @@ export default function TravelDashboard() {
 const fetch = scopedFetch;
     try {
       const token = sessionStorage.getItem('hms_token');
-      const res = await scopedFetch(`http://localhost:3000/api/broadcasts`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await scopedFetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/broadcasts`, { headers: { 'Authorization': `Bearer ${token}` } });
       if (res?.ok) {
         const data = await res.json();
         setBroadcasts(data.data.broadcasts || []);

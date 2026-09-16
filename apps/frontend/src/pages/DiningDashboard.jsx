@@ -124,7 +124,7 @@ export default function DiningDashboard() {
   const [printReceiptData, setPrintReceiptData] = React.useState(null);
 
   React.useEffect(() => {
-    fetch(`http://localhost:3000/api/hotels`, { headers: { 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` }, cache: 'no-store' })
+    fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/hotels`, { headers: { 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` }, cache: 'no-store' })
       .then(res => res.json())
       .then(data => {
         const hotelsList = data.data || [];
@@ -195,7 +195,7 @@ export default function DiningDashboard() {
     `;
 
     try {
-      const res = await fetch('http://localhost:3000/api/email/send-bill', {
+      const res = await fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/email/send-bill', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
         body: JSON.stringify({
@@ -223,7 +223,7 @@ export default function DiningDashboard() {
   const fetchBroadcasts = React.useCallback(async () => {
     try {
       const token = sessionStorage.getItem('hms_token');
-      const res = await fetch(`http://localhost:3000/api/broadcasts`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/broadcasts`, { headers: { 'Authorization': `Bearer ${token}` } });
       if (res?.ok) {
         const data = await res.json();
         setBroadcasts(data.data.broadcasts || []);
@@ -246,14 +246,14 @@ export default function DiningDashboard() {
       const currentHotel = sessionStorage.getItem('hms_current_hotel');
       const q = currentHotel ? `?hotel_id=${currentHotel}` : '';
       const [kotsRes, tablesRes, menuRes, overviewRes, invRes, guestsRes, billsRes, roomsRes] = await Promise.all([
-        fetch(`http://localhost:3000/api/dining/kots${q}`, { headers }),
-        fetch(`http://localhost:3000/api/dining/tables${q}`, { headers }),
-        fetch(`http://localhost:3000/api/dining/menu${q}`, { headers }),
-        fetch(`http://localhost:3000/api/dining/overview${q}`, { headers }),
-        fetch(`http://localhost:3000/api/dining/inventory${q}`, { headers }),
-        fetch(`http://localhost:3000/api/dining/in-house-guests${q}`, { headers }),
-        fetch(`http://localhost:3000/api/dining/bills${q}`, { headers }),
-        fetch(`http://localhost:3000/api/rooms${q}`, { headers })
+        fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/dining/kots${q}`, { headers }),
+        fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/dining/tables${q}`, { headers }),
+        fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/dining/menu${q}`, { headers }),
+        fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/dining/overview${q}`, { headers }),
+        fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/dining/inventory${q}`, { headers }),
+        fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/dining/in-house-guests${q}`, { headers }),
+        fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/dining/bills${q}`, { headers }),
+        fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/rooms${q}`, { headers })
       ]);
       if (kotsRes.ok) {
         const d = await kotsRes.json();
@@ -367,7 +367,7 @@ export default function DiningDashboard() {
   const handlePunchPOS = async () => {
     if (posCart.length === 0 || !posTable) return alert('Select a table and items first!');
     try {
-      const res = await fetch('http://localhost:3000/api/dining/kots', {
+      const res = await fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/dining/kots', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
         body: JSON.stringify({ table: posTable, items: JSON.stringify(posCart), type: posTable.toLowerCase().includes('room') ? 'Room Service' : 'Dine-in' })
@@ -383,7 +383,7 @@ export default function DiningDashboard() {
   const handleMenuSubmit = async (e) => {
     e.preventDefault();
     try {
-      const url = menuForm.id ? `http://localhost:3000/api/dining/menu/${menuForm.id}` : 'http://localhost:3000/api/dining/menu';
+      const url = menuForm.id ? `${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/dining/menu/${menuForm.id}` : (import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/dining/menu';
       const method = menuForm.id ? 'PUT' : 'POST';
       const res = await fetch(url, {
         method,
@@ -399,7 +399,7 @@ export default function DiningDashboard() {
   const handleMenuDelete = async (id) => {
     if (!window.confirm('Delete this item?')) return;
     try {
-      const res = await fetch(`http://localhost:3000/api/dining/menu/${id}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/dining/menu/${id}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` }
       });
@@ -409,7 +409,7 @@ export default function DiningDashboard() {
 
   const updateTableStatus = async (id, newStatus) => {
     try {
-      const res = await fetch(`http://localhost:3000/api/dining/tables/${id}/status`, {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/dining/tables/${id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
         body: JSON.stringify({ status: newStatus })
@@ -420,7 +420,7 @@ export default function DiningDashboard() {
 
   const handleAddTable = async (tableNumber, capacity) => {
     try {
-      const res = await fetch(`http://localhost:3000/api/dining/tables`, {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/dining/tables`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
         body: JSON.stringify({ table_number: tableNumber, capacity: capacity || 4 })
@@ -432,7 +432,7 @@ export default function DiningDashboard() {
   const handleDeleteTable = async (id) => {
     if (!window.confirm('Delete this table?')) return;
     try {
-      const res = await fetch(`http://localhost:3000/api/dining/tables/${id}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/dining/tables/${id}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` }
       });
@@ -442,7 +442,7 @@ export default function DiningDashboard() {
 
   const updateKOTStatus = async (id, newStatus) => {
     try {
-      const res = await fetch(`http://localhost:3000/api/dining/kots/${id}/status`, {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/dining/kots/${id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
         body: JSON.stringify({ status: newStatus })
@@ -501,7 +501,7 @@ export default function DiningDashboard() {
     if (billingForm.is_room_charge && !billingForm.booking_id) return alert('Select a room for the charge.');
 
     try {
-      const res = await fetch('http://localhost:3000/api/dining/settle-bill', {
+      const res = await fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/dining/settle-bill', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
         body: JSON.stringify({ ...billingForm, total_amount: total })
@@ -596,7 +596,7 @@ export default function DiningDashboard() {
 
     try {
       const token = sessionStorage.getItem('hms_token');
-      const res = await fetch('http://localhost:3000/api/dining/kots', {
+      const res = await fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/dining/kots', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
@@ -2112,7 +2112,7 @@ export default function DiningDashboard() {
                   const formData = new FormData(e.target);
                   const data = Object.fromEntries(formData);
                   try {
-                    const res = await fetch('http://localhost:3000/api/dining/wastage', {
+                    const res = await fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/dining/wastage', {
                       method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
                       body: JSON.stringify(data)
                     });
@@ -2146,7 +2146,7 @@ export default function DiningDashboard() {
                   data.id = materialForm.id;
                   data.is_active = true;
                   try {
-                    const res = await fetch('http://localhost:3000/api/dining/inventory', {
+                    const res = await fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/dining/inventory', {
                       method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
                       body: JSON.stringify(data)
                     });
@@ -2178,7 +2178,7 @@ export default function DiningDashboard() {
                   const formData = new FormData(e.target);
                   const data = Object.fromEntries(formData);
                   try {
-                    const res = await fetch('http://localhost:3000/api/dining/procurement', {
+                    const res = await fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/dining/procurement', {
                       method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
                       body: JSON.stringify(data)
                     });

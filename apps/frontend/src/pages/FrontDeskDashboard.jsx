@@ -13,7 +13,7 @@ import DepartmentHRModule from '../components/DepartmentHRModule';
 import StaffDirectoryModule from '../components/StaffDirectoryModule';
 import GuestFolioInvoice from '../components/GuestFolioInvoice';
 
-const API_BASE = 'http://localhost:3000';
+const API_BASE = (import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '';
 
 // ─── Status Color Map ──────────────────────────────────────
 // `accent` is a comma-separated RGB triplet (not a Tailwind class) used to

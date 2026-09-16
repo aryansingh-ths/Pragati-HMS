@@ -8,7 +8,7 @@ export default function BookingsLog({ token }) {
 
   const fetchBookingsLog = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/bookings');
+      const response = await fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/bookings');
       const json = await response.json();
       setBookings(json.data.bookings);
     } catch (err) {
@@ -24,7 +24,7 @@ export default function BookingsLog({ token }) {
     if (!window.confirm("Are you absolutely sure you want to cancel this booking?")) return;
 
     try {
-      const response = await fetch(`http://localhost:3000/api/bookings/${bookingId}/cancel`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/bookings/${bookingId}/cancel`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,

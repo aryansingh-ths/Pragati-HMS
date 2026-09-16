@@ -30,9 +30,9 @@ export default function HrHub({ isManagerView = false, managerDepartment = 'ALL'
   const loadData = useCallback(async () => {
     try {
       const [permRes, shiftsRes, salariesRes] = await Promise.all([
-        fetchWithAuth('http://localhost:3000/api/Admin/permissions').catch(()=>null),
-        fetchWithAuth('http://localhost:3000/api/Admin/shifts').catch(()=>null),
-        fetchWithAuth('http://localhost:3000/api/Admin/salaries').catch(()=>null),
+        fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/permissions').catch(()=>null),
+        fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/shifts').catch(()=>null),
+        fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/salaries').catch(()=>null),
       ]);
       if (permRes?.ok) {
         let perms = (await permRes.json()).data.permissions || [];
@@ -63,7 +63,7 @@ export default function HrHub({ isManagerView = false, managerDepartment = 'ALL'
     setOnboardError(null);
     setOnboardSuccess(null);
     try {
-      const res = await fetchWithAuth('http://localhost:3000/api/Admin/users', {
+      const res = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/users', {
         method: 'POST',
         body: JSON.stringify(onboardForm)
       });
@@ -84,7 +84,7 @@ export default function HrHub({ isManagerView = false, managerDepartment = 'ALL'
   const handleUpdateStaffProfile = async (field, value) => {
     if (!selectedStaff) return;
     try {
-      await fetchWithAuth(`http://localhost:3000/api/Admin/users/${selectedStaff.id || selectedStaff.user_id}`, {
+      await fetchWithAuth(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/Admin/users/${selectedStaff.id || selectedStaff.user_id}`, {
         method: 'PUT',
         body: JSON.stringify({ [field]: value })
       });
@@ -106,7 +106,7 @@ export default function HrHub({ isManagerView = false, managerDepartment = 'ALL'
       [permKey]: !currentVal
     };
     try {
-      await fetchWithAuth(`http://localhost:3000/api/Admin/permissions/${uid}`, {
+      await fetchWithAuth(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/Admin/permissions/${uid}`, {
         method: 'POST',
         body: JSON.stringify(updated)
       });
@@ -121,7 +121,7 @@ export default function HrHub({ isManagerView = false, managerDepartment = 'ALL'
     e.preventDefault();
     if (!selectedStaff) return;
     try {
-      await fetchWithAuth('http://localhost:3000/api/Admin/salaries', {
+      await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/salaries', {
         method: 'POST',
         body: JSON.stringify({
           user_id: selectedStaff.id || selectedStaff.user_id,

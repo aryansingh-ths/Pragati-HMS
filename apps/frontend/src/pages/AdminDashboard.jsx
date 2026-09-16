@@ -739,7 +739,7 @@ export default function AdminDashboard() {
       const fetchHotels = async () => {
         const token = sessionStorage.getItem('hms_token');
         try {
-          const res = await fetch('http://localhost:3000/api/super-admin/hotels', {
+          const res = await fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/super-admin/hotels', {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const json = await res.json();
@@ -754,24 +754,24 @@ export default function AdminDashboard() {
     setIsLoading(true);
     try {
       if (['overview', 'activity_monitor', 'operations_log', 'broadcasting', 'security_audit', 'analytics'].includes(activeTab)) {
-        const liveRes = await fetchWithAuth('http://localhost:3000/api/Admin/live-operations');
+        const liveRes = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/live-operations');
         if (liveRes?.ok) {
           const json = await liveRes.json();
           setLiveData(json.data);
         }
 
-        const auditRes = await fetchWithAuth('http://localhost:3000/api/Admin/audit-logs');
+        const auditRes = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/audit-logs');
         if (auditRes?.ok) setAuditLogs((await auditRes.json()).data.logs || []);
 
-        const analyticsRes = await fetchWithAuth('http://localhost:3000/api/Admin/analytics');
+        const analyticsRes = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/analytics');
         if (analyticsRes?.ok) setAnalyticsData((await analyticsRes.json()).data || null);
       }
 
       if (activeTab === 'properties') {
-        const roomsRes = await fetchWithAuth('http://localhost:3000/api/Admin/rooms');
+        const roomsRes = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/rooms');
         if (roomsRes?.ok) setRoomsList((await roomsRes.json()).data.rooms || []);
 
-        const typesRes = await fetchWithAuth('http://localhost:3000/api/Admin/room-types');
+        const typesRes = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/room-types');
         if (typesRes?.ok) {
           const fetchedTypes = (await typesRes.json()).data.roomTypes || [];
           setRoomTypes(fetchedTypes);
@@ -780,48 +780,48 @@ export default function AdminDashboard() {
           setExpandedClasses(initialExpanded);
         }
 
-        const yieldRes = await fetchWithAuth('http://localhost:3000/api/Admin/yield-rules');
+        const yieldRes = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/yield-rules');
         if (yieldRes?.ok) setYieldRules((await yieldRes.json()).data.rules || null);
       }
 
       if (activeTab === 'crm') {
-        const crmRes = await fetchWithAuth('http://localhost:3000/api/Admin/crm/guests');
+        const crmRes = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/crm/guests');
         if (crmRes?.ok) setCrmGuests((await crmRes.json()).data.guests || []);
       }
 
       if (activeTab === 'maintenance') {
-        const roomsRes = await fetchWithAuth('http://localhost:3000/api/Admin/rooms');
+        const roomsRes = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/rooms');
         if (roomsRes?.ok) setRoomsList((await roomsRes.json()).data.rooms || []);
 
-        const ticketsRes = await fetchWithAuth('http://localhost:3000/api/Admin/maintenance');
+        const ticketsRes = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/maintenance');
         if (ticketsRes?.ok) {
           const ticketsData = await ticketsRes.json();
           setMaintenanceTickets(ticketsData.data.tickets || []);
         }
 
-        const yieldRes = await fetchWithAuth('http://localhost:3000/api/Admin/yield-rules');
+        const yieldRes = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/yield-rules');
         if (yieldRes?.ok) setYieldRules((await yieldRes.json()).data.rules || null);
       }
 
       if (activeTab === 'hr') {
-        const permRes = await fetchWithAuth('http://localhost:3000/api/Admin/permissions');
+        const permRes = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/permissions');
         if (permRes?.ok) setStaffPermissions((await permRes.json()).data.permissions || []);
 
-        const shiftsRes = await fetchWithAuth('http://localhost:3000/api/Admin/shifts');
+        const shiftsRes = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/shifts');
         if (shiftsRes?.ok) setStaffShifts((await shiftsRes.json()).data.shifts || []);
 
-        const salariesRes = await fetchWithAuth('http://localhost:3000/api/Admin/salaries');
+        const salariesRes = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/salaries');
         if (salariesRes?.ok) setStaffSalaries((await salariesRes.json()).data.salaries || []);
 
-        const analyticsRes = await fetchWithAuth('http://localhost:3000/api/Admin/analytics');
+        const analyticsRes = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/analytics');
         if (analyticsRes?.ok) setAnalyticsData((await analyticsRes.json()).data || null);
       }
 
 
       if (activeTab === 'system_admins') {
         const [adminRes, hotelsDetailRes] = await Promise.all([
-          fetchWithAuth('http://localhost:3000/api/super-admin/users'),
-          fetch('http://localhost:3000/api/super-admin/hotels', { headers: { 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` } }),
+          fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/super-admin/users'),
+          fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/super-admin/hotels', { headers: { 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` } }),
         ]);
         if (adminRes?.ok) setSystemAdmins((await adminRes.json()).data?.users || []);
         if (hotelsDetailRes?.ok) {
@@ -838,7 +838,7 @@ export default function AdminDashboard() {
 
   const fetchBroadcasts = useCallback(async () => {
     try {
-      const res = await fetchWithAuth(`http://localhost:3000/api/broadcasts`);
+      const res = await fetchWithAuth(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/broadcasts`);
       if (res?.ok) {
         const data = await res.json();
         setBroadcasts(data.data.broadcasts || []);
@@ -869,7 +869,7 @@ export default function AdminDashboard() {
     if (activeTab === 'security_audit' && auditLive) {
       interval = setInterval(async () => {
         try {
-          const res = await fetchWithAuth(`http://localhost:3000/api/Admin/audit-logs?q=${encodeURIComponent(auditSearch)}`);
+          const res = await fetchWithAuth(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/Admin/audit-logs?q=${encodeURIComponent(auditSearch)}`);
           if (res?.ok) {
             const data = await res.json();
             setAuditLogs(data.data?.logs || []);
@@ -888,7 +888,7 @@ export default function AdminDashboard() {
     if (activeTab === 'hr') {
       interval = setInterval(async () => {
         try {
-          const shiftsRes = await fetchWithAuth('http://localhost:3000/api/Admin/shifts');
+          const shiftsRes = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/shifts');
           if (shiftsRes?.ok) {
             const data = await shiftsRes.json();
             setStaffShifts(data.data?.shifts || []);
@@ -921,7 +921,7 @@ export default function AdminDashboard() {
   const handleAddTicket = async (e) => {
     e.preventDefault();
     if (!newTicketForm.room_id) return alert("❌ Please select a room.");
-    const res = await fetchWithAuth('http://localhost:3000/api/Admin/maintenance', {
+    const res = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/maintenance', {
       method: 'POST', body: JSON.stringify(newTicketForm)
     });
     if (res?.ok) {
@@ -934,27 +934,27 @@ export default function AdminDashboard() {
   };
 
   const handleChangeTicketStatus = async (id, status) => {
-    const res = await fetchWithAuth(`http://localhost:3000/api/Admin/maintenance/${id}/status`, {
+    const res = await fetchWithAuth(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/Admin/maintenance/${id}/status`, {
       method: 'PATCH', body: JSON.stringify({ status })
     });
     if (res?.ok) loadAdminData();
   };
 
   const handleAssignTicket = async (id, assigned_to) => {
-    const res = await fetchWithAuth(`http://localhost:3000/api/Admin/maintenance/${id}/assign`, {
+    const res = await fetchWithAuth(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/Admin/maintenance/${id}/assign`, {
       method: 'PATCH', body: JSON.stringify({ assigned_to })
     });
     if (res?.ok) loadAdminData();
   };
 
   const handleToggleBlock = async (roomId) => {
-    const res = await fetchWithAuth(`http://localhost:3000/api/Admin/rooms/${roomId}/toggle-block`, { method: 'POST' });
+    const res = await fetchWithAuth(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/Admin/rooms/${roomId}/toggle-block`, { method: 'POST' });
     if (res?.ok) loadAdminData();
     else alert("❌ Failed to modify room block state.");
   };
 
   const handleChangeStatus = async (roomId, newStatus) => {
-    const res = await fetchWithAuth(`http://localhost:3000/api/Admin/rooms/${roomId}/status`, {
+    const res = await fetchWithAuth(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/Admin/rooms/${roomId}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status: newStatus })
     });
@@ -966,7 +966,7 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!newRoomClassForm.name.trim()) return alert("❌ Room class name cannot be empty.");
 
-    const res = await fetchWithAuth('http://localhost:3000/api/Admin/room-types', {
+    const res = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/room-types', {
       method: 'POST', body: JSON.stringify(newRoomClassForm)
     });
 
@@ -989,7 +989,7 @@ export default function AdminDashboard() {
       return alert(`❌ Duplicate Error: Room ${cleanRoomNumber} already exists.`);
     }
 
-    const res = await fetchWithAuth('http://localhost:3000/api/Admin/rooms', {
+    const res = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/rooms', {
       method: 'POST', body: JSON.stringify({ ...newRoomForm, room_number: cleanRoomNumber })
     });
 
@@ -1005,7 +1005,7 @@ export default function AdminDashboard() {
 
   const handleDeleteRoom = async (roomId, roomNumber) => {
     if (!window.confirm(`⚠️ CRITICAL: Are you sure you want to permanently delete Room ${roomNumber}? This cannot be undone.`)) return;
-    const res = await fetchWithAuth(`http://localhost:3000/api/Admin/rooms/${roomId}`, { method: 'DELETE' });
+    const res = await fetchWithAuth(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/Admin/rooms/${roomId}`, { method: 'DELETE' });
     if (res?.ok) loadAdminData();
     else alert("❌ Failed to delete room. It may have connected database records.");
   };
@@ -1013,12 +1013,12 @@ export default function AdminDashboard() {
   // --- ADVANCED CONTROLS ACTIONS ---
 
   const handleSaveYieldRule = async (key, value, applyToAll = false, showNotification = true) => {
-    const res = await fetchWithAuth('http://localhost:3000/api/Admin/yield-rules', {
+    const res = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/yield-rules', {
       method: 'POST', body: JSON.stringify({ key, value, apply_to_all: applyToAll })
     });
     if (res?.ok) {
       if (applyToAll && showNotification) alert(`✅ Successfully pushed rule ${key} to all properties!`);
-      const yieldRes = await fetchWithAuth('http://localhost:3000/api/Admin/yield-rules');
+      const yieldRes = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/yield-rules');
       if (yieldRes?.ok) setYieldRules((await yieldRes.json()).data.rules || null);
     } else {
       if (showNotification) alert("❌ Failed to update yield engine rule configuration.");
@@ -1038,7 +1038,7 @@ export default function AdminDashboard() {
   };
 
   const handleSavePermissions = async (userId, data) => {
-    const res = await fetchWithAuth(`http://localhost:3000/api/Admin/permissions/${userId}`, {
+    const res = await fetchWithAuth(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/Admin/permissions/${userId}`, {
       method: 'POST', body: JSON.stringify(data)
     });
     if (res?.ok) loadAdminData();
@@ -1047,7 +1047,7 @@ export default function AdminDashboard() {
   const handleSaveSalaryConfig = async (e) => {
     e.preventDefault();
     if (!selectedStaff) return;
-    const res = await fetchWithAuth(`http://localhost:3000/api/Admin/salary/${selectedStaff.id}`, {
+    const res = await fetchWithAuth(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/Admin/salary/${selectedStaff.id}`, {
       method: 'POST', body: JSON.stringify(salaryForm)
     });
     if (res?.ok) {
@@ -1070,7 +1070,7 @@ export default function AdminDashboard() {
         can_overbook: selectedStaff.can_overbook,
         [field]: value
       };
-      const res = await fetch(`http://localhost:3000/api/super-admin/users/${selectedStaff.id}/permissions`, {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/super-admin/users/${selectedStaff.id}/permissions`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
         body: JSON.stringify(updated),
@@ -1087,7 +1087,7 @@ export default function AdminDashboard() {
       name: field === 'name' ? value : selectedStaff.name,
       email: field === 'email' ? value : selectedStaff.email
     };
-    const res = await fetchWithAuth(`http://localhost:3000/api/Admin/staff/${selectedStaff.id}`, {
+    const res = await fetchWithAuth(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/Admin/staff/${selectedStaff.id}`, {
       method: 'PATCH',
       body: JSON.stringify(payload)
     });
@@ -1099,11 +1099,11 @@ export default function AdminDashboard() {
 
 
   const handleSaveGuestFlags = async (guestId, payload) => {
-    const res = await fetchWithAuth(`http://localhost:3000/api/Admin/crm/guests/${guestId}`, {
+    const res = await fetchWithAuth(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/Admin/crm/guests/${guestId}`, {
       method: 'POST', body: JSON.stringify(payload)
     });
     if (res?.ok) {
-      const crmRes = await fetchWithAuth('http://localhost:3000/api/Admin/crm/guests');
+      const crmRes = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/crm/guests');
       if (crmRes?.ok) setCrmGuests((await crmRes.json()).data.guests || []);
     } else {
       alert("❌ Failed to update guest relations registry.");
@@ -1118,7 +1118,7 @@ export default function AdminDashboard() {
     if (notifSendMode === 'individual') {
       // Use new notification system for individual sends
       if (!directTargetEmail.trim()) { alert('Please enter a target email address.'); return; }
-      res = await fetchWithAuth('http://localhost:3000/api/notifications', {
+      res = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/notifications', {
         method: 'POST',
         body: JSON.stringify({
           message: broadcastForm.message,
@@ -1130,11 +1130,11 @@ export default function AdminDashboard() {
       });
     } else {
       // Also create a notification alongside the old broadcast for the new bell system
-      res = await fetchWithAuth('http://localhost:3000/api/Admin/broadcast', {
+      res = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/broadcast', {
         method: 'POST', body: JSON.stringify(broadcastForm)
       });
       // Additionally push to new notification system
-      await fetchWithAuth('http://localhost:3000/api/notifications', {
+      await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/notifications', {
         method: 'POST',
         body: JSON.stringify({
           message: broadcastForm.message,
@@ -1152,7 +1152,7 @@ export default function AdminDashboard() {
       setDirectTargetEmail('');
       setNotifPriority('NORMAL');
       setTimeout(() => setBroadcastSuccess(false), 3000);
-      const auditRes = await fetchWithAuth('http://localhost:3000/api/Admin/audit-logs');
+      const auditRes = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/audit-logs');
       if (auditRes?.ok) setAuditLogs((await auditRes.json()).data.logs || []);
     } else {
       const errData = await res?.json().catch(() => null);
@@ -1163,7 +1163,7 @@ export default function AdminDashboard() {
   const handleResetPassword = async (userId) => {
     if (!confirm('Are you sure you want to reset this user\'s password? This action cannot be undone.')) return;
     try {
-      const res = await fetch('http://localhost:3000/api/auth/reset-password', {
+      const res = await fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/auth/reset-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1186,7 +1186,7 @@ export default function AdminDashboard() {
   const handleRemoveAdmin = async (id) => {
     if (!confirm('Are you sure you want to terminate this Administrator? This action is irreversible.')) return;
     try {
-      const res = await fetch(`http://localhost:3000/api/super-admin/users/${id}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/super-admin/users/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}`
@@ -1205,8 +1205,8 @@ export default function AdminDashboard() {
 
   const refreshManagementData = async () => {
     const [hotelsRes, usersRes] = await Promise.all([
-      fetch('http://localhost:3000/api/super-admin/hotels', { headers: { 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` } }),
-      fetch('http://localhost:3000/api/super-admin/users', { headers: { 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` } }),
+      fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/super-admin/hotels', { headers: { 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` } }),
+      fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/super-admin/users', { headers: { 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` } }),
     ]);
     if (hotelsRes.ok) {
       const hData = await hotelsRes.json();
@@ -1223,7 +1223,7 @@ export default function AdminDashboard() {
   const handleProfileSave = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetchWithAuth('http://localhost:3000/api/users/profile', {
+      const res = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/users/profile', {
         method: 'PATCH',
         body: JSON.stringify(profileForm)
       });
@@ -1245,7 +1245,7 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!addPropertyForm.name.trim() || !addPropertyForm.location.trim()) return;
     try {
-      const res = await fetch('http://localhost:3000/api/super-admin/hotels', {
+      const res = await fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/super-admin/hotels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
         body: JSON.stringify(addPropertyForm),
@@ -1268,7 +1268,7 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!selectedHotelForInvoice) return;
     try {
-      const res = await fetch(`http://localhost:3000/api/super-admin/hotels/${selectedHotelForInvoice}/settings`, {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/super-admin/hotels/${selectedHotelForInvoice}/settings`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -1293,7 +1293,7 @@ export default function AdminDashboard() {
   const handleDeleteProperty = async (id, name) => {
     if (!confirm(`⚠️ DANGER: Permanently delete property "${name}"?\n\nThis will remove ALL rooms, bookings, staff, and data associated with this property. This action is IRREVERSIBLE.`)) return;
     try {
-      const res = await fetch(`http://localhost:3000/api/super-admin/hotels/${id}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/super-admin/hotels/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
       });
@@ -1312,7 +1312,7 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!addAdminForm.name.trim() || !addAdminForm.email.trim() || !addAdminForm.password.trim()) return;
     try {
-      const res = await fetch('http://localhost:3000/api/super-admin/users', {
+      const res = await fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/super-admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
         body: JSON.stringify(addAdminForm),
@@ -1335,7 +1335,7 @@ export default function AdminDashboard() {
     if (e) e.preventDefault();
     if (!editingUser) return;
     try {
-      const res = await fetch(`http://localhost:3000/api/super-admin/users/${editingUser.id}/access`, {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/super-admin/users/${editingUser.id}/access`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
         body: JSON.stringify(editAccessForm),
@@ -1363,7 +1363,7 @@ export default function AdminDashboard() {
       [permKey]: !currentVal,
     };
     try {
-      const res = await fetch(`http://localhost:3000/api/super-admin/users/${userId}/permissions`, {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/super-admin/users/${userId}/permissions`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('hms_token')}` },
         body: JSON.stringify(updated),
@@ -1380,14 +1380,14 @@ export default function AdminDashboard() {
     e.preventDefault();
     setOnboardSuccess(null);
     setOnboardError(null);
-    const res = await fetchWithAuth('http://localhost:3000/api/Admin/staff/onboard', {
+    const res = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/staff/onboard', {
       method: 'POST', body: JSON.stringify(onboardForm)
     });
     const json = await res.json();
     if (res?.ok) {
       setOnboardSuccess('Employee onboarded and provisioned successfully!');
       setOnboardForm({ email: '', password: '', name: '', role: 'FRONT_DESK' });
-      const permRes = await fetchWithAuth('http://localhost:3000/api/Admin/permissions');
+      const permRes = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/permissions');
       if (permRes?.ok) setStaffPermissions((await permRes.json()).data.permissions || []);
       setTimeout(() => { setShowOnboardModal(false); setOnboardSuccess(null); }, 1800);
     } else {
@@ -1397,11 +1397,11 @@ export default function AdminDashboard() {
 
   const handleHROffboard = async (userId) => {
     if (!window.confirm('⚠️ WARNING: Are you sure you want to permanently revoke credential tokens and delete this staff member? This cannot be undone.')) return;
-    const res = await fetchWithAuth(`http://localhost:3000/api/Admin/staff/offboard/${userId}`, {
+    const res = await fetchWithAuth(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/Admin/staff/offboard/${userId}`, {
       method: 'POST'
     });
     if (res?.ok) {
-      const permRes = await fetchWithAuth('http://localhost:3000/api/Admin/permissions');
+      const permRes = await fetchWithAuth((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/Admin/permissions');
       if (permRes?.ok) setStaffPermissions((await permRes.json()).data.permissions || []);
     } else {
       const err = await res.json();
@@ -1411,7 +1411,7 @@ export default function AdminDashboard() {
 
   const handleSearchAudits = async (e) => {
     e.preventDefault();
-    const res = await fetchWithAuth(`http://localhost:3000/api/Admin/audit-logs?q=${encodeURIComponent(auditSearch)}`);
+    const res = await fetchWithAuth(`${import.meta.env.VITE_API_BASE || 'http://localhost:3000'}/api/Admin/audit-logs?q=${encodeURIComponent(auditSearch)}`);
     if (res?.ok) setAuditLogs((await res.json()).data.logs || []);
   };
 

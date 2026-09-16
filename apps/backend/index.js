@@ -21,7 +21,14 @@ const app = express();
 const PORT = 3000;
 const JWT_SECRET = 'techkriti_grand_super_secret_key_2026';
 
-app.use(cors({ origin: '*' }));
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: false,
+}));
+// Explicitly handle pre-flight OPTIONS requests for all routes
+app.options(/(.*)/, cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -2931,7 +2938,8 @@ app.get('/api/finance/overview', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN
         (SELECT COALESCE(SUM(total_price), 0) FROM bookings b WHERE status = 'CHECKED_OUT' AND DATE(b.check_out_date) = CURRENT_DATE AND ${hotelFilterB}) +
         (SELECT COALESCE(SUM(total_amount), 0) FROM dining_billing_records d WHERE DATE(d.created_at) = CURRENT_DATE AND ${hotelFilterD}) +
         (SELECT COALESCE(SUM(amount), 0) FROM travel_bookings tb WHERE DATE(tb.created_at) = CURRENT_DATE AND tb.payment_status != 'Pending' AND ${getHotelFilter(req, 'tb')}) +
-        (SELECT COALESCE(SUM(paid_amount), 0) FROM invoices i WHERE DATE(i.created_at) = CURRENT_DATE AND ${hotelFilterI}) AS total
+        (SELECT COALESCE(SUM(paid_amount), 0) FROM invoices i WHERE DATE(i.created_at) = CURRENT_DATE AND ${hotelFilterI}) +
+        (SELECT COALESCE(SUM(c.actual_amount - c.expected_amount), 0) FROM cash_drawer_logs c JOIN users u ON c.counted_by = u.id WHERE DATE(c.counted_at) = CURRENT_DATE AND c.actual_amount > c.expected_amount AND ${getHotelFilter(req, 'u')}) AS total
     `;
     const revRes = await pool.query(todaysRevenueQ);
     const todaysRevenue = parseFloat(revRes.rows[0].total || 0);
@@ -2981,6 +2989,9 @@ app.get('/api/finance/overview', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN
         UNION ALL
         SELECT tb.id, tb.guest_name, 'Travel Desk', tb.amount, tb.payment_status, tb.booking_status::text, tb.created_at 
         FROM travel_bookings tb WHERE ${getHotelFilter(req, 'tb')}
+        UNION ALL
+        SELECT c.id, 'Cash Register' as guest, 'Adjustment' as room_number, (c.actual_amount - c.expected_amount) as amount, 'Cash' as payment_method, 'Settled' as status, c.counted_at as created_at 
+        FROM cash_drawer_logs c JOIN users u ON c.counted_by = u.id WHERE c.actual_amount != c.expected_amount AND ${getHotelFilter(req, 'u')}
       ) AS combined
       ORDER BY created_at DESC LIMIT 10
     `;
@@ -3056,6 +3067,50 @@ app.get('/api/finance/overview', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN
     console.error('Failed to fetch finance overview:', err);
     console.error('Overview error:', err);
     res.status(500).json({ error: 'Failed to fetch finance overview', details: err.message });
+  }
+});
+
+app.get('/api/finance/transactions', verifyToken, requireRole(['SUPER_ADMIN', 'ADMIN', 'FINANCE']), async (req, res) => {
+  try {
+    const hotelFilterB = getHotelFilter(req, 'b');
+    const hotelFilterD = getHotelFilter(req, 'd');
+    const hotelFilterTB = getHotelFilter(req, 'tb');
+    const hotelFilterU = getHotelFilter(req, 'u');
+
+    const txnsQ = `
+      SELECT * FROM (
+        SELECT b.id, 'Frontdesk Checkout' as guest, r.room_number as room_number, b.total_price as amount, 
+        COALESCE((SELECT payment_method FROM ledger_transactions WHERE booking_id = b.id ORDER BY created_at DESC LIMIT 1), 'N/A') as payment_method, 
+        b.status::text, b.created_at 
+        FROM bookings b JOIN rooms r ON b.room_id = r.id WHERE b.status = 'CHECKED_OUT' AND ${hotelFilterB}
+        UNION ALL
+        SELECT id, 'Restaurant Bill', table_number, total_amount, payment_method, 'Settled', created_at 
+        FROM dining_billing_records d WHERE ${hotelFilterD}
+        UNION ALL
+        SELECT tb.id, tb.guest_name, 'Travel Desk', tb.amount, tb.payment_status, tb.booking_status::text, tb.created_at 
+        FROM travel_bookings tb WHERE ${hotelFilterTB}
+        UNION ALL
+        SELECT c.id, 'Cash Register' as guest, 'Adjustment' as room_number, (c.actual_amount - c.expected_amount) as amount, 'Cash' as payment_method, 'Settled' as status, c.counted_at as created_at 
+        FROM cash_drawer_logs c JOIN users u ON c.counted_by = u.id WHERE c.actual_amount != c.expected_amount AND ${hotelFilterU}
+      ) AS combined
+      ORDER BY created_at DESC
+      LIMIT 1000
+    `;
+    const txnsRes = await pool.query(txnsQ);
+    const transactions = txnsRes.rows.map(t => ({
+      id: t.id,
+      guest: t.guest,
+      room_number: t.room_number,
+      amount: t.amount,
+      payment_method: t.payment_method,
+      status: t.status,
+      created_at: t.created_at
+    }));
+
+    res.json({ data: transactions });
+  } catch (err) {
+    console.error('Failed to fetch all transactions:', err);
+    res.status(500).json({ error: 'Failed to fetch all transactions' });
   }
 });
 
@@ -3185,6 +3240,15 @@ app.get('/api/finance/statements', verifyToken, requireRole(['SUPER_ADMIN', 'ADM
       SELECT 'Corporate Account' as invoice_type, COALESCE(SUM(amount), 0) as total 
       FROM travel_bookings tb 
       WHERE DATE_TRUNC('${truncPeriod}', tb.created_at) = DATE_TRUNC('${truncPeriod}', ${targetDateStr}) AND tb.payment_status != 'Pending' AND ${hotelFilterTB}
+      
+      UNION ALL
+      
+      SELECT 'Other' as invoice_type, COALESCE(SUM(c.actual_amount - c.expected_amount), 0) as total 
+      FROM cash_drawer_logs c
+      JOIN users u ON c.counted_by = u.id
+      WHERE DATE_TRUNC('${truncPeriod}', c.counted_at) = DATE_TRUNC('${truncPeriod}', ${targetDateStr}) 
+      AND c.actual_amount > c.expected_amount 
+      AND ${getHotelFilter(req, 'u')}
     `;
     const revRes = await pool.query(revenueQ);
 
@@ -3293,7 +3357,8 @@ app.post('/api/finance/cash-register', verifyToken, requireRole(['SUPER_ADMIN', 
     const expected_amount = lastLog.rows.length > 0 ? parseFloat(lastLog.rows[0].actual_amount) : 0;
 
     let status = 'Balanced';
-    const actual = parseFloat(actual_amount);
+    const addedAmount = parseFloat(actual_amount) || 0;
+    const actual = expected_amount + addedAmount;
     if (actual > expected_amount) status = 'Over';
     if (actual < expected_amount) status = 'Short';
     if (expected_amount === 0) status = 'Balanced'; // Initial run
@@ -3604,7 +3669,7 @@ app.post('/api/email/send-bill', verifyToken, async (req, res) => {
   }
 });
 
-const server = app.listen(PORT, async () => {
+const server = app.listen(PORT, '0.0.0.0', async () => {
   console.log(`🚀 Secure Server active on http://localhost:${PORT}`);
   await runMigrations();
   startYieldEngine();

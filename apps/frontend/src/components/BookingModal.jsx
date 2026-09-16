@@ -25,7 +25,7 @@ export default function BookingModal({ roomClass, onClose }) {
     e.preventDefault();
     setStatus('loading');
     try {
-      const response = await fetch('http://localhost:3000/api/bookings', {
+      const response = await fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3000') + '/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
